@@ -20,6 +20,10 @@ class ObjectHost {
 }
 /*
 Verhalten der vom Host kontrollierten Gegner und ihrer Einheiten:
-Dough Zombies bewegen sich gradlinig auf Objekte vom Typ "Line Cook" zu und greifen diese an, wenn sie in Reichweite sind.
+Dough Zombies
+- bewegen sich gradlinig auf Objekte vom Typ "Line Cook" zu und greifen diese an, wenn sie in Reichweite sind.
+- haben eine 25% Chance bei ihrem Tod selbst zu einem Dough Dumpster zu werden, der dann weitere Dough Zombies spawnt.
+- haben eine 50% Chance, wenn sie einen Token des Spielers töten, anstelle dieses Tokens einen weiteren Dough Zombie zu spawnen.
+
 Dough Dumpsters spawnen Dough Zombies. Sie spawnen 1w6 (1-6) Dough Zombies und fügen sie der zombieList hinzu. Die Dough Zombies werden dann auf der Karte platziert und bewegen sich auf die Line Cooks zu, um sie anzugreifen.
 */

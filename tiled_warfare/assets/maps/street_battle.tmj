@@ -62,7 +62,7 @@
                 {
                  "height":0,
                  "id":1,
-                 "name":"spawn_dough",
+                 "name":"spawn_monster",
                  "opacity":1,
                  "point":true,
                  "rotation":0,

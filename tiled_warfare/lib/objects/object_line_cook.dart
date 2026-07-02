@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/objects/object_token.dart';

@@ -37,7 +37,7 @@
  </layer>
  <imagelayer id="4" name="Bildebene 1"/>
  <objectgroup id="2" name="Objektebene 1">
-  <object id="1" name="spawn_dough" x="483" y="229">
+  <object id="1" name="spawn_monster" x="483" y="229">
    <point/>
   </object>
   <object id="2" name="spawn_player1" x="61" y="221">

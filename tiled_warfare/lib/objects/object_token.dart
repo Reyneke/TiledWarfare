@@ -1,4 +1,6 @@
 
+import 'dart:ui' show Offset;
+
 /// Enum der verfügbaren Kampfaktionen für eine Einheit.
 ///
 /// Weitere Aktionen können in der Zukunft hinzugefügt werden.
@@ -18,6 +20,10 @@ class ObjectToken {
   int movementValue;
   int damageValue;
   int rangeValue;
+
+  /// Pixel-Position des Tokens auf der Karte (x, y).
+  /// Wird gesetzt, sobald der Token auf der Karte platziert wird.
+  Offset position = Offset.zero;
 
   ObjectToken({
     required this.name,

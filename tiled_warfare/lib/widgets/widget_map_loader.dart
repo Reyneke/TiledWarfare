@@ -6,7 +6,27 @@ import 'package:xml/xml.dart';
 /// Lädt die Karte "street_battle.tmx" aus dem "assets" Ordner und zeigt sie an.
 /// Die Karte kann gezoomt und gescrollt werden.
 class WidgetMapLoader extends StatefulWidget {
-  const WidgetMapLoader({super.key});
+  /// Callback, der aufgerufen wird, sobald die Karte geladen wurde.
+  /// Übergibt die Kartendimensionen (Tile-Größe und Karten-Größe).
+  final void Function({
+    required int tileWidth,
+    required int tileHeight,
+    required int mapWidth,
+    required int mapHeight,
+  })? onMapLoaded;
+
+  /// Callback, der den [TransformationController] des [InteractiveViewer]
+  /// an das übergeordnete Widget weitergibt, damit z. B. der [WidgetCaretaker]
+  /// die Token-Positionen mit dem Zoom/Scroll der Karte synchronisieren kann.
+  final void Function(TransformationController controller)?
+      onTransformationControllerCreated;
+
+  const WidgetMapLoader({
+    super.key,
+    this.onMapLoaded,
+    this.onTransformationControllerCreated,
+  });
+
 
   @override
   State<WidgetMapLoader> createState() => _WidgetMapLoaderState();
@@ -27,8 +47,12 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   @override
   void initState() {
     super.initState();
+    // TransformationController sofort über Callback bekannt geben,
+    // damit WidgetCaretaker ihn nutzen kann
+    widget.onTransformationControllerCreated?.call(_transformationController);
     _loadMap();
   }
+
 
   @override
   void dispose() {
@@ -68,10 +92,18 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       _tileData = tileData;
 
       // Tileset-Bild laden
-      final byteData = await rootBundle.load('assets/maps/Thespazztikone_tilemaps_005_neu.png');
-      final codec = await ui.instantiateImageCodec(byteData.buffer.asUint8List());
-      final frameInfo = await codec.getNextFrame();
+      var byteData = await rootBundle.load('assets/maps/Thespazztikone_tilemaps_005_neu.png');
+      var codec = await ui.instantiateImageCodec(byteData.buffer.asUint8List());
+      var frameInfo = await codec.getNextFrame();
       _tilesetImage = frameInfo.image;
+
+      // Kartendimensionen an den Callback melden
+      widget.onMapLoaded?.call(
+        tileWidth: _tileWidth,
+        tileHeight: _tileHeight,
+        mapWidth: _mapWidth,
+        mapHeight: _mapHeight,
+      );
 
       setState(() {
         _isLoading = false;
@@ -159,6 +191,7 @@ class _HexMapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 1. Karten-Tiles zeichnen
     for (int y = 0; y < mapHeight; y++) {
       for (int x = 0; x < mapWidth; x++) {
         final tileId = tileData[y][x];
