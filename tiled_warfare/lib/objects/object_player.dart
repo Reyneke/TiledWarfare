@@ -1,20 +1,58 @@
 import 'package:tiled_warfare/objects/object_line_cook.dart';
 
+/// Repräsentiert den Spieler und seine Einheiten.
+///
+/// Der Spieler steuert die Einheiten vom Typ [ObjectLineCook], die in der
+/// Liste [lineCookList] gespeichert sind. Jede Einheit hat ihre eigenen
+/// Eigenschaften wie Angriff, Verteidigung, Bewegung, Schaden und Reichweite.
+///
+/// Dieses Objekt ist ein Singleton, da es nur eine Instanz des Spielers geben
+/// kann. Einheiten können im Laufe des Spiels verbessert und aufgerüstet werden.
 class ObjectPlayer {
+  static final ObjectPlayer _instance = ObjectPlayer._internal();
 
-List <ObjectLineCook> lineCookList = [];
-ObjectPlayer();
+  /// Gibt die einzige Instanz des Spielers zurück.
+  factory ObjectPlayer() => _instance;
 
-/*
-Singleton
-Dieses Objekt repäsentiert den Spieler und seine Einheiten. Es ist ein Singleton, da es nur eine Instanz des Spielers geben kann.
-Der Spieler steuert die Einheiten vom Typ "Line Cook", die in der Liste "lineCookList" gespeichert sind. Jede Einheit hat ihre eigenen Eigenschaften wie Angriff, Verteidigung, Bewegung, Schaden und Reichweite.
-Die Einheiten werden vom Spieler gesteuert und können auf der Karte bewegt und eingesetzt werden. Der Spieler kann die Einheiten in Kämpfen gegen Gegner einsetzen und ihre Fähigkeiten nutzen, um das Spielziel zu erreichen.
-Jeder Spieler spawnt mindestens eine Einheit vom Typ "Line Cook", die in der Liste "lineCookList" gespeichert wird. Die Einheiten können im Laufe des Spiels verbessert und aufgerüstet werden, um ihre Fähigkeiten zu verbessern und ihre Überlebensfähigkeit zu erhöhen.
+  ObjectPlayer._internal();
 
-Einheiten werden per Drag&Drop auf der Karte platziert und bewegt. Sie können nur auf freien Feldern platziert werden, die nicht von Gegnern oder anderen Einheiten besetzt sind. Die Einheiten können sich auf der Karte bewegen und angreifen, um Gegner zu besiegen und das Spielziel zu erreichen.
-Die Bewegung der Einheiten wird durch die Bewegungspunkte bestimmt, die in der Eigenschaft "movementValue" jeder Einheit gespeichert sind. Jede Bewegung verbraucht eine bestimmte Anzahl von Bewegungspunkten, abhängig von der Entfernung und dem Gelände.
+  /// Liste aller vom Spieler kontrollierten Line Cooks.
+  List<ObjectLineCook> lineCookList = [];
 
-Ein rechter Mausklick auf eine Einheit öffnet ein Kontextmenü, in dem der Spieler die verfügbaren Aktionen für die Einheit auswählen kann. Die verfügbaren Aktionen hängen von den Eigenschaften der Einheit und der aktuellen Spielsituation ab. Immer verfügbar sind die Aktionen "Nahkampfangriff" und "Fernkampfangriff".
-*/
+  /// Erzeugt einen neuen [ObjectLineCook] und fügt ihn der [lineCookList] hinzu.
+  /// Gibt den neu erschaffenen Line Cook zurück.
+  ObjectLineCook spawnLineCook() {
+    final cook = ObjectLineCook();
+    lineCookList.add(cook);
+    return cook;
+  }
+
+  /// Entfernt einen [ObjectLineCook] aus der [lineCookList]
+  /// (z. B. wenn er zerstört wurde).
+  void removeLineCook(ObjectLineCook cook) {
+    lineCookList.remove(cook);
+  }
+
+  /// Gibt die Anzahl der aktuell kontrollierten Line Cooks zurück.
+  int get lineCookCount => lineCookList.length;
+
+  /// Verbessert die Eigenschaften eines [ObjectLineCook].
+  ///
+  /// Nur übergebene Werte werden aktualisiert; `null`-Werte bleiben unverändert.
+  void upgradeLineCook(
+    ObjectLineCook cook, {
+    int? attackValue,
+    int? defenseValue,
+    int? movementValue,
+    int? damageValue,
+    int? rangeValue,
+    int? woundValue,
+  }) {
+    if (attackValue != null) cook.attackValue = attackValue;
+    if (defenseValue != null) cook.defenseValue = defenseValue;
+    if (movementValue != null) cook.movementValue = movementValue;
+    if (damageValue != null) cook.damageValue = damageValue;
+    if (rangeValue != null) cook.rangeValue = rangeValue;
+    if (woundValue != null) cook.woundValue = woundValue;
+  }
 }

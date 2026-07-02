@@ -18,3 +18,8 @@ class ObjectHost {
   Diese Enegramme werden durch eine library abgebildet, die auf der Fuzzy Logic Systems library basiert, welche wiederum in "fuzzy_logic/lib/fuzzy_logic.dart" definiert ist.
   */
 }
+/*
+Verhalten der vom Host kontrollierten Gegner und ihrer Einheiten:
+Dough Zombies bewegen sich gradlinig auf Objekte vom Typ "Line Cook" zu und greifen diese an, wenn sie in Reichweite sind.
+Dough Dumpsters spawnen Dough Zombies. Sie spawnen 1w6 (1-6) Dough Zombies und fügen sie der zombieList hinzu. Die Dough Zombies werden dann auf der Karte platziert und bewegen sich auf die Line Cooks zu, um sie anzugreifen.
+*/
