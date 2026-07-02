@@ -1,8 +1,11 @@
+import 'dart:async';
+
+import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
 class ObjectLineCook extends ObjectToken {
   ObjectLineCook() : super(
-    name: "Line Cook",
+    name: "Line Cook: ${RandomNames(Zone.italy).fullName()}",
     imagePath: "assets/images/token/token_cook_basic.png",
     attackValue: 40,
     defenseValue: 40,

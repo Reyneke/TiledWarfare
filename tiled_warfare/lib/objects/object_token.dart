@@ -1,3 +1,14 @@
+
+/// Enum der verfügbaren Kampfaktionen für eine Einheit.
+///
+/// Weitere Aktionen können in der Zukunft hinzugefügt werden.
+enum CombatAction {
+  /// Nahkampf-Angriff auf ein benachbartes Hex-Feld.
+  melee,
+
+  /// Fernkampf-Angriff auf ein Ziel in Reichweite.
+  ranged,
+}
 class ObjectToken {
   final String name;
   final String imagePath;

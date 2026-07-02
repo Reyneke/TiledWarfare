@@ -5,7 +5,7 @@ import 'package:tiled_warfare/objects/object_token.dart';
 
 class ObjectDoughDumpster extends ObjectToken {
   ObjectDoughDumpster() : super(
-    name: "Dough Dumpster",
+    name: "Donald Trumpster",
     imagePath: "assets/images/token/token_spawner.png",
     woundValue: 50,
     attackValue: 0,
