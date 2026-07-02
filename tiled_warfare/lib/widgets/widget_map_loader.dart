@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:xml/xml.dart';
 
 /// Lädt die Karte "street_battle.tmx" aus dem "assets" Ordner und zeigt sie an.
+/// Die Karte kann gezoomt und gescrollt werden.
 class WidgetMapLoader extends StatefulWidget {
   const WidgetMapLoader({super.key});
 
@@ -21,11 +22,18 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   final int _tilesetColumns = 16;
   bool _isLoading = true;
   String? _error;
+  final TransformationController _transformationController = TransformationController();
 
   @override
   void initState() {
     super.initState();
     _loadMap();
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMap() async {
@@ -106,22 +114,23 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     final mapPixelWidth = _mapWidth * _tileWidth + _tileWidth ~/ 2;
     final mapPixelHeight = (_mapHeight * _tileHeight * 3 ~/ 4) + _tileHeight ~/ 4;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        child: SizedBox(
-          width: mapPixelWidth.toDouble(),
-          height: mapPixelHeight.toDouble(),
-          child: CustomPaint(
-            painter: _HexMapPainter(
-              tilesetImage: _tilesetImage!,
-              tileData: _tileData!,
-              mapWidth: _mapWidth,
-              mapHeight: _mapHeight,
-              tileWidth: _tileWidth,
-              tileHeight: _tileHeight,
-              tilesetColumns: _tilesetColumns,
-            ),
+    return InteractiveViewer(
+      transformationController: _transformationController,
+      boundaryMargin: const EdgeInsets.all(double.infinity),
+      minScale: 0.25,
+      maxScale: 4.0,
+      child: SizedBox(
+        width: mapPixelWidth.toDouble(),
+        height: mapPixelHeight.toDouble(),
+        child: CustomPaint(
+          painter: _HexMapPainter(
+            tilesetImage: _tilesetImage!,
+            tileData: _tileData!,
+            mapWidth: _mapWidth,
+            mapHeight: _mapHeight,
+            tileWidth: _tileWidth,
+            tileHeight: _tileHeight,
+            tilesetColumns: _tilesetColumns,
           ),
         ),
       ),

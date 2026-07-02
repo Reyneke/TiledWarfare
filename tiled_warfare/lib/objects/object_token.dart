@@ -1,12 +1,21 @@
 class ObjectToken {
   final String name;
   final String imagePath;
-  int woundValue = 3;
-  int attackValue = 0;
-  int defenseValue = 0;
-  int movementValue = 0;
-  int damageValue = 1;
-  int rangeValue = 1;
+  int woundValue;
+  int attackValue;
+  int defenseValue;
+  int movementValue;
+  int damageValue;
+  int rangeValue;
 
-  ObjectToken({required this.name, required this.imagePath});
+  ObjectToken({
+    required this.name,
+    required this.imagePath,
+    this.woundValue = 3,
+    this.attackValue = 0,
+    this.defenseValue = 0,
+    this.movementValue = 0,
+    this.damageValue = 1,
+    this.rangeValue = 1,
+  });
 }

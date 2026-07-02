@@ -91,9 +91,9 @@ abstract class AppTheme {
     ),
   );
 
-  /*static final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
+  static final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
     ThemeMode.light,
-  );*/
+  );
 }
 
 /*abstract class AppPizzaTheme {
