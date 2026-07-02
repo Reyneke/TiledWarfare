@@ -17,6 +17,15 @@ import 'package:tiled_warfare/objects/object_token.dart';
 /// Die Tokens werden über einen [TransformationController] mit der Karte
 /// synchronisiert, sodass sie beim Zoomen und Scrollen der Karte ebenfalls
 /// skaliert und verschoben werden.
+///
+/// Tokens blockieren ihre Hex-Felder: Es kann sich immer nur ein Token auf
+/// einem Feld befinden. Beim Ziehen eines Tokens wird beim Loslassen
+/// automatisch das nächstgelegene freie Hex-Feld gesucht und der Token
+/// rastet dort ein (Snap-to-Grid).
+///
+/// Tokens, die außerhalb des sichtbaren Viewports liegen, werden automatisch
+/// ausgeblendet (Viewport-Culling), um Performance zu optimieren und
+/// Darstellungsfehler zu vermeiden.
 class WidgetCaretaker extends StatefulWidget {
   /// Die Pixel-Maße eines einzelnen Karten-Tiles (Breite).
   final int tileWidth;
@@ -148,6 +157,140 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return Offset(pixelX, pixelY);
   }
 
+  /// Rechnet Pixel-Koordinaten in die nächstgelegenen Hex-Gitter-Koordinaten
+  /// (x, y) um. Dies ist die Umkehrung von [_hexToPixel].
+  ///
+  /// Verwendet die gleiche Logik wie [_HexMapPainter] in [WidgetMapLoader]:
+  /// - staggeraxis="y", staggerindex="odd"
+  /// - Ungerade Zeilen sind um tileWidth/2 nach rechts versetzt.
+  ({int x, int y}) _pixelToHex(Offset pixel) {
+    // Zunächst die ungefähre y-Zeile bestimmen
+    final approxY = (pixel.dy / (widget.tileHeight * 3.0 / 4.0)).round();
+
+    // y auf gültigen Bereich begrenzen
+    final y = approxY.clamp(0, widget.mapHeight - 1);
+
+    // x basierend auf y (gerade/ungerade Zeile) berechnen
+    int x;
+    if (y % 2 == 1) {
+      x = ((pixel.dx - widget.tileWidth / 2) / widget.tileWidth).round();
+    } else {
+      x = (pixel.dx / widget.tileWidth).round();
+    }
+
+    // x auf gültigen Bereich begrenzen
+    x = x.clamp(0, widget.mapWidth - 1);
+
+    return (x: x, y: y);
+  }
+
+  /// Gibt die Hex-Gitter-Koordinaten (x, y) für einen Token zurück,
+  /// basierend auf seiner aktuellen Pixel-Position.
+  ({int x, int y}) _getTokenHex(ObjectToken token) {
+    return _pixelToHex(token.position);
+  }
+
+  /// Erstellt eine eindeutige Kennung für ein Hex-Feld (x, y).
+  /// Wird verwendet, um belegte Felder in einem Set zu verwalten.
+  int _hexKey(int x, int y) => y * widget.mapWidth + x;
+
+  /// Baut eine Menge aller aktuell belegten Hex-Felder auf.
+  /// Ein Feld gilt als belegt, wenn dort ein lebender Token steht.
+  /// Der [excludeToken] wird dabei nicht berücksichtigt (z. B. der
+  /// gerade gezogene Token).
+  Set<int> _getOccupiedHexFields({ObjectToken? excludeToken}) {
+    final occupied = <int>{};
+
+    for (final renderInfo in _allTokens) {
+      final token = renderInfo.token;
+      if (token.woundValue <= 0) continue;
+      if (token == excludeToken) continue;
+
+      final hex = _getTokenHex(token);
+      occupied.add(_hexKey(hex.x, hex.y));
+    }
+
+    return occupied;
+  }
+
+  /// Prüft, ob ein bestimmtes Hex-Feld (x, y) frei ist (kein lebender Token
+  /// darauf steht). Der [excludeToken] wird ignoriert.
+  bool _isHexFieldFree(int x, int y, {ObjectToken? excludeToken}) {
+    final occupied = _getOccupiedHexFields(excludeToken: excludeToken);
+    return !occupied.contains(_hexKey(x, y));
+  }
+
+  /// Findet das nächstgelegene freie Hex-Feld zu einer Pixel-Position.
+  /// Durchsucht die Umgebung spiralförmig, beginnend beim nächstgelegenen
+  /// Hex-Feld, und gibt die Pixel-Position des ersten freien Feldes zurück.
+  /// Falls alle Felder belegt sind, wird die ursprüngliche Pixel-Position
+  /// zurückgegeben.
+  Offset _snapToNearestFreeHex(Offset pixel, {ObjectToken? excludeToken}) {
+    final approxHex = _pixelToHex(pixel);
+
+    // Prüfen, ob das angenäherte Feld bereits frei ist
+    if (_isHexFieldFree(approxHex.x, approxHex.y, excludeToken: excludeToken)) {
+      return _hexToPixel(x: approxHex.x, y: approxHex.y);
+    }
+
+    // Spiralförmige Suche im Umkreis von bis zu 10 Feldern
+    const maxRadius = 10;
+    for (int radius = 1; radius <= maxRadius; radius++) {
+      // Obere und untere Kante
+      for (int dx = -radius; dx <= radius; dx++) {
+        // Obere Kante: y = approxHex.y - radius
+        final yTop = approxHex.y - radius;
+        if (yTop >= 0 && yTop < widget.mapHeight) {
+          final xTop = approxHex.x + dx;
+          if (xTop >= 0 && xTop < widget.mapWidth) {
+            if (_isHexFieldFree(xTop, yTop, excludeToken: excludeToken)) {
+              return _hexToPixel(x: xTop, y: yTop);
+            }
+          }
+        }
+
+        // Untere Kante: y = approxHex.y + radius
+        final yBottom = approxHex.y + radius;
+        if (yBottom >= 0 && yBottom < widget.mapHeight) {
+          final xBottom = approxHex.x + dx;
+          if (xBottom >= 0 && xBottom < widget.mapWidth) {
+            if (_isHexFieldFree(xBottom, yBottom, excludeToken: excludeToken)) {
+              return _hexToPixel(x: xBottom, y: yBottom);
+            }
+          }
+        }
+      }
+
+      // Linke und rechte Kante (ohne Ecken, die schon oben/unten abgedeckt sind)
+      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
+        // Linke Kante: x = approxHex.x - radius
+        final xLeft = approxHex.x - radius;
+        if (xLeft >= 0) {
+          final yLeft = approxHex.y + dy;
+          if (yLeft >= 0 && yLeft < widget.mapHeight) {
+            if (_isHexFieldFree(xLeft, yLeft, excludeToken: excludeToken)) {
+              return _hexToPixel(x: xLeft, y: yLeft);
+            }
+          }
+        }
+
+        // Rechte Kante: x = approxHex.x + radius
+        final xRight = approxHex.x + radius;
+        if (xRight < widget.mapWidth) {
+          final yRight = approxHex.y + dy;
+          if (yRight >= 0 && yRight < widget.mapHeight) {
+            if (_isHexFieldFree(xRight, yRight, excludeToken: excludeToken)) {
+              return _hexToPixel(x: xRight, y: yRight);
+            }
+          }
+        }
+      }
+    }
+
+    // Kein freies Feld gefunden – ursprüngliche Pixel-Position zurückgeben
+    return _hexToPixel(x: approxHex.x, y: approxHex.y);
+  }
+
   /// Gibt alle Tokens zurück, die auf der Karte angezeigt werden sollen.
   List<_TokenRenderInfo> get _allTokens {
     final tokens = <_TokenRenderInfo>[];
@@ -243,10 +386,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   }
 
   /// Beendet den Drag-Vorgang und setzt die endgültige Position.
+  /// Der Token wird automatisch auf das nächstgelegene freie Hex-Feld
+  /// gesetzt (Snap-to-Grid). Ist das Zielfeld belegt, wird spiralförmig
+  /// nach einem freien Feld gesucht.
   void _handleDragEnd() {
     if (!_isDragging || _draggedToken == null) return;
     setState(() {
-      _draggedToken!.position += _dragOffset;
+      // Neue Pixel-Position nach dem Drag
+      final newPosition = _draggedToken!.position + _dragOffset;
+
+      // Auf das nächstgelegene freie Hex-Feld einrasten
+      final snappedPosition = _snapToNearestFreeHex(
+        newPosition,
+        excludeToken: _draggedToken,
+      );
+
+      _draggedToken!.position = snappedPosition;
       _isDragging = false;
       _draggedToken = null;
       _dragOffset = Offset.zero;
@@ -486,9 +641,77 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
 
 
+  /// Berechnet das in Karten-Koordinaten sichtbare Rechteck (Viewport).
+  /// Tokens außerhalb dieses Bereichs werden nicht gezeichnet (Viewport-Culling).
+  Rect _getVisibleMapRect() {
+    final matrix = widget.transformationController.value;
+    final inverseMatrix = Matrix4.tryInvert(matrix);
+    if (inverseMatrix == null) {
+      // Falls die Matrix nicht invertiert werden kann, den gesamten Kartenbereich zurückgeben
+      return Rect.fromLTWH(
+        0,
+        0,
+        widget.mapWidth * widget.tileWidth + widget.tileWidth / 2,
+        (widget.mapHeight * widget.tileHeight * 3 / 4) + widget.tileHeight / 4,
+      );
+    }
+
+    // Die Bildschirmgröße über den BuildContext ermitteln
+    final screenSize = MediaQuery.of(context).size;
+
+    // Die vier Ecken des Bildschirms in Karten-Koordinaten umrechnen
+    final topLeft = MatrixUtils.transformPoint(inverseMatrix, Offset.zero);
+    final topRight = MatrixUtils.transformPoint(
+        inverseMatrix, Offset(screenSize.width, 0));
+    final bottomLeft = MatrixUtils.transformPoint(
+        inverseMatrix, Offset(0, screenSize.height));
+    final bottomRight = MatrixUtils.transformPoint(
+        inverseMatrix, Offset(screenSize.width, screenSize.height));
+
+    // Das umschließende Rechteck in Karten-Koordinaten berechnen
+    final minX = [
+      topLeft.dx,
+      topRight.dx,
+      bottomLeft.dx,
+      bottomRight.dx
+    ].reduce((a, b) => a < b ? a : b);
+    final minY = [
+      topLeft.dy,
+      topRight.dy,
+      bottomLeft.dy,
+      bottomRight.dy
+    ].reduce((a, b) => a < b ? a : b);
+    final maxX = [
+      topLeft.dx,
+      topRight.dx,
+      bottomLeft.dx,
+      bottomRight.dx
+    ].reduce((a, b) => a > b ? a : b);
+    final maxY = [
+      topLeft.dy,
+      topRight.dy,
+      bottomLeft.dy,
+      bottomRight.dy
+    ].reduce((a, b) => a > b ? a : b);
+
+    // Einen großzügigen Rand hinzufügen, damit Tokens nicht zu früh
+    // ein-/ausblenden (ca. 2 Tile-Breiten als Puffer)
+    const margin = 200.0;
+    return Rect.fromLTRB(
+      minX - margin,
+      minY - margin,
+      maxX + margin,
+      maxY + margin,
+    );
+  }
+
   /// Baut die Widgets für alle Tokens auf der Karte.
+  /// Tokens außerhalb des sichtbaren Viewports werden übersprungen (Culling).
   List<Widget> _buildTokenWidgets() {
     final widgets = <Widget>[];
+
+    // Sichtbaren Bereich in Karten-Koordinaten ermitteln
+    final visibleRect = _getVisibleMapRect();
 
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
@@ -497,6 +720,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       Offset displayPosition = token.position;
       if (_isDragging && _draggedToken == token) {
         displayPosition += _dragOffset;
+      }
+
+      // Viewport-Culling: Nur Tokens im sichtbaren Bereich zeichnen
+      if (!visibleRect.contains(displayPosition)) {
+        continue;
       }
 
       widgets.add(
