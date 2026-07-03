@@ -279,36 +279,42 @@ class ObjectHost {
 
   /// Führt Angriffe aller Zombies auf Line Cooks in Reichweite aus.
   ///
-  /// Ein Zombie greift an, wenn ein Line Cook in seiner Reichweite ist
-  /// (rangeValue = 0 bedeutet Nahkampf, d. h. benachbarte Felder).
-  void performAllZombieAttacks(
-      ObjectPlayer player, CombatAction action) {
+  /// Ein Zombie greift an (Nahkampf), wenn ein Line Cook in seiner Reichweite
+  /// ist (rangeValue = 0 bedeutet Nahkampf, d. h. benachbarte Felder).
+  /// Gemäß den Kampfregeln in "combat_rules.md".
+  void performAllZombieAttacks(ObjectPlayer player) {
     for (final dumpster in doughDumpsterList) {
       final zombiesToRemove = <ObjectDoughZombie>[];
 
       for (final zombie in dumpster.zombieList) {
-        for (final cook in player.lineCookList) {
+        // Kopie der Liste erstellen, da wir während der Iteration ggf.
+        // Einträge entfernen müssen
+        for (final cook in player.lineCookList.toList()) {
           final distance = (zombie.position - cook.position).distance;
 
           // Prüfen, ob der Line Cook in Reichweite ist
           if (distance <= zombie.rangeValue + 1) {
             final result = player.performAction(
-              action: action,
-              attacker: cook, // Der Cook verteidigt sich
-              defender: zombie,
+              action: CombatAction.melee,
+              attacker: zombie,
+              defender: cook,
               distance: distance.round(),
             );
 
-            if (result.hit) {
-              // Zombie wurde getroffen
-              if (zombie.woundValue <= 0) {
-                // Zombie stirbt
-                zombiesToRemove.add(zombie);
+            // Zombie (Angreifer) wurde durch Patzer oder kritischen Erfolg
+            // des Verteidigers verletzt
+            if (zombie.woundValue <= 0) {
+              zombiesToRemove.add(zombie);
+              break; // Zombie ist tot, keine weiteren Angriffe
+            }
 
-                // 25% Chance: Zombie wird zu einem Dough Dumpster
-                if (_random.nextInt(100) < 25) {
-                  spawnDoughDumpster();
-                }
+            // Cook (Verteidiger) wurde getroffen und stirbt
+            if (result.hit && cook.woundValue <= 0) {
+              player.removeLineCook(cook);
+
+              // 25% Chance: Zombie wird zu einem Dough Dumpster
+              if (_random.nextInt(100) < 25) {
+                spawnDoughDumpster();
               }
             }
           }

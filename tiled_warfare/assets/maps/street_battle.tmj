@@ -56,8 +56,32 @@
         }, 
         {
          "draworder":"topdown",
+         "id":5,
+         "name":"Gelaendetypen",
+         "objects":[
+                {
+                 "capsule":true,
+                 "height":165.333333333333,
+                 "id":7,
+                 "name":"Ruine",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":235.333333333333,
+                 "x":361.333333333333,
+                 "y":138.666666666667
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
+        }, 
+        {
+         "draworder":"topdown",
          "id":2,
-         "name":"Objektebene 1",
+         "name":"Spawns",
          "objects":[
                 {
                  "height":0,
@@ -130,8 +154,8 @@
          "x":0,
          "y":0
         }],
- "nextlayerid":5,
- "nextobjectid":6,
+ "nextlayerid":6,
+ "nextobjectid":8,
  "orientation":"hexagonal",
  "renderorder":"right-down",
  "staggeraxis":"y",

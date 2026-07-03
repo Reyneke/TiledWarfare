@@ -109,6 +109,12 @@ class ObjectPlayer {
     return actions;
   }
 
+  /// Führt einen Initiative-Wurf für den Spieler durch.
+  ///
+  /// Gemäß den Kampfregeln (Abschnitt 7) wird zu Beginn jeder Runde für jede
+  /// Seite ein Initiative-Wurf mit einem W100 durchgeführt.
+  int rollInitiative() => _random.nextInt(100) + 1;
+
   /// Führt einen W100-Wurf durch und gibt das Ergebnis (1–100) zurück.
   int _rollD100() => _random.nextInt(100) + 1;
 
@@ -124,7 +130,7 @@ class ObjectPlayer {
   /// Gibt ein [CombatResult] mit dem Ergebnis des Angriffs zurück.
   CombatResult performAction({
     required CombatAction action,
-    required ObjectLineCook attacker,
+    required ObjectToken attacker,
     required ObjectToken defender,
     int distance = 1,
   }) {

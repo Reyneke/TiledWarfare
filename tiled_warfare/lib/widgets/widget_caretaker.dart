@@ -26,6 +26,7 @@ import 'package:tiled_warfare/objects/object_token.dart';
 /// Tokens, die außerhalb des sichtbaren Viewports liegen, werden automatisch
 /// ausgeblendet (Viewport-Culling), um Performance zu optimieren und
 /// Darstellungsfehler zu vermeiden.
+/// 
 class WidgetCaretaker extends StatefulWidget {
   /// Die Pixel-Maße eines einzelnen Karten-Tiles (Breite).
   final int tileWidth;
@@ -76,6 +77,32 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Der Token, der gerade gezogen wird.
   ObjectToken? _draggedToken;
 
+  /// Die Hex-Position (x, y), an der der Drag-Vorgang begonnen hat.
+  /// Wird verwendet, um die Bewegung auf [ObjectToken.movementValue] zu begrenzen.
+  ({int x, int y})? _dragStartHex;
+
+  // ──────────────────────────────────────────────
+  // Runden- und Initiativsystem
+  // ──────────────────────────────────────────────
+
+  /// Die aktuelle Runde (beginnt bei 1).
+  int _currentRound = 0;
+
+  /// Ob der Spieler am Zug ist.
+  bool _isPlayerTurn = true;
+
+  /// Ob der Host am Zug ist.
+  bool _isHostTurn = false;
+
+  /// Ob das Spiel beendet ist (eine Seite hat verloren).
+  bool _isGameOver = false;
+
+  /// Nachricht über den Initiativwurf (für UI-Anzeige).
+  String? _initiativeMessage;
+
+  /// Nachricht über den aktuellen Spielstatus (für UI-Anzeige).
+  String? _statusMessage;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +110,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Auf Änderungen der Transformation (Zoom/Scroll) lauschen,
     // um die Token-Positionen zu aktualisieren
     widget.transformationController.addListener(_onTransformationChanged);
+
+    // Nach der Initialisierung die erste Runde starten
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startNewRound();
+    });
   }
 
   @override
@@ -136,6 +168,128 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         y: 3 + i * 3,
       );
     }
+  }
+
+  // ──────────────────────────────────────────────
+  // Runden- und Initiativsystem
+  // ──────────────────────────────────────────────
+
+  /// Startet eine neue Runde mit Initiativwurf.
+  ///
+  /// Gemäß Abschnitt 7 der Kampfregeln wird zu Beginn jeder Runde für jede
+  /// Seite ein Initiative-Wurf mit einem W100 durchgeführt. Die Seite mit
+  /// dem höheren Ergebnis beginnt die Runde.
+  void _startNewRound() {
+    if (_isGameOver) return;
+
+    _currentRound++;
+
+    // Initiativwürfe für beide Seiten
+    final playerInitiative = _player.rollInitiative();
+    final hostInitiative = _host.rollInitiative();
+
+    String message;
+    if (playerInitiative > hostInitiative) {
+      _isPlayerTurn = true;
+      _isHostTurn = false;
+      message = 'Runde $_currentRound: Spieler hat Initiative ($playerInitiative vs. $hostInitiative)';
+    } else if (hostInitiative > playerInitiative) {
+      _isPlayerTurn = false;
+      _isHostTurn = true;
+      message = 'Runde $_currentRound: Host hat Initiative ($hostInitiative vs. $playerInitiative)';
+    } else {
+      // Gleichstand: Münzwurf (W100 > 51 → gleiche Reihenfolge wie letzte Runde)
+      // In der ersten Runde beginnt der Spieler bei Gleichstand
+      if (_currentRound == 1) {
+        _isPlayerTurn = true;
+        _isHostTurn = false;
+        message = 'Runde $_currentRound: Gleichstand – Spieler beginnt (erste Runde)';
+      } else {
+        // Beide gleich – behalte die aktuelle Reihenfolge bei
+        message = 'Runde $_currentRound: Gleichstand – gleiche Reihenfolge wie zuvor';
+      }
+    }
+
+    _initiativeMessage = message;
+    _statusMessage = _isPlayerTurn ? 'Spieler ist am Zug' : 'Host ist am Zug';
+
+    // Wenn der Host die Initiative hat, führt er sofort seinen Zug aus
+    if (_isHostTurn) {
+      _executeHostTurn();
+    }
+
+    setState(() {});
+  }
+
+  /// Beendet den Zug des Spielers und übergibt an den Host.
+  void _endPlayerTurn() {
+    if (_isGameOver) return;
+
+    _isPlayerTurn = false;
+    _isHostTurn = true;
+    _statusMessage = 'Host ist am Zug';
+
+    // Auswahl zurücksetzen
+    _selectedToken = null;
+
+    setState(() {});
+
+    // Host-Zug mit kurzer Verzögerung ausführen, damit der Spieler
+    // die Statusänderung sehen kann
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _executeHostTurn();
+      }
+    });
+  }
+
+  /// Führt den Zug des Hosts aus.
+  ///
+  /// Der Host bewegt alle Zombies auf die Line Cooks zu und führt
+  /// Angriffe aus, wenn Zombies in Reichweite sind.
+  void _executeHostTurn() {
+    if (_isGameOver) return;
+
+    // Prüfen, ob der Host überhaupt noch Einheiten hat
+    if (_host.isDefeated) {
+      _isGameOver = true;
+      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
+      setState(() {});
+      return;
+    }
+
+    // Prüfen, ob der Spieler noch Einheiten hat
+    if (_player.lineCookList.isEmpty) {
+      _isGameOver = true;
+      _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
+      setState(() {});
+      return;
+    }
+
+    // 1. Zombies bewegen
+    _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
+
+    // 2. Zombies angreifen lassen
+    _host.performAllZombieAttacks(_player);
+
+    // 3. Tote Einheiten entfernen
+    _removeDeadTokens();
+
+    // 4. Prüfen, ob der Spieler noch Einheiten hat
+    if (_player.lineCookList.isEmpty) {
+      _isGameOver = true;
+      _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
+      setState(() {});
+      return;
+    }
+
+    // 5. Host-Zug beenden, neue Runde starten
+    _isHostTurn = false;
+    _isPlayerTurn = true;
+    _statusMessage = 'Spieler ist am Zug';
+
+    // Nächste Runde starten
+    _startNewRound();
   }
 
   /// Rechnet Hex-Gitter-Koordinaten (x, y) in Pixel-Koordinaten um.
@@ -327,6 +481,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Behandelt einen Tap auf die Karte – wählt den Token unter dem Tap aus
   /// oder deselektiert, wenn auf leeren Bereich getippt wird.
   void _handleTap(Offset tapPosition) {
+    // Nur im Spieler-Zug darf ausgewählt werden
+    if (!_isPlayerTurn || _isGameOver) return;
+
     setState(() {
       // Prüfen, ob ein Token angetippt wurde
       ObjectToken? tappedToken;
@@ -355,6 +512,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Startet einen Drag-Vorgang für den Token unter der Startposition.
   void _handleDragStart(Offset startPosition) {
+    // Nur im Spieler-Zug darf gezogen werden
+    if (!_isPlayerTurn || _isGameOver) return;
+
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
       // Nur Spieler-Einheiten können gezogen werden
@@ -371,6 +531,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
           _draggedToken = token;
           _selectedToken = token;
           _dragOffset = Offset.zero;
+          _dragStartHex = _getTokenHex(token);
         });
         return;
       }
@@ -385,10 +546,37 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     });
   }
 
+  /// Berechnet die Hex-Gitter-Entfernung zwischen zwei Hex-Koordinaten
+  /// auf einem Pointy-Top-Hex-Gitter mit staggeraxis="y", staggerindex="odd".
+  ///
+  /// Verwendet die Umrechnung in Cube-Koordinaten für eine korrekte
+  /// Hex-Distanzberechnung.
+  int _hexDistance({required int x1, required int y1, required int x2, required int y2}) {
+    // Offset-zu-Cube-Konvertierung für odd-r (staggerindex="odd")
+    int cubeX1 = x1 - (y1 - (y1 & 1)) ~/ 2;
+    int cubeZ1 = y1;
+    int cubeY1 = -cubeX1 - cubeZ1;
+
+    int cubeX2 = x2 - (y2 - (y2 & 1)) ~/ 2;
+    int cubeZ2 = y2;
+    int cubeY2 = -cubeX2 - cubeZ2;
+
+    // Hex-Distanz = max(|dx|, |dy|, |dz|)
+    return [
+      (cubeX1 - cubeX2).abs(),
+      (cubeY1 - cubeY2).abs(),
+      (cubeZ1 - cubeZ2).abs(),
+    ].reduce((a, b) => a > b ? a : b);
+  }
+
   /// Beendet den Drag-Vorgang und setzt die endgültige Position.
   /// Der Token wird automatisch auf das nächstgelegene freie Hex-Feld
   /// gesetzt (Snap-to-Grid). Ist das Zielfeld belegt, wird spiralförmig
   /// nach einem freien Feld gesucht.
+  ///
+  /// Die Bewegung wird auf [ObjectToken.movementValue] begrenzt. Überschreitet
+  /// die Entfernung den Bewegungswert, wird der Token an seine ursprüngliche
+  /// Position zurückgesetzt.
   void _handleDragEnd() {
     if (!_isDragging || _draggedToken == null) return;
     setState(() {
@@ -401,10 +589,36 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         excludeToken: _draggedToken,
       );
 
+      // Ziel-Hex-Koordinaten ermitteln
+      final targetHex = _pixelToHex(snappedPosition);
+
+      // Bewegung auf movementValue begrenzen
+      if (_dragStartHex != null) {
+        final distance = _hexDistance(
+          x1: _dragStartHex!.x,
+          y1: _dragStartHex!.y,
+          x2: targetHex.x,
+          y2: targetHex.y,
+        );
+
+        if (distance > _draggedToken!.movementValue) {
+          // Bewegung überschreitet den erlaubten Wert – zurücksetzen
+          _showMessage(
+            'Bewegung zu weit! Maximal ${_draggedToken!.movementValue} Felder erlaubt.',
+          );
+          _isDragging = false;
+          _draggedToken = null;
+          _dragOffset = Offset.zero;
+          _dragStartHex = null;
+          return;
+        }
+      }
+
       _draggedToken!.position = snappedPosition;
       _isDragging = false;
       _draggedToken = null;
       _dragOffset = Offset.zero;
+      _dragStartHex = null;
     });
   }
 
@@ -412,6 +626,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   void _performAction(CombatAction action) {
     if (_selectedToken == null) return;
     if (_selectedToken is! ObjectLineCook) return;
+    // Nur im Spieler-Zug darf gekämpft werden
+    if (!_isPlayerTurn || _isGameOver) return;
 
     final attacker = _selectedToken as ObjectLineCook;
 
@@ -471,7 +687,16 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Tote Einheiten entfernen
     _removeDeadTokens();
 
-    setState(() {});
+    // Prüfen, ob der Host besiegt wurde
+    if (_host.isDefeated) {
+      _isGameOver = true;
+      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
+      setState(() {});
+      return;
+    }
+
+    // Nach dem Angriff: Host-Zug ausführen (der Host reagiert auf den Angriff)
+    _endPlayerTurn();
   }
 
   /// Entfernt alle Tokens mit woundValue <= 0.
@@ -508,6 +733,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   void _showContextMenu(BuildContext context, Offset position) {
     if (_selectedToken == null) return;
     if (_selectedToken is! ObjectLineCook) return;
+    // Nur im Spieler-Zug darf das Kontextmenü geöffnet werden
+    if (!_isPlayerTurn || _isGameOver) return;
 
     final cook = _selectedToken as ObjectLineCook;
     final actions = _player.getAvailableActions(cook);
@@ -628,18 +855,128 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
                 child: _buildInfoPanelContent(),
               ),
             ),
-
+          // Runden- und Status-Anzeige (oben rechts)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: _buildStatusPanel(),
+          ),
         ],
       ),
-
-
-
-
-
     );
   }
 
-
+  /// Baut das Status-Panel mit Runden-, Initiativ- und Spielstandsanzeige.
+  Widget _buildStatusPanel() {
+    return Card(
+      elevation: 4,
+      color: _isGameOver
+          ? Colors.amber.shade100
+          : _isPlayerTurn
+              ? Colors.green.shade50
+              : Colors.red.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Rundenanzeige
+            Text(
+              'Runde $_currentRound',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Status (wessen Zug)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isGameOver
+                        ? Colors.orange
+                        : _isPlayerTurn
+                            ? Colors.green
+                            : Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _isGameOver
+                      ? 'Spiel beendet'
+                      : _isPlayerTurn
+                          ? 'Spieler am Zug'
+                          : 'Host am Zug',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _isGameOver
+                        ? Colors.orange.shade800
+                        : _isPlayerTurn
+                            ? Colors.green.shade800
+                            : Colors.red.shade800,
+                  ),
+                ),
+              ],
+            ),
+            // Initiativnachricht
+            if (_initiativeMessage != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _initiativeMessage!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+            // Spielstand
+            const SizedBox(height: 8),
+            Text(
+              'Line Cooks: ${_player.lineCookCount}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            Text(
+              'Gegner: ${_host.activeUnitCount}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            // "Zug beenden"-Button (nur im Spieler-Zug)
+            if (_isPlayerTurn && !_isGameOver) ...[
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: _endPlayerTurn,
+                icon: const Icon(Icons.skip_next, size: 16),
+                label: const Text('Zug beenden'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  backgroundColor: Colors.green.shade100,
+                  foregroundColor: Colors.green.shade900,
+                ),
+              ),
+            ],
+            // Spielende-Nachricht
+            if (_isGameOver) ...[
+              const SizedBox(height: 8),
+              Text(
+                _statusMessage ?? '',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   /// Berechnet das in Karten-Koordinaten sichtbare Rechteck (Viewport).
   /// Tokens außerhalb dieses Bereichs werden nicht gezeichnet (Viewport-Culling).
@@ -783,7 +1120,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
             if (isPlayerUnit) ...[
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                onPressed: () => _performAction(CombatAction.melee),
+                onPressed: (_isPlayerTurn && !_isGameOver)
+                    ? () => _performAction(CombatAction.melee)
+                    : null,
                 icon: const Icon(Icons.local_fire_department, size: 16),
                 label: const Text('Nahkampf'),
                 style: ElevatedButton.styleFrom(
@@ -794,7 +1133,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
                 const SizedBox(height: 4),
               if (token.rangeValue > 0)
                 ElevatedButton.icon(
-                  onPressed: () => _performAction(CombatAction.ranged),
+                  onPressed: (_isPlayerTurn && !_isGameOver)
+                      ? () => _performAction(CombatAction.ranged)
+                      : null,
                   icon: const Icon(Icons.arrow_forward, size: 16),
                   label: const Text('Fernkampf'),
                   style: ElevatedButton.styleFrom(
@@ -804,7 +1145,6 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
             ],
           ],
         ),
-
       ),
     );
   }
