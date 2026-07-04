@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/objects/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/object_dough_zombie.dart';
@@ -44,6 +46,11 @@ class WidgetCaretaker extends StatefulWidget {
   /// um die Token-Positionen mit dem Zoom/Scroll der Karte zu synchronisieren.
   final TransformationController transformationController;
 
+  /// Die geparsten Spawnpunkte aus der Map.
+  /// Jeder Spawnpunkt hat einen Namen (z. B. "spawn_player1", "spawn_monster")
+  /// und Pixel-Koordinaten (x, y) aus der TMX-Datei.
+  final List<({String name, double x, double y})> spawnPoints;
+
   const WidgetCaretaker({
     super.key,
     required this.tileWidth,
@@ -51,6 +58,7 @@ class WidgetCaretaker extends StatefulWidget {
     required this.mapWidth,
     required this.mapHeight,
     required this.transformationController,
+    this.spawnPoints = const [],
   });
 
 
@@ -123,6 +131,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant WidgetCaretaker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Falls die Spawnpunkte nachgeladen wurden (oder sich geändert haben),
+    // die Spielobjekte neu initialisieren
+    if (widget.spawnPoints != oldWidget.spawnPoints && widget.spawnPoints.isNotEmpty) {
+      _initializeGameObjects();
+      setState(() {});
+    }
+  }
+
   /// Wird bei jeder Änderung der Karten-Transformation aufgerufen.
   void _onTransformationChanged() {
     // setState, um die Token-Positionen neu zu zeichnen
@@ -141,32 +160,123 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return transformed;
   }
 
-
-
   /// Initialisiert die Spielobjekte: platziert Start-Einheiten auf der Karte.
+  /// Verwendet die Spawnpunkte aus der Map-Datei, falls vorhanden.
+  /// Andernfalls werden die bisherigen Standard-Positionen verwendet.
   void _initializeGameObjects() {
-    // Spieler-Einheiten spawnen und auf der Karte positionieren
+    // Mit hochauflösendem Zeitstempel seeden, damit jeder Spielstart
+    // eine andere Zufallsauswahl ergibt (auch bei schnellen Neustarts)
+    final random = Random(DateTime.now().microsecondsSinceEpoch);
+    // Vorherige Spielobjekte entfernen, falls diese Methode erneut aufgerufen wird
+    _player.lineCookList.clear();
+    _host.doughDumpsterList.clear();
+    // Spieler-Spawnpunkte (mit "spawn_player" im Namen) finden
+    final playerSpawns = widget.spawnPoints
+        .where((sp) => sp.name.startsWith('spawn_player'))
+        .toList();
+    // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
+    final monsterSpawns = widget.spawnPoints
+        .where((sp) => sp.name.startsWith('spawn_monster'))
+        .toList();
+
+    // Einen zufälligen Spawnpunkt für die Spieler-Gruppe auswählen
+    Offset playerSpawnPosition;
+    if (playerSpawns.isNotEmpty) {
+      final chosenSpawn = playerSpawns[random.nextInt(playerSpawns.length)];
+      playerSpawnPosition = Offset(chosenSpawn.x, chosenSpawn.y);
+    } else {
+      // Fallback: linke Seite der Karte
+      playerSpawnPosition = _hexToPixel(x: 2, y: 5);
+    }
+
+    // Alle 3 Spieler-Einheiten gruppiert um den gewählten Spawnpunkt positionieren
     for (int i = 0; i < 3; i++) {
       final cook = _player.spawnLineCook();
-      // Startpositionen: linke Seite der Karte
-      cook.position = _hexToPixel(
-        x: 2,
-        y: 5 + i * 4,
+      // Leichter Versatz, damit die Tokens nicht exakt übereinander liegen
+      cook.position = Offset(
+        playerSpawnPosition.dx + (i - 1) * widget.tileWidth * 0.5,
+        playerSpawnPosition.dy + (i - 1) * widget.tileHeight * 0.5,
       );
     }
 
-    // Gegnerische Dough Dumpster platzieren
+    // Gegnerische Dough Dumpster am Monster-Spawnpunkt platzieren
     final dumpster = ObjectDoughDumpster();
-    dumpster.position = _hexToPixel(x: 25, y: 5);
+    if (monsterSpawns.isNotEmpty) {
+      dumpster.position = Offset(monsterSpawns[0].x, monsterSpawns[0].y);
+    } else {
+      dumpster.position = _hexToPixel(x: 25, y: 5);
+    }
     _host.doughDumpsterList.add(dumpster);
 
-    // Start-Zombies vom Dumpster spawnen lassen
+    // Start-Zombies vom Dumpster spawnen lassen – verteilt um den Dumpster herum
     final zombies = dumpster.spawnZombies();
+
+    // Hexagonale Offset-Richtungen für Nachbarfelder (odd-r staggerindex="odd"):
+    // Gerade y: Nachbarn bei (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (0,1)
+    // Ungerade y: Nachbarn bei (1,0), (1,1), (0,1), (-1,1), (-1,0), (0,-1)
+    // Für die Platzierung zwischen den Zentren verwenden wir reduzierte Offsets.
+    final dumpsterHex = _pixelToHex(dumpster.position);
+    final neighborOffsets = <({int dx, int dy})>[
+      (dx: 0, dy: -1), (dx: -1, dy: 0),
+      (dx: 1, dy: 0), (dx: 0, dy: 1),
+    ];
     for (int i = 0; i < zombies.length; i++) {
-      zombies[i].position = _hexToPixel(
-        x: 22,
-        y: 3 + i * 3,
-      );
+      if (i < neighborOffsets.length) {
+        final offset = neighborOffsets[i];
+        zombies[i].position = _hexToPixel(
+          x: (dumpsterHex.x + offset.dx).clamp(0, widget.mapWidth - 1),
+          y: (dumpsterHex.y + offset.dy).clamp(0, widget.mapHeight - 1),
+        );
+      } else {
+        // Fallback: direkt auf den Dumpster
+        zombies[i].position = dumpster.position;
+      }
+    }
+  }
+
+  /// Setzt die Bewegungspunkte aller Einheiten auf ihre Basiswerte zurück.
+  /// Verwaltet die Initialwerte über eine Map, da ObjectToken.movementValue
+  /// mutable ist und während des Spiels verbraucht wird.
+  final Map<ObjectToken, int> _baseMovementValues = {};
+
+  /// Speichert den Basis-Bewegungswert eines Tokens (wird bei der ersten
+  /// Runde von [_startNewRound] automatisch ermittelt).
+  void _storeBaseMovementValue(ObjectToken token) {
+    if (!_baseMovementValues.containsKey(token)) {
+      _baseMovementValues[token] = token.movementValue;
+    }
+  }
+
+  /// Setzt die Bewegungspunkte aller Einheiten auf ihre Basiswerte zurück.
+  void _resetMovementPoints() {
+    // Spieler-Einheiten
+    for (final cook in _player.lineCookList) {
+      _storeBaseMovementValue(cook);
+      cook.movementValue = _baseMovementValues[cook]!;
+    }
+    // Gegnerische Dough Dumpster
+    for (final dumpster in _host.doughDumpsterList) {
+      _storeBaseMovementValue(dumpster);
+      dumpster.movementValue = _baseMovementValues[dumpster]!;
+      // Zombies in jedem Dumpster
+      for (final zombie in dumpster.zombieList) {
+        _storeBaseMovementValue(zombie);
+        zombie.movementValue = _baseMovementValues[zombie]!;
+      }
+    }
+  }
+
+  /// Setzt das hasActed-Flag aller Einheiten zurück, damit sie in der
+  /// neuen Runde wieder eine Kampfaktion ausführen können.
+  void _resetHasActed() {
+    for (final cook in _player.lineCookList) {
+      cook.hasActed = false;
+    }
+    for (final dumpster in _host.doughDumpsterList) {
+      dumpster.hasActed = false;
+      for (final zombie in dumpster.zombieList) {
+        zombie.hasActed = false;
+      }
     }
   }
 
@@ -183,6 +293,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     if (_isGameOver) return;
 
     _currentRound++;
+
+    // Bewegungspunkte aller Einheiten zurücksetzen
+    _resetMovementPoints();
+
+    // hasActed-Flag aller Einheiten zurücksetzen
+    _resetHasActed();
 
     // Initiativwürfe für beide Seiten
     final playerInitiative = _player.rollInitiative();
@@ -602,9 +718,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         );
 
         if (distance > _draggedToken!.movementValue) {
-          // Bewegung überschreitet den erlaubten Wert – zurücksetzen
+          // Bewegung überschreitet den verbleibenden Bewegungswert – zurücksetzen
           _showMessage(
-            'Bewegung zu weit! Maximal ${_draggedToken!.movementValue} Felder erlaubt.',
+            'Bewegung zu weit! Nur noch ${_draggedToken!.movementValue} Bewegungspunkte übrig.',
           );
           _isDragging = false;
           _draggedToken = null;
@@ -612,6 +728,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
           _dragStartHex = null;
           return;
         }
+
+        // Verbrauchte Bewegungspunkte abziehen
+        _draggedToken!.movementValue -= distance;
       }
 
       _draggedToken!.position = snappedPosition;
@@ -619,6 +738,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       _draggedToken = null;
       _dragOffset = Offset.zero;
       _dragStartHex = null;
+
+      // Nach Bewegung prüfen, ob alle Tokens fertig sind
+      _checkAutoEndPlayerTurn();
     });
   }
 
@@ -630,6 +752,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     if (!_isPlayerTurn || _isGameOver) return;
 
     final attacker = _selectedToken as ObjectLineCook;
+
+    // Prüfen, ob der Token in dieser Runde bereits gehandelt hat
+    if (attacker.hasActed) {
+      _showMessage('${attacker.name} hat bereits in dieser Runde angegriffen!');
+      return;
+    }
 
     // Nächstgelegenen Gegner finden
     ObjectToken? nearestEnemy;
@@ -671,6 +799,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       distance: distanceInHex,
     );
 
+    // Token hat in dieser Runde seine eine Kampfaktion verbraucht
+    attacker.hasActed = true;
+
     // Ergebnis anzeigen
     String message = 'Angriff auf ${nearestEnemy.name}: ';
     if (result.hit) {
@@ -695,8 +826,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       return;
     }
 
-    // Nach dem Angriff: Host-Zug ausführen (der Host reagiert auf den Angriff)
-    _endPlayerTurn();
+    // Prüfen, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben
+    _checkAutoEndPlayerTurn();
   }
 
   /// Entfernt alle Tokens mit woundValue <= 0.
@@ -716,6 +847,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     if (_selectedToken != null && _selectedToken!.woundValue <= 0) {
       _selectedToken = null;
     }
+  }
+
+  /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.
+  /// Ist dies der Fall, wird der Spielerzug automatisch beendet.
+  void _checkAutoEndPlayerTurn() {
+    if (!_isPlayerTurn || _isGameOver) return;
+    if (_player.lineCookList.isEmpty) return;
+
+    for (final cook in _player.lineCookList) {
+      // Ein Token hat noch Aktionen oder Bewegungspunkte übrig
+      if (!cook.hasActed || cook.movementValue > 0) return;
+    }
+
+    // Alle Tokens haben gehandelt und keine Bewegung mehr – automatisch beenden
+    _showMessage('Alle Einheiten haben keine Aktionen mehr – Zug wird beendet.');
+    _endPlayerTurn();
   }
 
   /// Zeigt eine SnackBar-Nachricht an.
@@ -1042,13 +1189,97 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     );
   }
 
+  /// Berechnet alle erreichbaren Hex-Felder für den ausgewählten Token
+  /// basierend auf seinen verbleibenden Bewegungspunkten.
+  /// Verwendet BFS über die Hex-Nachbarschaft (odd-r).
+  Set<int> get _reachableHexFields {
+    if (_selectedToken == null || _selectedToken!.movementValue <= 0) {
+      return {};
+    }
+    final hex = _getTokenHex(_selectedToken!);
+    final maxMovement = _selectedToken!.movementValue;
+    final occupied = _getOccupiedHexFields(excludeToken: _selectedToken);
+
+    // BFS: Queue von (x, y, remainingSteps)
+    final visited = <int>{_hexKey(hex.x, hex.y)};
+    final reachable = <int>{};
+    final queue = [(x: hex.x, y: hex.y, steps: maxMovement)];
+
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      if (current.steps <= 0) continue;
+
+      // Nachbar-Offsets für odd-r Hex-Gitter (staggerindex="odd")
+      final neighbors = (current.y % 2 == 0)
+          ? [(-1, -1), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)]
+          : [(0, -1), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)];
+
+      for (final (dx, dy) in neighbors) {
+        final nx = current.x + dx;
+        final ny = current.y + dy;
+        if (nx < 0 || nx >= widget.mapWidth || ny < 0 || ny >= widget.mapHeight) continue;
+        final key = _hexKey(nx, ny);
+        if (visited.contains(key)) continue;
+        visited.add(key);
+        if (occupied.contains(key)) continue;
+        reachable.add(key);
+        queue.add((x: nx, y: ny, steps: current.steps - 1));
+      }
+    }
+
+    return reachable;
+  }
+
   /// Baut die Widgets für alle Tokens auf der Karte.
   /// Tokens außerhalb des sichtbaren Viewports werden übersprungen (Culling).
+  /// Wenn ein Token ausgewählt ist, werden seine erreichbaren Hex-Felder
+  /// als transparente grüne Overlays angezeigt.
   List<Widget> _buildTokenWidgets() {
     final widgets = <Widget>[];
 
     // Sichtbaren Bereich in Karten-Koordinaten ermitteln
     final visibleRect = _getVisibleMapRect();
+
+    // Erreichbare Felder für den ausgewählten Token berechnen
+    final reachableFields = _reachableHexFields;
+
+    // Highlight-Widgets für erreichbare Felder zeichnen
+    if (reachableFields.isNotEmpty) {
+      for (final key in reachableFields) {
+        final x = key % widget.mapWidth;
+        final y = key ~/ widget.mapWidth;
+        final pixel = _hexToPixel(x: x, y: y);
+
+        // Viewport-Culling
+        if (!visibleRect.contains(pixel)) continue;
+
+        widgets.add(
+          Positioned(
+            left: pixel.dx,
+            top: pixel.dy,
+            child: IgnorePointer(
+              child: Container(
+                width: widget.tileWidth.toDouble(),
+                height: widget.tileHeight.toDouble(),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.25),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.6),
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '', // leer – nur Farbe
+                    style: const TextStyle(fontSize: 8, color: Colors.white70),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
 
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
@@ -1120,7 +1351,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
             if (isPlayerUnit) ...[
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                onPressed: (_isPlayerTurn && !_isGameOver)
+                onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
                     ? () => _performAction(CombatAction.melee)
                     : null,
                 icon: const Icon(Icons.local_fire_department, size: 16),
@@ -1133,7 +1364,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
                 const SizedBox(height: 4),
               if (token.rangeValue > 0)
                 ElevatedButton.icon(
-                  onPressed: (_isPlayerTurn && !_isGameOver)
+                  onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
                       ? () => _performAction(CombatAction.ranged)
                       : null,
                   icon: const Icon(Icons.arrow_forward, size: 16),

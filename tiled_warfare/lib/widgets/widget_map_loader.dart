@@ -21,10 +21,18 @@ class WidgetMapLoader extends StatefulWidget {
   final void Function(TransformationController controller)?
       onTransformationControllerCreated;
 
+  /// Callback, der die geparsten Spawnpunkte aus der Map an das übergeordnete
+  /// Widget weitergibt.
+  /// Jeder Spawnpunkt hat einen Namen (z. B. "spawn_player1", "spawn_monster")
+  /// und Pixel-Koordinaten (x, y) aus der TMX-Datei.
+  final void Function(List<({String name, double x, double y})> spawnPoints)?
+      onSpawnPointsParsed;
+
   const WidgetMapLoader({
     super.key,
     this.onMapLoaded,
     this.onTransformationControllerCreated,
+    this.onSpawnPointsParsed,
   });
 
 
@@ -96,6 +104,27 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       var codec = await ui.instantiateImageCodec(byteData.buffer.asUint8List());
       var frameInfo = await codec.getNextFrame();
       _tilesetImage = frameInfo.image;
+
+      // Spawnpunkte aus der "Spawns"-Objektgruppe parsen
+      final spawnPoints = <({String name, double x, double y})>[];
+      try {
+        final spawnObjectGroup = mapElement.findElements('objectgroup').firstWhere(
+          (og) => og.getAttribute('name') == 'Spawns',
+        );
+        for (final obj in spawnObjectGroup.findElements('object')) {
+          final name = obj.getAttribute('name') ?? '';
+          final x = double.parse(obj.getAttribute('x') ?? '0');
+          final y = double.parse(obj.getAttribute('y') ?? '0');
+          if (name.isNotEmpty) {
+            spawnPoints.add((name: name, x: x, y: y));
+          }
+        }
+      } catch (_) {
+        // Keine Spawns-Objektgruppe vorhanden – ignorieren
+      }
+
+      // Spawnpunkte an den Callback melden
+      widget.onSpawnPointsParsed?.call(spawnPoints);
 
       // Kartendimensionen an den Callback melden
       widget.onMapLoaded?.call(
