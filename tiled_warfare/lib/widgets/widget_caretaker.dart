@@ -76,6 +76,14 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Der aktuell ausgewählte Token (für Info-Anzeige und Aktionen).
   ObjectToken? _selectedToken;
 
+  /// Die aktuell vorgemerkte Kampfaktion (Targeting-Modus).
+  /// Solange nicht null, wartet das Spiel auf einen Klick auf ein Ziel.
+  CombatAction? _pendingAction;
+
+  /// Alle feindlichen Tokens, die für die ausstehende Aktion als Ziel
+  /// in Frage kommen (im Targeting-Modus hervorgehoben).
+  Set<ObjectToken> _targetableEnemies = {};
+
   /// Gibt an, ob gerade ein Drag-Vorgang läuft.
   bool _isDragging = false;
 
@@ -594,10 +602,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return tokens;
   }
 
-  /// Behandelt einen Tap auf die Karte – wählt den Token unter dem Tap aus
-  /// oder deselektiert, wenn auf leeren Bereich getippt wird.
+  /// Behandelt einen Tap auf die Karte.
+  /// - Im Targeting-Modus wird ein angeklickter targetierbarer Gegner angegriffen.
+  /// - Im Normalmodus wird ein Token ausgewählt oder die Auswahl aufgehoben.
   void _handleTap(Offset tapPosition) {
-    // Nur im Spieler-Zug darf ausgewählt werden
+    // Nur im Spieler-Zug
     if (!_isPlayerTurn || _isGameOver) return;
 
     setState(() {
@@ -616,12 +625,30 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         }
       }
 
-      if (tappedToken != null) {
-        // Token auswählen
+      if (_pendingAction != null && tappedToken != null) {
+        // Targeting-Modus: Wurde ein targetierbarer Gegner getroffen?
+        if (_targetableEnemies.contains(tappedToken)) {
+          final action = _pendingAction!;
+          _pendingAction = null;
+          _targetableEnemies = {};
+          _executeActionOnTarget(action, tappedToken);
+        } else if (tappedToken == _selectedToken) {
+          // Klick auf den eigenen Angreifer bricht ab
+          _pendingAction = null;
+          _targetableEnemies = {};
+        } else {
+          // Unerwarteter Token – abbrechen
+          _pendingAction = null;
+          _targetableEnemies = {};
+        }
+      } else if (tappedToken != null) {
+        // Normalmodus: Token auswählen
         _selectedToken = tappedToken;
       } else {
         // Nichts getroffen – Deselektieren
         _selectedToken = null;
+        _pendingAction = null;
+        _targetableEnemies = {};
       }
     });
   }
@@ -744,11 +771,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     });
   }
 
-  /// Führt eine Kampfaktion des ausgewählten Tokens gegen einen Gegner aus.
-  void _performAction(CombatAction action) {
+  /// Versetzt das Spiel in den Targeting-Modus für die angegebene Aktion.
+  /// Zeigt alle erreichbaren Gegner als rote Highlights an.
+  /// Erst ein Klick auf einen Gegner führt die Aktion aus.
+  void _enterTargetingMode(CombatAction action) {
     if (_selectedToken == null) return;
     if (_selectedToken is! ObjectLineCook) return;
-    // Nur im Spieler-Zug darf gekämpft werden
     if (!_isPlayerTurn || _isGameOver) return;
 
     final attacker = _selectedToken as ObjectLineCook;
@@ -759,43 +787,57 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       return;
     }
 
-    // Nächstgelegenen Gegner finden
-    ObjectToken? nearestEnemy;
-    double nearestDistance = double.infinity;
-
+    // Alle in Reichweite liegenden Gegner finden
+    final targets = <ObjectToken>{};
     for (final renderInfo in _allTokens) {
       if (renderInfo.isPlayerUnit) continue;
       final enemy = renderInfo.token;
       if (enemy.woundValue <= 0) continue;
 
-      final distance = (enemy.position - attacker.position).distance;
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestEnemy = enemy;
+      final distance = _hexDistance(
+        x1: _getTokenHex(attacker).x,
+        y1: _getTokenHex(attacker).y,
+        x2: _getTokenHex(enemy).x,
+        y2: _getTokenHex(enemy).y,
+      );
+
+      if (action == CombatAction.melee && distance <= 1) {
+        targets.add(enemy);
+      } else if (action == CombatAction.ranged && distance <= attacker.rangeValue) {
+        targets.add(enemy);
       }
     }
 
-    if (nearestEnemy == null) return;
+    if (targets.isEmpty) {
+      _showMessage('Keine Ziele in Reichweite!');
+      return;
+    }
 
-    // Entfernung in Hex-Feldern schätzen
-    final distanceInHex = (nearestDistance / widget.tileWidth).round();
+    setState(() {
+      _pendingAction = action;
+      _targetableEnemies = targets;
+    });
+  }
+
+  /// Führt die ausstehende Kampfaktion gegen das per Tap gewählte Ziel aus.
+  void _executeActionOnTarget(CombatAction action, ObjectToken target) {
+    if (_selectedToken == null || _selectedToken is! ObjectLineCook) return;
+    final attacker = _selectedToken as ObjectLineCook;
+
+    // Entfernung in Hex-Feldern ermitteln
+    final distanceInHex = _hexDistance(
+      x1: _getTokenHex(attacker).x,
+      y1: _getTokenHex(attacker).y,
+      x2: _getTokenHex(target).x,
+      y2: _getTokenHex(target).y,
+    );
     if (distanceInHex < 1) return;
-
-    // Prüfen, ob die Aktion in dieser Entfernung möglich ist
-    if (action == CombatAction.melee && distanceInHex > 1) {
-      _showMessage('Nahkampf ist nur auf benachbarte Felder möglich!');
-      return;
-    }
-    if (action == CombatAction.ranged && distanceInHex > attacker.rangeValue) {
-      _showMessage('Ziel ist außerhalb der Reichweite!');
-      return;
-    }
 
     // Kampfaktion ausführen
     final result = _player.performAction(
       action: action,
       attacker: attacker,
-      defender: nearestEnemy,
+      defender: target,
       distance: distanceInHex,
     );
 
@@ -803,7 +845,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     attacker.hasActed = true;
 
     // Ergebnis anzeigen
-    String message = 'Angriff auf ${nearestEnemy.name}: ';
+    String message = 'Angriff auf ${target.name}: ';
     if (result.hit) {
       message += 'Treffer! ${result.damage} Schaden verursacht.';
     } else {
@@ -926,9 +968,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
           'Trefferpunkte: ${cook.woundValue}',
         );
       } else if (value == CombatAction.melee.name) {
-        _performAction(CombatAction.melee);
+        _enterTargetingMode(CombatAction.melee);
       } else if (value == CombatAction.ranged.name) {
-        _performAction(CombatAction.ranged);
+        _enterTargetingMode(CombatAction.ranged);
       }
     });
   }
@@ -1281,6 +1323,39 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       }
     }
 
+    // Im Targeting-Modus: rote Highlights für targetierbare Gegner zeichnen
+    if (_pendingAction != null && _targetableEnemies.isNotEmpty) {
+      for (final enemy in _targetableEnemies) {
+        if (enemy.woundValue <= 0) continue;
+        if (!visibleRect.contains(enemy.position)) continue;
+
+        final key = _hexKey(_getTokenHex(enemy).x, _getTokenHex(enemy).y);
+        final x = key % widget.mapWidth;
+        final y = key ~/ widget.mapWidth;
+        final pixel = _hexToPixel(x: x, y: y);
+
+        widgets.add(
+          Positioned(
+            left: pixel.dx,
+            top: pixel.dy,
+            child: IgnorePointer(
+              child: Container(
+                width: widget.tileWidth.toDouble(),
+                height: widget.tileHeight.toDouble(),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.3),
+                  border: Border.all(
+                    color: Colors.red.withValues(alpha: 0.8),
+                    width: 2.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
       if (token.woundValue <= 0) continue;
@@ -1352,7 +1427,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
               const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
-                    ? () => _performAction(CombatAction.melee)
+                    ? () => _enterTargetingMode(CombatAction.melee)
                     : null,
                 icon: const Icon(Icons.local_fire_department, size: 16),
                 label: const Text('Nahkampf'),
@@ -1365,7 +1440,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
               if (token.rangeValue > 0)
                 ElevatedButton.icon(
                   onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
-                      ? () => _performAction(CombatAction.ranged)
+                      ? () => _enterTargetingMode(CombatAction.ranged)
                       : null,
                   icon: const Icon(Icons.arrow_forward, size: 16),
                   label: const Text('Fernkampf'),
