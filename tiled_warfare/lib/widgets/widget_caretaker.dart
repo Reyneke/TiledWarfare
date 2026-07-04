@@ -390,11 +390,20 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       return;
     }
 
+    // 0. Dough Dumpster spawnen neue Zombies (alle 2 Runden)
+    final spawnLogs = _host.performAllDumpsterSpawning();
+    for (final log in spawnLogs) {
+      _showMessage(log);
+    }
+
     // 1. Zombies bewegen
     _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
 
-    // 2. Zombies angreifen lassen
-    _host.performAllZombieAttacks(_player);
+    // 2. Zombies angreifen lassen (mit Kampflog)
+    final combatLogs = _host.performAllZombieAttacks(_player);
+    for (final log in combatLogs) {
+      _showMessage(log);
+    }
 
     // 3. Tote Einheiten entfernen
     _removeDeadTokens();
@@ -614,10 +623,15 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       ObjectToken? tappedToken;
       for (final renderInfo in _allTokens) {
         final token = renderInfo.token;
+        // Host-Tokens (Gegner) haben eine etwas größere Hitbox,
+        // um dem Spieler das Zielen zu erleichtern
+        final double hitboxSize = renderInfo.isPlayerUnit
+            ? widget.tileWidth.toDouble()
+            : widget.tileWidth.toDouble() * 1.3;
         final tokenRect = Rect.fromCenter(
           center: token.position,
-          width: widget.tileWidth.toDouble(),
-          height: widget.tileHeight.toDouble(),
+          width: hitboxSize,
+          height: hitboxSize,
         );
         if (tokenRect.contains(tapPosition)) {
           tappedToken = token;
@@ -1297,8 +1311,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
         widgets.add(
           Positioned(
-            left: pixel.dx,
-            top: pixel.dy,
+            left: pixel.dx - widget.tileWidth / 2,
+            top: pixel.dy - widget.tileHeight / 2,
             child: IgnorePointer(
               child: Container(
                 width: widget.tileWidth.toDouble(),
@@ -1336,8 +1350,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
         widgets.add(
           Positioned(
-            left: pixel.dx,
-            top: pixel.dy,
+            left: pixel.dx - widget.tileWidth / 2,
+            top: pixel.dy - widget.tileHeight / 2,
             child: IgnorePointer(
               child: Container(
                 width: widget.tileWidth.toDouble(),
@@ -1370,10 +1384,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         continue;
       }
 
+      // Token visuell zentrieren: Die Positioned-Widgets platzieren den
+      // Token so, dass die Kreismitte auf der Hex-Zentrum-Position liegt.
+      // Für Host-Tokens (Dough Dumpster, Dough Zombies) wird die Hitbox
+      // zusätzlich etwas größer gemacht.
+      final tokenSize = (widget.tileWidth * 0.7).clamp(20.0, 48.0);
+      final halfTokenSize = tokenSize / 2;
+
       widgets.add(
         Positioned(
-          left: displayPosition.dx,
-          top: displayPosition.dy,
+          left: displayPosition.dx - halfTokenSize,
+          top: displayPosition.dy - halfTokenSize,
           child: _TokenWidget(
             token: token,
             isSelected: _selectedToken == token,
@@ -1513,41 +1534,71 @@ class _TokenWidget extends StatelessWidget {
 
     return Opacity(
       opacity: isDragging ? 0.8 : 1.0,
-      child: Container(
+      child: SizedBox(
         width: tokenSize,
         height: tokenSize,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _getTokenColor(),
-          border: Border.all(
-            color: isSelected ? Colors.yellow : Colors.black,
-            width: isSelected ? 3.0 : 1.5,
-          ),
-          boxShadow: [
-            if (isDragging)
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(2, 4),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Hintergrund-Kreis
+            Container(
+              width: tokenSize,
+              height: tokenSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _getTokenColor(),
+                border: Border.all(
+                  color: isSelected ? Colors.yellow : Colors.black,
+                  width: isSelected ? 3.0 : 1.5,
+                ),
+                boxShadow: [
+                  if (isDragging)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(2, 4),
+                    ),
+                ],
+              ),
+            ),
+            // Token-Label
+            Text(
+              _getTokenLabel(),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: tokenSize * 0.3,
+                fontWeight: FontWeight.bold,
+                shadows: const [
+                  Shadow(
+                    color: Colors.black,
+                    blurRadius: 2,
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            // Wund-Anzeige (unten rechts)
+            if (token.woundValue > 0)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.black87,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${token.woundValue}',
+                    style: TextStyle(
+                      color: token.woundValue <= 2 ? Colors.red.shade300 : Colors.white,
+                      fontSize: tokenSize * 0.25,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
           ],
-        ),
-        child: Center(
-          child: Text(
-            _getTokenLabel(),
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: tokenSize * 0.3,
-              fontWeight: FontWeight.bold,
-              shadows: const [
-                Shadow(
-                  color: Colors.black,
-                  blurRadius: 2,
-                ),
-              ],
-            ),
-            textAlign: TextAlign.center,
-          ),
         ),
       ),
     );

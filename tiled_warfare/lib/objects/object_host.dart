@@ -9,6 +9,10 @@ import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:random_name_generator/random_name_generator.dart';
 
+/// Konstante Tile-Größe für die Hex-Gitter-Berechnung (aus der TMX-Datei).
+const int _hostTileWidth = 32;
+const int _hostTileHeight = 32;
+
 /// Repräsentiert ein Enneagramm-Persönlichkeitsprofil.
 ///
 /// Die zwölf Enneagramme basieren auf der Enneagramm-Persönlichkeitstheorie
@@ -241,7 +245,36 @@ class ObjectHost {
     }
   }
 
+  /// Rechnet Pixel-Koordinaten in die nächstgelegenen Hex-Gitter-Koordinaten
+  /// (x, y) um (odd-r staggerindex="odd").
+  /// Gleiche Logik wie in WidgetCaretaker.
+  ({int x, int y}) _pixelToHex(Offset pixel) {
+    final approxY = (pixel.dy / (_hostTileHeight * 3.0 / 4.0)).round();
+    int x;
+    if (approxY % 2 == 1) {
+      x = ((pixel.dx - _hostTileWidth / 2) / _hostTileWidth).round();
+    } else {
+      x = (pixel.dx / _hostTileWidth).round();
+    }
+    return (x: x, y: approxY);
+  }
+
+  /// Rechnet Hex-Gitter-Koordinaten (x, y) in Pixel-Koordinaten um
+  /// (odd-r staggerindex="odd").
+  Offset _hexToPixel({required int x, required int y}) {
+    final double pixelX;
+    if (y % 2 == 1) {
+      pixelX = (x * _hostTileWidth).toDouble() + _hostTileWidth / 2;
+    } else {
+      pixelX = (x * _hostTileWidth).toDouble();
+    }
+    final pixelY = y * (_hostTileHeight * 3.0 / 4.0);
+    return Offset(pixelX, pixelY);
+  }
+
   /// Bewegt einen einzelnen Zombie auf das nächste Ziel zu.
+  /// Die Bewegung erfolgt hexgitter-basiert: Der Zombie rückt genau ein
+  /// Hex-Feld in Richtung des Ziels vor und rastet auf dem Hex-Zentrum ein.
   void _moveZombieTowardsTarget(
       ObjectDoughZombie zombie, List<ObjectLineCook> targets) {
     if (targets.isEmpty) return;
@@ -260,21 +293,61 @@ class ObjectHost {
 
     if (nearestTarget == null) return;
 
-    // Bewegung in Richtung des Ziels (vereinfacht: Bewegungspunkte nutzen)
-    final dx = nearestTarget.position.dx - zombie.position.dx;
-    final dy = nearestTarget.position.dy - zombie.position.dy;
-    final distance = sqrt(dx * dx + dy * dy);
+    // Hex-Koordinaten des Zombies und des Ziels ermitteln
+    final zombieHex = _pixelToHex(zombie.position);
+    final targetHex = _pixelToHex(nearestTarget.position);
 
-    if (distance > 0) {
-      final moveDistance = zombie.movementValue.toDouble();
-      final normalizedDx = (dx / distance) * moveDistance;
-      final normalizedDy = (dy / distance) * moveDistance;
+    // Differenz in Hex-Koordinaten berechnen
+    final dx = targetHex.x - zombieHex.x;
+    final dy = targetHex.y - zombieHex.y;
 
-      zombie.position = Offset(
-        zombie.position.dx + normalizedDx,
-        zombie.position.dy + normalizedDy,
-      );
+    // Wenn Zombie und Ziel auf dem gleichen Hex-Feld sind, nichts tun
+    if (dx == 0 && dy == 0) return;
+
+    // Schrittweite = min(1, movementValue) Hex-Felder
+    // Zombies movementValue = 1, also genau 1 Schritt
+    final steps = zombie.movementValue.clamp(1, 100);
+
+    // Hex-Richtung wählen: bevorzuge die Achse mit der größten Differenz
+    int newHexX = zombieHex.x;
+    int newHexY = zombieHex.y;
+
+    for (int step = 0; step < steps; step++) {
+      // Nächsten Schritt bestimmen:
+      // Wir bewegen uns in eine der 6 Hex-Richtungen (odd-r).
+      // Bevorzuge die Richtung, die uns dem Ziel am nächsten bringt.
+      final currentX = newHexX;
+      final currentY = newHexY;
+
+      // Nachbarn für aktuelles y (gerade/ungerade)
+      final neighbors = (currentY % 2 == 0)
+          ? [(-1, -1), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)]
+          : [(0, -1), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)];
+
+      // Den Nachbarn mit der geringsten Entfernung zum Ziel wählen
+      ({int dx, int dy}) bestNeighbor = (dx: 0, dy: 0);
+      int bestDistance = 999999;
+
+      for (final (ndx, ndy) in neighbors) {
+        final nx = currentX + ndx;
+        final ny = currentY + ndy;
+        if (nx < 0 || ny < 0) continue; // Kartenränder – kein Problem, da grob
+
+        final dist = ((targetHex.x - nx).abs() + (targetHex.y - ny).abs());
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestNeighbor = (dx: ndx, dy: ndy);
+        }
+      }
+
+      if (bestNeighbor.dx == 0 && bestNeighbor.dy == 0) break;
+
+      newHexX += bestNeighbor.dx;
+      newHexY += bestNeighbor.dy;
     }
+
+    // Auf Hex-Zentrum setzen
+    zombie.position = _hexToPixel(x: newHexX, y: newHexY);
   }
 
   /// Führt Angriffe aller Zombies auf Line Cooks in Reichweite aus.
@@ -282,9 +355,20 @@ class ObjectHost {
   /// Ein Zombie greift an (Nahkampf), wenn ein Line Cook in seiner Reichweite
   /// ist (rangeValue = 0 bedeutet Nahkampf, d. h. benachbarte Felder).
   /// Gemäß den Kampfregeln in "combat_rules.md".
-  void performAllZombieAttacks(ObjectPlayer player) {
+  ///
+  /// Gibt eine Liste von Log-Nachrichten zurück, die im UI angezeigt werden können.
+  List<String> performAllZombieAttacks(ObjectPlayer player) {
+    final logMessages = <String>[];
+
+    // Puffer für neue Dumpster, die während der Kampfiteration erstellt werden,
+    // um ConcurrentModificationError zu vermeiden.
+    final newDumpsters = <ObjectDoughDumpster>[];
+
     for (final dumpster in doughDumpsterList) {
       final zombiesToRemove = <ObjectDoughZombie>[];
+      // Puffer für neue Zombies, die durch handleTokenKilledByZombie erstellt werden,
+      // um ConcurrentModificationError beim Iterieren von zombieList zu vermeiden.
+      final newZombiesPending = <ObjectDoughZombie>[];
 
       for (final zombie in dumpster.zombieList) {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
@@ -301,42 +385,107 @@ class ObjectHost {
               distance: distance.round(),
             );
 
+            // Log-Nachricht für diesen Angriff erstellen
+            String logEntry = '${zombie.name} greift ${cook.name} an: ';
+            if (result.hit) {
+              logEntry += 'Treffer! ${result.damage} Schaden.';
+            } else {
+              logEntry += 'Verfehlt!';
+            }
+            if (result.attackerCritical) logEntry += ' (Kritischer Treffer!)';
+            if (result.attackerFumbled) logEntry += ' (Patzer!)';
+            if (result.defenderCritical) logEntry += ' (Gegner pariert kritisch!)';
+            if (result.defenderFumbled) logEntry += ' (Gegner patzt!)';
+            logMessages.add(logEntry);
+
             // Zombie (Angreifer) wurde durch Patzer oder kritischen Erfolg
             // des Verteidigers verletzt
             if (zombie.woundValue <= 0) {
+              logMessages.add('${zombie.name} wurde getötet!');
               zombiesToRemove.add(zombie);
               break; // Zombie ist tot, keine weiteren Angriffe
             }
 
             // Cook (Verteidiger) wurde getroffen und stirbt
             if (result.hit && cook.woundValue <= 0) {
+              logMessages.add('${cook.name} wurde getötet!');
               player.removeLineCook(cook);
+
+              // Wenn ein Zombie einen Token des Spielers tötet, besteht eine 50% Chance,
+              // dass anstelle des Tokens ein weiterer Dough Zombie erscheint.
+              // Zombie wird gepuffert und nach der Iteration hinzugefügt.
+              if (_random.nextInt(100) < 50) {
+                final newZombie = ObjectDoughZombie();
+                newZombie.position = Offset(
+                  dumpster.position.dx + _random.nextInt(64) - 32,
+                  dumpster.position.dy + _random.nextInt(64) - 32,
+                );
+                newZombiesPending.add(newZombie);
+                logMessages.add('Ein neuer Dough Zombie erscheint aus den Überresten von ${cook.name}!');
+              }
 
               // 25% Chance: Zombie wird zu einem Dough Dumpster
               if (_random.nextInt(100) < 25) {
-                spawnDoughDumpster();
+                final newDumpster = ObjectDoughDumpster();
+                logMessages.add('Ein neuer Dough Dumpster erscheint!');
+                // Neuen Dumpster in der Nähe des aktuellen positionieren
+                newDumpster.position = Offset(
+                  dumpster.position.dx + _random.nextInt(64) - 32,
+                  dumpster.position.dy + _random.nextInt(64) - 32,
+                );
+                newDumpsters.add(newDumpster);
               }
             }
           }
         }
       }
 
+      // Ausstehende neue Zombies nach der Iteration hinzufügen
+      dumpster.zombieList.addAll(newZombiesPending);
+
       // Tote Zombies entfernen
       for (final zombie in zombiesToRemove) {
         dumpster.removeZombie(zombie);
       }
     }
+
+    // Ausstehende neue Dumpster nach der Iteration hinzufügen
+    doughDumpsterList.addAll(newDumpsters);
+
+    return logMessages;
   }
 
-  /// Verarbeitet den Tod eines Tokens, der von einem Zombie getötet wurde.
-  ///
-  /// Wenn ein Zombie einen Token des Spielers tötet, besteht eine 50% Chance,
-  /// dass anstelle des Tokens ein weiterer Dough Zombie erscheint.
-  void handleTokenKilledByZombie(ObjectDoughDumpster dumpster) {
-    if (_random.nextInt(100) < 50) {
-      final newZombie = ObjectDoughZombie();
-      dumpster.zombieList.add(newZombie);
+  /// Lässt alle Dough Dumpster neue Zombies spawnen (für jede neue Runde).
+  /// Gibt Log-Nachrichten zurück.
+  List<String> performAllDumpsterSpawning() {
+    final logMessages = <String>[];
+    // Über eine Kopie iterieren, da während des Spawnens keine neuen
+    // Dumpster zur Liste hinzugefügt werden sollen (ConcurrentModification vermeiden)
+    for (final dumpster in doughDumpsterList.toList()) {
+      final newZombies = dumpster.spawnZombies();
+      if (newZombies.isNotEmpty) {
+        logMessages.add('${dumpster.name} spawniert ${newZombies.length} neue Zombies!');
+        // Zombies um den Dumpster herum positionieren
+        final dumpsterHex = _pixelToHex(dumpster.position);
+        final neighborOffsets = <({int dx, int dy})>[
+          (dx: 0, dy: -1), (dx: -1, dy: 0),
+          (dx: 1, dy: 0), (dx: 0, dy: 1),
+          (dx: -1, dy: -1), (dx: 1, dy: 1),
+        ];
+        for (int i = 0; i < newZombies.length; i++) {
+          if (i < neighborOffsets.length) {
+            final offset = neighborOffsets[i];
+            newZombies[i].position = _hexToPixel(
+              x: (dumpsterHex.x + offset.dx).clamp(0, 50),
+              y: (dumpsterHex.y + offset.dy).clamp(0, 50),
+            );
+          } else {
+            newZombies[i].position = dumpster.position;
+          }
+        }
+      }
     }
+    return logMessages;
   }
 
   // ──────────────────────────────────────────────
