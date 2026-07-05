@@ -2,9 +2,9 @@ import 'dart:math';
 import 'dart:ui' show Offset;
 
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
-import 'package:tiled_warfare/objects/object_dough_dumpster.dart';
-import 'package:tiled_warfare/objects/object_dough_zombie.dart';
-import 'package:tiled_warfare/objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
+import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:random_name_generator/random_name_generator.dart';

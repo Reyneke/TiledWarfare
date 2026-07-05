@@ -2,10 +2,10 @@ import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:tiled_warfare/objects/object_dough_dumpster.dart';
-import 'package:tiled_warfare/objects/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
+import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
-import 'package:tiled_warfare/objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 

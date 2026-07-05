@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:tiled_warfare/objects/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
 class ObjectDoughDumpster extends ObjectToken {
@@ -13,6 +13,8 @@ class ObjectDoughDumpster extends ObjectToken {
     movementValue: 0,
     damageValue: 0,
     rangeValue: 0,
+    moneyValue: 1000,
+    xpValue: 1000,
   );
 
   List<ObjectDoughZombie> zombieList = [];

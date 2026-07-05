@@ -20,6 +20,8 @@ class ObjectToken {
   int movementValue;
   int damageValue;
   int rangeValue;
+  int moneyValue;
+  int xpValue;
 
   /// Pixel-Position des Tokens auf der Karte (x, y).
   /// Wird gesetzt, sobald der Token auf der Karte platziert wird.
@@ -38,5 +40,7 @@ class ObjectToken {
     this.movementValue = 0,
     this.damageValue = 1,
     this.rangeValue = 1,
+    this.moneyValue = 100,
+    this.xpValue = 25,
   });
 }

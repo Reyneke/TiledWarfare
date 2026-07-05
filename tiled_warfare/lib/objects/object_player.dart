@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:tiled_warfare/objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
 /// Repräsentiert das Ergebnis eines Kampfangriffs.
