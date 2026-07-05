@@ -1,5 +1,5 @@
 import 'dart:math';
-
+import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
@@ -35,9 +35,10 @@ class CombatResult {
 
 /// Repräsentiert den Spieler und seine Einheiten.
 ///
-/// Der Spieler steuert die Einheiten vom Typ [ObjectLineCook], die in der
-/// Liste [lineCookList] gespeichert sind. Jede Einheit hat ihre eigenen
-/// Eigenschaften wie Angriff, Verteidigung, Bewegung, Schaden und Reichweite.
+/// Der Spieler steuert die Einheiten vom Typ [ObjectApprentice] (und deren
+/// Unterklassen wie [ObjectLineCook]), die in der Liste [unitList] gespeichert
+/// sind. Jede Einheit hat ihre eigenen Eigenschaften wie Angriff, Verteidigung,
+/// Bewegung, Schaden und Reichweite.
 ///
 /// Dieses Objekt ist ein Singleton, da es nur eine Instanz des Spielers geben
 /// kann. Einheiten können im Laufe des Spiels verbessert und aufgerüstet werden.
@@ -53,34 +54,34 @@ class ObjectPlayer {
 
   ObjectPlayer._internal();
 
-  /// Liste aller vom Spieler kontrollierten Line Cooks.
-  List<ObjectLineCook> lineCookList = [];
+  /// Liste aller vom Spieler kontrollierten Einheiten.
+  List<ObjectApprentice> unitList = [];
 
   /// Zufallsgenerator für Kampfwürfe.
   final Random _random = Random();
 
-  /// Erzeugt einen neuen [ObjectLineCook] und fügt ihn der [lineCookList] hinzu.
+  /// Erzeugt einen neuen [ObjectLineCook] und fügt ihn der [unitList] hinzu.
   /// Gibt den neu erschaffenen Line Cook zurück.
   ObjectLineCook spawnLineCook() {
     final cook = ObjectLineCook();
-    lineCookList.add(cook);
+    unitList.add(cook);
     return cook;
   }
 
-  /// Entfernt einen [ObjectLineCook] aus der [lineCookList]
-  /// (z. B. wenn er zerstört wurde).
-  void removeLineCook(ObjectLineCook cook) {
-    lineCookList.remove(cook);
+  /// Entfernt eine [ObjectApprentice]-Einheit aus der [unitList]
+  /// (z. B. wenn sie zerstört wurde).
+  void removeUnit(ObjectApprentice unit) {
+    unitList.remove(unit);
   }
 
-  /// Gibt die Anzahl der aktuell kontrollierten Line Cooks zurück.
-  int get lineCookCount => lineCookList.length;
+  /// Gibt die Anzahl der aktuell kontrollierten Einheiten zurück.
+  int get unitCount => unitList.length;
 
-  /// Verbessert die Eigenschaften eines [ObjectLineCook].
+  /// Verbessert die Eigenschaften einer [ObjectApprentice]-Einheit.
   ///
   /// Nur übergebene Werte werden aktualisiert; `null`-Werte bleiben unverändert.
-  void upgradeLineCook(
-    ObjectLineCook cook, {
+  void upgradeUnit(
+    ObjectApprentice unit, {
     int? attackValue,
     int? defenseValue,
     int? movementValue,
@@ -88,12 +89,12 @@ class ObjectPlayer {
     int? rangeValue,
     int? woundValue,
   }) {
-    if (attackValue != null) cook.attackValue = attackValue;
-    if (defenseValue != null) cook.defenseValue = defenseValue;
-    if (movementValue != null) cook.movementValue = movementValue;
-    if (damageValue != null) cook.damageValue = damageValue;
-    if (rangeValue != null) cook.rangeValue = rangeValue;
-    if (woundValue != null) cook.woundValue = woundValue;
+    if (attackValue != null) unit.attackValue = attackValue;
+    if (defenseValue != null) unit.defenseValue = defenseValue;
+    if (movementValue != null) unit.movementValue = movementValue;
+    if (damageValue != null) unit.damageValue = damageValue;
+    if (rangeValue != null) unit.rangeValue = rangeValue;
+    if (woundValue != null) unit.woundValue = woundValue;
   }
 
   /// Gibt die Liste der verfügbaren [CombatAction]s für eine Einheit zurück.
@@ -101,9 +102,9 @@ class ObjectPlayer {
   /// Die Verfügbarkeit hängt von den Eigenschaften der Einheit ab:
   /// - "Nahkampf" (melee) ist immer verfügbar.
   /// - "Fernkampf" (ranged) ist nur verfügbar, wenn `rangeValue > 0`.
-  List<CombatAction> getAvailableActions(ObjectLineCook cook) {
+  List<CombatAction> getAvailableActions(ObjectApprentice unit) {
     final actions = <CombatAction>[CombatAction.melee];
-    if (cook.rangeValue > 0) {
+    if (unit.rangeValue > 0) {
       actions.add(CombatAction.ranged);
     }
     return actions;

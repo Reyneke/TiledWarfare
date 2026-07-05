@@ -12,8 +12,8 @@ enum CombatAction {
   ranged,
 }
 class ObjectToken {
-  final String name;
-  final String imagePath;
+  String name;
+  String imagePath;
   int woundValue;
   int attackValue;
   int defenseValue;

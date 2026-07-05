@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tiled_warfare/screens/screen_main.dart';
+import 'package:tiled_warfare/screens/screen_start.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 
 class MainApp extends StatefulWidget {
@@ -33,7 +33,7 @@ class _MainAppState extends State<MainApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: AppTheme.themeModeNotifier.value,
-      home: ScreenMain(),
+      home: const ScreenStart(),
     );
   }
 }

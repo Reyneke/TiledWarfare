@@ -4,6 +4,7 @@ import 'dart:ui' show Offset;
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
@@ -237,7 +238,7 @@ class ObjectHost {
   /// Simuliert die gradlinige Bewegung der Dough Zombies auf Objekte vom
   /// Typ [ObjectLineCook]. Diese Methode sollte pro Spielzug aufgerufen
   /// werden.
-  void moveAllZombiesTowardsLineCooks(List<ObjectLineCook> targets) {
+  void moveAllZombiesTowardsTargets(List<ObjectApprentice> targets) {
     for (final dumpster in doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
         _moveZombieTowardsTarget(zombie, targets);
@@ -277,11 +278,11 @@ class ObjectHost {
   /// Hex-Feld in Richtung des Ziels vor und rastet auf dem Hex-Zentrum ein.
   /// Überspringt belegte Hex-Felder, um Stapelung zu vermeiden.
   void _moveZombieTowardsTarget(
-      ObjectDoughZombie zombie, List<ObjectLineCook> targets) {
+      ObjectDoughZombie zombie, List<ObjectApprentice> targets) {
     if (targets.isEmpty) return;
 
     // Nächstgelegenes Ziel finden
-    ObjectLineCook? nearestTarget;
+    ObjectApprentice? nearestTarget;
     double nearestDistance = double.infinity;
 
     for (final target in targets) {
@@ -385,7 +386,7 @@ class ObjectHost {
       for (final zombie in dumpster.zombieList) {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
         // Einträge entfernen müssen
-        for (final cook in player.lineCookList.toList()) {
+        for (final cook in player.unitList.toList()) {
           final distance = (zombie.position - cook.position).distance;
 
           // Prüfen, ob der Line Cook in Reichweite ist
@@ -421,7 +422,7 @@ class ObjectHost {
             // Cook (Verteidiger) wurde getroffen und stirbt
             if (result.hit && cook.woundValue <= 0) {
               logMessages.add('${cook.name} wurde getötet!');
-              player.removeLineCook(cook);
+              player.removeUnit(cook);
 
               // Wenn ein Zombie einen Token des Spielers tötet, besteht eine 50% Chance,
               // dass anstelle des Tokens ein weiterer Dough Zombie erscheint.

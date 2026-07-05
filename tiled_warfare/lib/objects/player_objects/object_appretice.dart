@@ -7,6 +7,7 @@ enum CharacterStatus {ready, reeling, hurt, afraid, injured, dying, dead, overki
 class ObjectApprentice extends ObjectToken {
   int levelValue = 1;
   int currentXPValue = 0;
+  CharacterStatus status = CharacterStatus.ready;
 
   ObjectApprentice({
     String? name,

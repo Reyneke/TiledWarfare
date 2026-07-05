@@ -264,7 +264,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // eine andere Zufallsauswahl ergibt (auch bei schnellen Neustarts)
     final random = Random(DateTime.now().microsecondsSinceEpoch);
     // Vorherige Spielobjekte entfernen, falls diese Methode erneut aufgerufen wird
-    _player.lineCookList.clear();
+    _player.unitList.clear();
     _host.doughDumpsterList.clear();
     _baseMovementValues.clear();
     // Spieler-Spawnpunkte (mit "spawn_player" im Namen) finden
@@ -354,7 +354,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// hasActed-Flag aller Einheiten für eine neue Runde.
   void _resetRoundState() {
     // Spieler-Einheiten
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       _resetTokenRoundState(cook);
     }
     // Gegnerische Dough Dumpster und deren Zombies
@@ -452,7 +452,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
       return true;
     }
-    if (_player.lineCookList.isEmpty) {
+    if (_player.unitList.isEmpty) {
       _isGameOver = true;
       _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
       return true;
@@ -513,7 +513,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Führt die Bewegung aller Host-Zombies aus.
   void _executeHostMovement() {
-    _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
+    _host.moveAllZombiesTowardsTargets(_player.unitList);
   }
 
   /// Führt die Angriffe aller Host-Zombies aus.
@@ -840,7 +840,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     final tokens = <_TokenRenderInfo>[];
 
     // Spieler-Einheiten (nur lebende)
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       if (cook.woundValue <= 0) continue;
       tokens.add(_TokenRenderInfo(
         token: cook,
@@ -1144,7 +1144,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Entfernt alle Tokens mit woundValue <= 0 und räumt den Cache auf.
   void _removeDeadTokens() {
     // Tote Spieler-Einheiten entfernen
-    _player.lineCookList.removeWhere((cook) => cook.woundValue <= 0);
+    _player.unitList.removeWhere((cook) => cook.woundValue <= 0);
 
     // Tote Zombies aus allen Dumpstern entfernen
     for (final dumpster in _host.doughDumpsterList) {
@@ -1170,9 +1170,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Ist dies der Fall, wird der Spielerzug automatisch beendet.
   void _checkAutoEndPlayerTurn() {
     if (!_isPlayerTurn || _isGameOver) return;
-    if (_player.lineCookList.isEmpty) return;
+    if (_player.unitList.isEmpty) return;
 
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       // Ein Token hat noch Aktionen oder Bewegungspunkte übrig
       if (!cook.hasActed || cook.movementValue > 0) return;
     }
@@ -1407,7 +1407,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
             // Spielstand
             const SizedBox(height: 8),
             Text(
-              'Line Cooks: ${_player.lineCookCount}',
+              'Line Cooks: ${_player.unitCount}',
               style: const TextStyle(fontSize: 12),
             ),
             Text(
@@ -1686,7 +1686,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Baut den Inhalt des Info-Panels für den ausgewählten Token.
   Widget _buildInfoPanelContent() {
     final token = _selectedToken!;
-    final isPlayerUnit = _player.lineCookList.contains(token);
+    final isPlayerUnit = _player.unitList.contains(token);
 
     return Card(
       elevation: 4,

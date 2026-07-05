@@ -1,0 +1,78 @@
+{
+  "id": 3507838291,
+  "name": "Reyneke",
+  "creationDate": "2026-07-05T22:18:16.076758",
+  "budget": 9600,
+  "profileImagePath": "C:\\Users\\matth\\Downloads\\Telegram Desktop\\makefoxbot_full_image_29998677.png",
+  "staff": [
+    {
+      "name": "Apprentice: Luca",
+      "imagePath": "assets/images/token/token_cook_basic.png",
+      "type": "apprentice",
+      "levelValue": 1,
+      "currentXPValue": 0,
+      "woundValue": 3,
+      "attackValue": 40,
+      "defenseValue": 20,
+      "movementValue": 6,
+      "damageValue": 2,
+      "rangeValue": 3,
+      "moneyValue": 100,
+      "xpValue": 25,
+      "status": "ready"
+    },
+    {
+      "name": "Apprentice: Angelo",
+      "imagePath": "assets/images/token/token_cook_basic.png",
+      "type": "apprentice",
+      "levelValue": 1,
+      "currentXPValue": 0,
+      "woundValue": 3,
+      "attackValue": 40,
+      "defenseValue": 20,
+      "movementValue": 6,
+      "damageValue": 2,
+      "rangeValue": 3,
+      "moneyValue": 100,
+      "xpValue": 25,
+      "status": "ready"
+    },
+    {
+      "name": "Apprentice: Christian",
+      "imagePath": "assets/images/token/token_cook_basic.png",
+      "type": "apprentice",
+      "levelValue": 1,
+      "currentXPValue": 0,
+      "woundValue": 3,
+      "attackValue": 40,
+      "defenseValue": 20,
+      "movementValue": 6,
+      "damageValue": 2,
+      "rangeValue": 3,
+      "moneyValue": 100,
+      "xpValue": 25,
+      "status": "ready"
+    },
+    {
+      "name": "Apprentice: Greta",
+      "imagePath": "assets/images/token/token_cook_basic.png",
+      "type": "apprentice",
+      "levelValue": 1,
+      "currentXPValue": 0,
+      "woundValue": 3,
+      "attackValue": 40,
+      "defenseValue": 20,
+      "movementValue": 6,
+      "damageValue": 2,
+      "rangeValue": 3,
+      "moneyValue": 100,
+      "xpValue": 25,
+      "status": "ready"
+    }
+  ],
+  "restaurants": [
+    {
+      "name": "Pizzeria Pepe et Urinal"
+    }
+  ]
+}
