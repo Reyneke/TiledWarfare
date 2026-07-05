@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+
 /// Das WidgetCaretaker-Widget ist für das Erstellen und Verwalten von Objekten
 /// auf der Karte zuständig. Es enthält die Logik für das Platzieren von
 /// Einheiten, das Aktualisieren ihrer Positionen und das Anzeigen von
@@ -66,6 +68,65 @@ class WidgetCaretaker extends StatefulWidget {
   State<WidgetCaretaker> createState() => _WidgetCaretakerState();
 }
 
+/// Hex-Gitter-Hilfsfunktionen für odd-r (staggeraxis="y", staggerindex="odd").
+///
+/// Nachbar-Offsets für odd-r:
+/// - Gerade y: Nachbarn bei (-1,-1), (0,-1), (-1,0), (1,0), (-1,1), (0,1)
+/// - Ungerade y: Nachbarn bei (0,-1), (1,-1), (-1,0), (1,0), (0,1), (1,1)
+class _HexUtils {
+  const _HexUtils._();
+
+  /// Erstellt eine eindeutige Kennung für ein Hex-Feld (x, y).
+  static int hexKey(int x, int y, int mapWidth) => y * mapWidth + x;
+
+  /// Konvertiert Offset-Koordinaten (odd-r) in Cube-Koordinaten.
+  static ({int x, int y, int z}) offsetToCube(int x, int y) {
+    final cubeX = x - (y & ~1) ~/ 2;
+    final cubeZ = y;
+    final cubeY = -cubeX - cubeZ;
+    return (x: cubeX, y: cubeY, z: cubeZ);
+  }
+
+  /// Berechnet die Hex-Gitter-Entfernung zwischen zwei Hex-Koordinaten
+  /// auf einem Pointy-Top-Hex-Gitter mit staggeraxis="y", staggerindex="odd".
+  static int distance({
+    required int x1,
+    required int y1,
+    required int x2,
+    required int y2,
+  }) {
+    final cube1 = offsetToCube(x1, y1);
+    final cube2 = offsetToCube(x2, y2);
+    final dx = (cube1.x - cube2.x).abs();
+    final dy = (cube1.y - cube2.y).abs();
+    final dz = (cube1.z - cube2.z).abs();
+    return [dx, dy, dz].reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Gibt die Nachbar-Offsets für odd-r Hex-Gitter zurück.
+  static List<({int dx, int dy})> neighborOffsets(int y) {
+    if (y % 2 == 0) {
+      return [
+        (dx: -1, dy: -1),
+        (dx: 0, dy: -1),
+        (dx: -1, dy: 0),
+        (dx: 1, dy: 0),
+        (dx: -1, dy: 1),
+        (dx: 0, dy: 1),
+      ];
+    } else {
+      return [
+        (dx: 0, dy: -1),
+        (dx: 1, dy: -1),
+        (dx: -1, dy: 0),
+        (dx: 1, dy: 0),
+        (dx: 0, dy: 1),
+        (dx: 1, dy: 1),
+      ];
+    }
+  }
+}
+
 class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Der Spieler (Singleton).
   final ObjectPlayer _player = ObjectPlayer();
@@ -97,6 +158,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Wird verwendet, um die Bewegung auf [ObjectToken.movementValue] zu begrenzen.
   ({int x, int y})? _dragStartHex;
 
+  /// Cache-Dirty-Flags: Werden auf true gesetzt, wenn sich der Zustand ändert,
+  /// und nach der Neuberechnung zurückgesetzt. So vermeiden wir wiederholte
+  /// teure Berechnungen innerhalb eines Build-Durchlaufs.
+  bool _cacheDirty = true;
+  List<_TokenRenderInfo>? _cachedAllTokens;
+  Set<int>? _cachedOccupiedFields;
+  Set<int>? _cachedReachableFields;
+  ObjectToken? _cachedReachableToken;
+  int? _cachedReachableMovement;
+  Rect? _cachedVisibleRect;
+
   // ──────────────────────────────────────────────
   // Runden- und Initiativsystem
   // ──────────────────────────────────────────────
@@ -118,6 +190,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Nachricht über den aktuellen Spielstatus (für UI-Anzeige).
   String? _statusMessage;
+
+  /// Der nächste Snackbar-Schlüssel, um das Stapeln von Snackbars zu vermeiden.
+  int _snackBarKey = 0;
 
   @override
   void initState() {
@@ -152,8 +227,21 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Wird bei jeder Änderung der Karten-Transformation aufgerufen.
   void _onTransformationChanged() {
-    // setState, um die Token-Positionen neu zu zeichnen
+    // Viewport-Cache ungültig machen, da sich die Transformation geändert hat
+    _cachedVisibleRect = null;
     setState(() {});
+  }
+
+  /// Markiert alle gecachten Werte als ungültig, sodass sie beim nächsten
+  /// Zugriff neu berechnet werden.
+  void _invalidateCache() {
+    _cacheDirty = true;
+    _cachedAllTokens = null;
+    _cachedOccupiedFields = null;
+    _cachedReachableFields = null;
+    _cachedReachableToken = null;
+    _cachedReachableMovement = null;
+    // _cachedVisibleRect wird separat invalidiert (via _onTransformationChanged)
   }
 
   /// Rechnet einen Bildschirm-Punkt (z. B. Tap-Position) in die
@@ -178,6 +266,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Vorherige Spielobjekte entfernen, falls diese Methode erneut aufgerufen wird
     _player.lineCookList.clear();
     _host.doughDumpsterList.clear();
+    _baseMovementValues.clear();
     // Spieler-Spawnpunkte (mit "spawn_player" im Namen) finden
     final playerSpawns = widget.spawnPoints
         .where((sp) => sp.name.startsWith('spawn_player'))
@@ -217,29 +306,28 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _host.doughDumpsterList.add(dumpster);
 
     // Start-Zombies vom Dumpster spawnen lassen – verteilt um den Dumpster herum
+    // auf freien Hex-Feldern, um Stapelung zu vermeiden
     final zombies = dumpster.spawnZombies();
-
-    // Hexagonale Offset-Richtungen für Nachbarfelder (odd-r staggerindex="odd"):
-    // Gerade y: Nachbarn bei (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (0,1)
-    // Ungerade y: Nachbarn bei (1,0), (1,1), (0,1), (-1,1), (-1,0), (0,-1)
-    // Für die Platzierung zwischen den Zentren verwenden wir reduzierte Offsets.
     final dumpsterHex = _pixelToHex(dumpster.position);
-    final neighborOffsets = <({int dx, int dy})>[
-      (dx: 0, dy: -1), (dx: -1, dy: 0),
-      (dx: 1, dy: 0), (dx: 0, dy: 1),
-    ];
+    // Alle belegten Felder ermitteln (Dumpster selbst + bereits platzierte Zombies)
+    final occupied = <int>{};
+    occupied.add(dumpsterHex.y * widget.mapWidth + dumpsterHex.x);
     for (int i = 0; i < zombies.length; i++) {
-      if (i < neighborOffsets.length) {
-        final offset = neighborOffsets[i];
-        zombies[i].position = _hexToPixel(
-          x: (dumpsterHex.x + offset.dx).clamp(0, widget.mapWidth - 1),
-          y: (dumpsterHex.y + offset.dy).clamp(0, widget.mapHeight - 1),
-        );
-      } else {
-        // Fallback: direkt auf den Dumpster
-        zombies[i].position = dumpster.position;
-      }
+      // Spiralförmig nach einem freien Feld in der Nähe des Dumpsters suchen
+      final freePos = _findFreeHexNearCaretaker(
+        startX: dumpsterHex.x,
+        startY: dumpsterHex.y,
+        occupied: occupied,
+        mapWidth: widget.mapWidth,
+        mapHeight: widget.mapHeight,
+      );
+      zombies[i].position = freePos;
+      // Neu platzierten Zombie als belegt markieren
+      final zh = _pixelToHex(freePos);
+      occupied.add(zh.y * widget.mapWidth + zh.x);
     }
+
+    _invalidateCache();
   }
 
   /// Setzt die Bewegungspunkte aller Einheiten auf ihre Basiswerte zurück.
@@ -255,35 +343,25 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     }
   }
 
-  /// Setzt die Bewegungspunkte aller Einheiten auf ihre Basiswerte zurück.
-  void _resetMovementPoints() {
-    // Spieler-Einheiten
-    for (final cook in _player.lineCookList) {
-      _storeBaseMovementValue(cook);
-      cook.movementValue = _baseMovementValues[cook]!;
-    }
-    // Gegnerische Dough Dumpster
-    for (final dumpster in _host.doughDumpsterList) {
-      _storeBaseMovementValue(dumpster);
-      dumpster.movementValue = _baseMovementValues[dumpster]!;
-      // Zombies in jedem Dumpster
-      for (final zombie in dumpster.zombieList) {
-        _storeBaseMovementValue(zombie);
-        zombie.movementValue = _baseMovementValues[zombie]!;
-      }
-    }
+  /// Setzt den Bewegungswert und das hasActed-Flag eines Tokens zurück.
+  void _resetTokenRoundState(ObjectToken token) {
+    _storeBaseMovementValue(token);
+    token.movementValue = _baseMovementValues[token]!;
+    token.hasActed = false;
   }
 
-  /// Setzt das hasActed-Flag aller Einheiten zurück, damit sie in der
-  /// neuen Runde wieder eine Kampfaktion ausführen können.
-  void _resetHasActed() {
+  /// Kombinierte Methode zum Zurücksetzen von Bewegungspunkten und
+  /// hasActed-Flag aller Einheiten für eine neue Runde.
+  void _resetRoundState() {
+    // Spieler-Einheiten
     for (final cook in _player.lineCookList) {
-      cook.hasActed = false;
+      _resetTokenRoundState(cook);
     }
+    // Gegnerische Dough Dumpster und deren Zombies
     for (final dumpster in _host.doughDumpsterList) {
-      dumpster.hasActed = false;
+      _resetTokenRoundState(dumpster);
       for (final zombie in dumpster.zombieList) {
-        zombie.hasActed = false;
+        _resetTokenRoundState(zombie);
       }
     }
   }
@@ -302,11 +380,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
     _currentRound++;
 
-    // Bewegungspunkte aller Einheiten zurücksetzen
-    _resetMovementPoints();
-
-    // hasActed-Flag aller Einheiten zurücksetzen
-    _resetHasActed();
+    // Bewegungspunkte und hasActed-Flag aller Einheiten zurücksetzen
+    _resetRoundState();
 
     // Initiativwürfe für beide Seiten
     final playerInitiative = _player.rollInitiative();
@@ -336,6 +411,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
     _initiativeMessage = message;
     _statusMessage = _isPlayerTurn ? 'Spieler ist am Zug' : 'Host ist am Zug';
+
+    _invalidateCache();
 
     // Wenn der Host die Initiative hat, führt er sofort seinen Zug aus
     if (_isHostTurn) {
@@ -367,51 +444,47 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     });
   }
 
+  /// Prüft Spielende-Bedingungen (eine Seite besiegt).
+  /// Gibt true zurück, wenn das Spiel beendet ist.
+  bool _checkGameOver() {
+    if (_host.isDefeated) {
+      _isGameOver = true;
+      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
+      return true;
+    }
+    if (_player.lineCookList.isEmpty) {
+      _isGameOver = true;
+      _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
+      return true;
+    }
+    return false;
+  }
+
   /// Führt den Zug des Hosts aus.
   ///
   /// Der Host bewegt alle Zombies auf die Line Cooks zu und führt
   /// Angriffe aus, wenn Zombies in Reichweite sind.
   void _executeHostTurn() {
     if (_isGameOver) return;
-
-    // Prüfen, ob der Host überhaupt noch Einheiten hat
-    if (_host.isDefeated) {
-      _isGameOver = true;
-      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
-      setState(() {});
-      return;
-    }
-
-    // Prüfen, ob der Spieler noch Einheiten hat
-    if (_player.lineCookList.isEmpty) {
-      _isGameOver = true;
-      _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
+    if (_checkGameOver()) {
       setState(() {});
       return;
     }
 
     // 0. Dough Dumpster spawnen neue Zombies (alle 2 Runden)
-    final spawnLogs = _host.performAllDumpsterSpawning();
-    for (final log in spawnLogs) {
-      _showMessage(log);
-    }
+    _executeHostSpawning();
 
     // 1. Zombies bewegen
-    _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
+    _executeHostMovement();
 
-    // 2. Zombies angreifen lassen (mit Kampflog)
-    final combatLogs = _host.performAllZombieAttacks(_player);
-    for (final log in combatLogs) {
-      _showMessage(log);
-    }
+    // 2. Zombies angreifen lassen
+    _executeHostAttacks();
 
     // 3. Tote Einheiten entfernen
     _removeDeadTokens();
 
     // 4. Prüfen, ob der Spieler noch Einheiten hat
-    if (_player.lineCookList.isEmpty) {
-      _isGameOver = true;
-      _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
+    if (_checkGameOver()) {
       setState(() {});
       return;
     }
@@ -425,6 +498,32 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _startNewRound();
   }
 
+  /// Führt das Spawning neuer Zombies durch den Host aus.
+  /// Spawning findet nur in geraden Runden statt (alle 2 Runden),
+  /// damit die Spieler-Zombie-Population nicht explodiert.
+  void _executeHostSpawning() {
+    // Nur in geraden Runden spawnen (alle 2 Runden)
+    if (_currentRound % 2 != 0) return;
+    
+    final spawnLogs = _host.performAllDumpsterSpawning();
+    for (final log in spawnLogs) {
+      _showMessage(log);
+    }
+  }
+
+  /// Führt die Bewegung aller Host-Zombies aus.
+  void _executeHostMovement() {
+    _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
+  }
+
+  /// Führt die Angriffe aller Host-Zombies aus.
+  void _executeHostAttacks() {
+    final combatLogs = _host.performAllZombieAttacks(_player);
+    for (final log in combatLogs) {
+      _showMessage(log);
+    }
+  }
+
   /// Rechnet Hex-Gitter-Koordinaten (x, y) in Pixel-Koordinaten um.
   ///
   /// Verwendet die gleiche Logik wie [_HexMapPainter] in [WidgetMapLoader]:
@@ -432,14 +531,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// - Ungerade Zeilen sind um tileWidth/2 nach rechts versetzt.
   Offset _hexToPixel({required int x, required int y}) {
     final double pixelX;
-    final double pixelY;
 
     if (y % 2 == 1) {
       pixelX = (x * widget.tileWidth).toDouble() + widget.tileWidth / 2;
     } else {
       pixelX = (x * widget.tileWidth).toDouble();
     }
-    pixelY = y * (widget.tileHeight * 3.0 / 4.0);
+    final pixelY = y * (widget.tileHeight * 3.0 / 4.0);
 
     return Offset(pixelX, pixelY);
   }
@@ -471,21 +569,91 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return (x: x, y: y);
   }
 
+  /// Findet ein freies Hex-Feld in der Nähe eines Ausgangs-Hex.
+  /// Durchsucht spiralförmig beginnend beim Start-Hex, bis ein freies Feld
+  /// gefunden wird oder der maximale Radius erreicht ist.
+  /// Gibt das erste freie Hex als Pixel-Position zurück.
+  /// Verwendet mapWidth und mapHeight für Kartenbegrenzung und
+  /// hexKey = y * mapWidth + x für die occupied-Prüfung.
+  Offset _findFreeHexNearCaretaker({
+    required int startX,
+    required int startY,
+    required Set<int> occupied,
+    int maxRadius = 12,
+    required int mapWidth,
+    required int mapHeight,
+  }) {
+    // Prüfe, ob das Start-Hex selbst frei ist
+    if (!occupied.contains(startY * mapWidth + startX)) {
+      return _hexToPixel(x: startX, y: startY);
+    }
+
+    // Spiralförmige Suche
+    for (int radius = 1; radius <= maxRadius; radius++) {
+      // Obere Kante
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = startX + dx;
+        final y = startY - radius;
+        if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight &&
+            !occupied.contains(y * mapWidth + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Untere Kante
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = startX + dx;
+        final y = startY + radius;
+        if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight &&
+            !occupied.contains(y * mapWidth + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Linke Kante (ohne Ecken)
+      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
+        final x = startX - radius;
+        final y = startY + dy;
+        if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight &&
+            !occupied.contains(y * mapWidth + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Rechte Kante (ohne Ecken)
+      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
+        final x = startX + radius;
+        final y = startY + dy;
+        if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight &&
+            !occupied.contains(y * mapWidth + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+    }
+
+    // Fallback: Start-Position zurückgeben
+    return _hexToPixel(x: startX, y: startY);
+  }
+
   /// Gibt die Hex-Gitter-Koordinaten (x, y) für einen Token zurück,
   /// basierend auf seiner aktuellen Pixel-Position.
   ({int x, int y}) _getTokenHex(ObjectToken token) {
     return _pixelToHex(token.position);
   }
 
-  /// Erstellt eine eindeutige Kennung für ein Hex-Feld (x, y).
-  /// Wird verwendet, um belegte Felder in einem Set zu verwalten.
-  int _hexKey(int x, int y) => y * widget.mapWidth + x;
-
   /// Baut eine Menge aller aktuell belegten Hex-Felder auf.
   /// Ein Feld gilt als belegt, wenn dort ein lebender Token steht.
   /// Der [excludeToken] wird dabei nicht berücksichtigt (z. B. der
   /// gerade gezogene Token).
+  ///
+  /// Das Ergebnis wird gecached, da diese Methode mehrfach pro Frame
+  /// aufgerufen werden kann.
   Set<int> _getOccupiedHexFields({ObjectToken? excludeToken}) {
+    if (excludeToken != null || _cacheDirty || _cachedOccupiedFields == null) {
+      // Wenn ein excludeToken angegeben ist, können wir nicht cachen
+      return _buildOccupiedHexFields(excludeToken: excludeToken);
+    }
+    return _cachedOccupiedFields!;
+  }
+
+  Set<int> _buildOccupiedHexFields({ObjectToken? excludeToken}) {
     final occupied = <int>{};
 
     for (final renderInfo in _allTokens) {
@@ -494,7 +662,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       if (token == excludeToken) continue;
 
       final hex = _getTokenHex(token);
-      occupied.add(_hexKey(hex.x, hex.y));
+      occupied.add(_HexUtils.hexKey(hex.x, hex.y, widget.mapWidth));
     }
 
     return occupied;
@@ -504,20 +672,85 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// darauf steht). Der [excludeToken] wird ignoriert.
   bool _isHexFieldFree(int x, int y, {ObjectToken? excludeToken}) {
     final occupied = _getOccupiedHexFields(excludeToken: excludeToken);
-    return !occupied.contains(_hexKey(x, y));
+    return !occupied.contains(_HexUtils.hexKey(x, y, widget.mapWidth));
   }
 
-  /// Findet das nächstgelegene freie Hex-Feld zu einer Pixel-Position.
-  /// Durchsucht die Umgebung spiralförmig, beginnend beim nächstgelegenen
-  /// Hex-Feld, und gibt die Pixel-Position des ersten freien Feldes zurück.
-  /// Falls alle Felder belegt sind, wird die ursprüngliche Pixel-Position
-  /// zurückgegeben.
+  /// Prüft, ob ein Ziel-Hex-Feld vom Start-Hex-Feld aus über einen freien
+  /// Pfad erreichbar ist (BFS, blockiert durch belegte Felder).
+  /// Dies stellt sicher, dass Tokens belegte Felder wie unüberwindbare
+  /// Hindernisse umgehen müssen, anstatt einfach auf ein freies Feld zu
+  /// springen, das durch blockierte Felder abgeschnitten ist.
+  bool _isHexFieldReachable({
+    required int startX,
+    required int startY,
+    required int targetX,
+    required int targetY,
+    int maxSteps = 20,
+    ObjectToken? excludeToken,
+  }) {
+    if (startX == targetX && startY == targetY) return true;
+
+    final occupied = _buildOccupiedHexFields(excludeToken: excludeToken);
+    visited.reset();
+    final queue = Queue<({int x, int y, int steps})>();
+    queue.add((x: startX, y: startY, steps: maxSteps));
+    visited.add(_HexUtils.hexKey(startX, startY, widget.mapWidth));
+    final targetKey = _HexUtils.hexKey(targetX, targetY, widget.mapWidth);
+
+    while (queue.isNotEmpty) {
+      final current = queue.removeFirst();
+      if (current.steps <= 0) continue;
+
+      for (final offset in _HexUtils.neighborOffsets(current.y)) {
+        final nx = current.x + offset.dx;
+        final ny = current.y + offset.dy;
+        if (nx < 0 || nx >= widget.mapWidth || ny < 0 || ny >= widget.mapHeight) continue;
+        final key = _HexUtils.hexKey(nx, ny, widget.mapWidth);
+        if (visited.contains(key)) continue;
+        visited.add(key);
+        if (key == targetKey) return true;
+        if (occupied.contains(key)) continue;
+        queue.add((x: nx, y: ny, steps: current.steps - 1));
+      }
+    }
+
+    return false;
+  }
+
+  /// Ein schnelles Set für BFS-Besuchsmarkierungen, das Wiederverwendung
+  /// ermöglicht, ohne jedes Mal ein neues Set zu allozieren.
+  final _BfsVisitedSet visited = _BfsVisitedSet();
+
+  /// Findet das nächstgelegene freie und erreichbare Hex-Feld zu einer
+  /// Pixel-Position. Durchsucht die Umgebung spiralförmig, beginnend beim
+  /// nächstgelegenen Hex-Feld, und gibt die Pixel-Position des ersten freien
+  /// und erreichbaren Feldes zurück.
+  ///
+  /// Ein Feld ist nur erreichbar, wenn ein freier Pfad vom Start-Hex-Feld
+  /// des [excludeToken] dorthin existiert (belegte Felder werden als
+  /// unüberwindbare Hindernisse behandelt, die umgangen werden müssen).
+  ///
+  /// Falls kein geeignetes Feld gefunden wird, wird die ursprüngliche
+  /// Pixel-Position zurückgegeben.
   Offset _snapToNearestFreeHex(Offset pixel, {ObjectToken? excludeToken}) {
     final approxHex = _pixelToHex(pixel);
 
-    // Prüfen, ob das angenäherte Feld bereits frei ist
+    // Hex-Position des Tokens vor der Bewegung
+    final ({int x, int y})? startHex =
+        excludeToken != null ? _getTokenHex(excludeToken) : null;
+
+    // Prüfen, ob das angenäherte Feld bereits frei und erreichbar ist
     if (_isHexFieldFree(approxHex.x, approxHex.y, excludeToken: excludeToken)) {
-      return _hexToPixel(x: approxHex.x, y: approxHex.y);
+      if (startHex == null ||
+          _isHexFieldReachable(
+            startX: startHex.x,
+            startY: startHex.y,
+            targetX: approxHex.x,
+            targetY: approxHex.y,
+            excludeToken: excludeToken,
+          )) {
+        return _hexToPixel(x: approxHex.x, y: approxHex.y);
+      }
     }
 
     // Spiralförmige Suche im Umkreis von bis zu 10 Feldern
@@ -526,51 +759,43 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       // Obere und untere Kante
       for (int dx = -radius; dx <= radius; dx++) {
         // Obere Kante: y = approxHex.y - radius
-        final yTop = approxHex.y - radius;
-        if (yTop >= 0 && yTop < widget.mapHeight) {
-          final xTop = approxHex.x + dx;
-          if (xTop >= 0 && xTop < widget.mapWidth) {
-            if (_isHexFieldFree(xTop, yTop, excludeToken: excludeToken)) {
-              return _hexToPixel(x: xTop, y: yTop);
-            }
-          }
-        }
+        final result = _checkSpiralEdge(
+          approxHex.x + dx,
+          approxHex.y - radius,
+          startHex: startHex,
+          excludeToken: excludeToken,
+        );
+        if (result != null) return result;
 
         // Untere Kante: y = approxHex.y + radius
-        final yBottom = approxHex.y + radius;
-        if (yBottom >= 0 && yBottom < widget.mapHeight) {
-          final xBottom = approxHex.x + dx;
-          if (xBottom >= 0 && xBottom < widget.mapWidth) {
-            if (_isHexFieldFree(xBottom, yBottom, excludeToken: excludeToken)) {
-              return _hexToPixel(x: xBottom, y: yBottom);
-            }
-          }
-        }
+        final resultBottom = _checkSpiralEdge(
+          approxHex.x + dx,
+          approxHex.y + radius,
+          startHex: startHex,
+          excludeToken: excludeToken,
+        );
+        if (resultBottom != null) return resultBottom;
       }
 
       // Linke und rechte Kante (ohne Ecken, die schon oben/unten abgedeckt sind)
       for (int dy = -radius + 1; dy <= radius - 1; dy++) {
         // Linke Kante: x = approxHex.x - radius
-        final xLeft = approxHex.x - radius;
-        if (xLeft >= 0) {
-          final yLeft = approxHex.y + dy;
-          if (yLeft >= 0 && yLeft < widget.mapHeight) {
-            if (_isHexFieldFree(xLeft, yLeft, excludeToken: excludeToken)) {
-              return _hexToPixel(x: xLeft, y: yLeft);
-            }
-          }
-        }
+        final resultLeft = _checkSpiralEdge(
+          approxHex.x - radius,
+          approxHex.y + dy,
+          startHex: startHex,
+          excludeToken: excludeToken,
+        );
+        if (resultLeft != null) return resultLeft;
 
         // Rechte Kante: x = approxHex.x + radius
-        final xRight = approxHex.x + radius;
-        if (xRight < widget.mapWidth) {
-          final yRight = approxHex.y + dy;
-          if (yRight >= 0 && yRight < widget.mapHeight) {
-            if (_isHexFieldFree(xRight, yRight, excludeToken: excludeToken)) {
-              return _hexToPixel(x: xRight, y: yRight);
-            }
-          }
-        }
+        final resultRight = _checkSpiralEdge(
+          approxHex.x + radius,
+          approxHex.y + dy,
+          startHex: startHex,
+          excludeToken: excludeToken,
+        );
+        if (resultRight != null) return resultRight;
       }
     }
 
@@ -578,29 +803,64 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return _hexToPixel(x: approxHex.x, y: approxHex.y);
   }
 
+  /// Prüft ein einzelnes Hex-Feld auf Freiheit und Erreichbarkeit.
+  /// Gibt die Pixel-Position zurück, wenn das Feld geeignet ist, sonst null.
+  Offset? _checkSpiralEdge(
+    int x,
+    int y, {
+    ({int x, int y})? startHex,
+    ObjectToken? excludeToken,
+  }) {
+    if (x < 0 || x >= widget.mapWidth || y < 0 || y >= widget.mapHeight) return null;
+    if (!_isHexFieldFree(x, y, excludeToken: excludeToken)) return null;
+    if (startHex != null &&
+        !_isHexFieldReachable(
+          startX: startHex.x,
+          startY: startHex.y,
+          targetX: x,
+          targetY: y,
+          excludeToken: excludeToken,
+        )) {
+      return null;
+    }
+    return _hexToPixel(x: x, y: y);
+  }
+
   /// Gibt alle Tokens zurück, die auf der Karte angezeigt werden sollen.
+  /// Das Ergebnis wird gecached, um wiederholte Iterationen zu vermeiden.
   List<_TokenRenderInfo> get _allTokens {
+    if (_cacheDirty || _cachedAllTokens == null) {
+      _cachedAllTokens = _buildAllTokens();
+      _cacheDirty = false;
+    }
+    return _cachedAllTokens!;
+  }
+
+  List<_TokenRenderInfo> _buildAllTokens() {
     final tokens = <_TokenRenderInfo>[];
 
-    // Spieler-Einheiten
+    // Spieler-Einheiten (nur lebende)
     for (final cook in _player.lineCookList) {
+      if (cook.woundValue <= 0) continue;
       tokens.add(_TokenRenderInfo(
         token: cook,
         isPlayerUnit: true,
       ));
     }
 
-    // Gegnerische Dough Dumpster
+    // Gegnerische Dough Dumpster (nur lebende)
     for (final dumpster in _host.doughDumpsterList) {
+      if (dumpster.woundValue <= 0) continue;
       tokens.add(_TokenRenderInfo(
         token: dumpster,
         isPlayerUnit: false,
       ));
     }
 
-    // Zombies aus allen Dumpstern
+    // Zombies aus allen Dumpstern (nur lebende)
     for (final dumpster in _host.doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) continue;
         tokens.add(_TokenRenderInfo(
           token: zombie,
           isPlayerUnit: false,
@@ -620,41 +880,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
     setState(() {
       // Prüfen, ob ein Token angetippt wurde
-      ObjectToken? tappedToken;
-      for (final renderInfo in _allTokens) {
-        final token = renderInfo.token;
-        // Host-Tokens (Gegner) haben eine etwas größere Hitbox,
-        // um dem Spieler das Zielen zu erleichtern
-        final double hitboxSize = renderInfo.isPlayerUnit
-            ? widget.tileWidth.toDouble()
-            : widget.tileWidth.toDouble() * 1.3;
-        final tokenRect = Rect.fromCenter(
-          center: token.position,
-          width: hitboxSize,
-          height: hitboxSize,
-        );
-        if (tokenRect.contains(tapPosition)) {
-          tappedToken = token;
-          break;
-        }
-      }
+      final tappedToken = _findTokenAtPosition(tapPosition);
 
       if (_pendingAction != null && tappedToken != null) {
-        // Targeting-Modus: Wurde ein targetierbarer Gegner getroffen?
-        if (_targetableEnemies.contains(tappedToken)) {
-          final action = _pendingAction!;
-          _pendingAction = null;
-          _targetableEnemies = {};
-          _executeActionOnTarget(action, tappedToken);
-        } else if (tappedToken == _selectedToken) {
-          // Klick auf den eigenen Angreifer bricht ab
-          _pendingAction = null;
-          _targetableEnemies = {};
-        } else {
-          // Unerwarteter Token – abbrechen
-          _pendingAction = null;
-          _targetableEnemies = {};
-        }
+        _handleTapInTargetingMode(tappedToken);
       } else if (tappedToken != null) {
         // Normalmodus: Token auswählen
         _selectedToken = tappedToken;
@@ -665,6 +894,46 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         _targetableEnemies = {};
       }
     });
+  }
+
+  /// Findet den Token an einer gegebenen Karten-Position (oder null).
+  ObjectToken? _findTokenAtPosition(Offset mapPosition) {
+    for (final renderInfo in _allTokens) {
+      final token = renderInfo.token;
+      // Host-Tokens (Gegner) haben eine etwas größere Hitbox,
+      // um dem Spieler das Zielen zu erleichtern
+      final double hitboxSize = renderInfo.isPlayerUnit
+          ? widget.tileWidth.toDouble()
+          : widget.tileWidth.toDouble() * 1.3;
+      final tokenRect = Rect.fromCenter(
+        center: token.position,
+        width: hitboxSize,
+        height: hitboxSize,
+      );
+      if (tokenRect.contains(mapPosition)) {
+        return token;
+      }
+    }
+    return null;
+  }
+
+  /// Behandelt einen Tap im Targeting-Modus.
+  void _handleTapInTargetingMode(ObjectToken tappedToken) {
+    if (_targetableEnemies.contains(tappedToken)) {
+      // Gültiges Ziel getroffen – Aktion ausführen
+      final action = _pendingAction!;
+      _pendingAction = null;
+      _targetableEnemies = {};
+      _executeActionOnTarget(action, tappedToken);
+    } else if (tappedToken == _selectedToken) {
+      // Klick auf den eigenen Angreifer bricht ab
+      _pendingAction = null;
+      _targetableEnemies = {};
+    } else {
+      // Unerwarteter Token – abbrechen
+      _pendingAction = null;
+      _targetableEnemies = {};
+    }
   }
 
   /// Startet einen Drag-Vorgang für den Token unter der Startposition.
@@ -703,29 +972,6 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     });
   }
 
-  /// Berechnet die Hex-Gitter-Entfernung zwischen zwei Hex-Koordinaten
-  /// auf einem Pointy-Top-Hex-Gitter mit staggeraxis="y", staggerindex="odd".
-  ///
-  /// Verwendet die Umrechnung in Cube-Koordinaten für eine korrekte
-  /// Hex-Distanzberechnung.
-  int _hexDistance({required int x1, required int y1, required int x2, required int y2}) {
-    // Offset-zu-Cube-Konvertierung für odd-r (staggerindex="odd")
-    int cubeX1 = x1 - (y1 - (y1 & 1)) ~/ 2;
-    int cubeZ1 = y1;
-    int cubeY1 = -cubeX1 - cubeZ1;
-
-    int cubeX2 = x2 - (y2 - (y2 & 1)) ~/ 2;
-    int cubeZ2 = y2;
-    int cubeY2 = -cubeX2 - cubeZ2;
-
-    // Hex-Distanz = max(|dx|, |dy|, |dz|)
-    return [
-      (cubeX1 - cubeX2).abs(),
-      (cubeY1 - cubeY2).abs(),
-      (cubeZ1 - cubeZ2).abs(),
-    ].reduce((a, b) => a > b ? a : b);
-  }
-
   /// Beendet den Drag-Vorgang und setzt die endgültige Position.
   /// Der Token wird automatisch auf das nächstgelegene freie Hex-Feld
   /// gesetzt (Snap-to-Grid). Ist das Zielfeld belegt, wird spiralförmig
@@ -751,7 +997,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
       // Bewegung auf movementValue begrenzen
       if (_dragStartHex != null) {
-        final distance = _hexDistance(
+        final distance = _HexUtils.distance(
           x1: _dragStartHex!.x,
           y1: _dragStartHex!.y,
           x2: targetHex.x,
@@ -780,6 +1026,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       _dragOffset = Offset.zero;
       _dragStartHex = null;
 
+      _invalidateCache();
+
       // Nach Bewegung prüfen, ob alle Tokens fertig sind
       _checkAutoEndPlayerTurn();
     });
@@ -803,14 +1051,15 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
     // Alle in Reichweite liegenden Gegner finden
     final targets = <ObjectToken>{};
+    final attackerHex = _getTokenHex(attacker);
     for (final renderInfo in _allTokens) {
       if (renderInfo.isPlayerUnit) continue;
       final enemy = renderInfo.token;
       if (enemy.woundValue <= 0) continue;
 
-      final distance = _hexDistance(
-        x1: _getTokenHex(attacker).x,
-        y1: _getTokenHex(attacker).y,
+      final distance = _HexUtils.distance(
+        x1: attackerHex.x,
+        y1: attackerHex.y,
         x2: _getTokenHex(enemy).x,
         y2: _getTokenHex(enemy).y,
       );
@@ -839,7 +1088,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     final attacker = _selectedToken as ObjectLineCook;
 
     // Entfernung in Hex-Feldern ermitteln
-    final distanceInHex = _hexDistance(
+    final distanceInHex = _HexUtils.distance(
       x1: _getTokenHex(attacker).x,
       y1: _getTokenHex(attacker).y,
       x2: _getTokenHex(target).x,
@@ -859,16 +1108,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     attacker.hasActed = true;
 
     // Ergebnis anzeigen
-    String message = 'Angriff auf ${target.name}: ';
-    if (result.hit) {
-      message += 'Treffer! ${result.damage} Schaden verursacht.';
-    } else {
-      message += 'Verfehlt!';
-    }
-    if (result.attackerCritical) message += ' (Kritischer Treffer!)';
-    if (result.attackerFumbled) message += ' (Patzer – selbst Schaden erlitten!)';
-    if (result.defenderCritical) message += ' (Gegner hat kritisch pariert!)';
-    if (result.defenderFumbled) message += ' (Gegner hat einen Patzer erlitten!)';
+    final message = _buildCombatResultMessage(target, result);
     _showMessage(message);
 
     // Tote Einheiten entfernen
@@ -886,7 +1126,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _checkAutoEndPlayerTurn();
   }
 
-  /// Entfernt alle Tokens mit woundValue <= 0.
+  /// Baut eine lesbare Kampf-Nachricht aus dem Kampfergebnis.
+  String _buildCombatResultMessage(ObjectToken target, CombatResult result) {
+    String message = 'Angriff auf ${target.name}: ';
+    if (result.hit) {
+      message += 'Treffer! ${result.damage} Schaden verursacht.';
+    } else {
+      message += 'Verfehlt!';
+    }
+    if (result.attackerCritical) message += ' (Kritischer Treffer!)';
+    if (result.attackerFumbled) message += ' (Patzer – selbst Schaden erlitten!)';
+    if (result.defenderCritical) message += ' (Gegner hat kritisch pariert!)';
+    if (result.defenderFumbled) message += ' (Gegner hat einen Patzer erlitten!)';
+    return message;
+  }
+
+  /// Entfernt alle Tokens mit woundValue <= 0 und räumt den Cache auf.
   void _removeDeadTokens() {
     // Tote Spieler-Einheiten entfernen
     _player.lineCookList.removeWhere((cook) => cook.woundValue <= 0);
@@ -903,6 +1158,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     if (_selectedToken != null && _selectedToken!.woundValue <= 0) {
       _selectedToken = null;
     }
+
+    // Basis-Bewegungswerte für tote Tokens aufräumen (Memory Leak vermeiden)
+    _baseMovementValues.removeWhere((token, _) => token.woundValue <= 0);
+
+    // Cache invalidieren, damit tote Tokens sofort aus der Darstellung verschwinden
+    _invalidateCache();
   }
 
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.
@@ -922,10 +1183,14 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   }
 
   /// Zeigt eine SnackBar-Nachricht an.
+  /// Verwendet einen eindeutigen Schlüssel, um das Stapeln mehrerer
+  /// SnackBars zu vermeiden.
   void _showMessage(String message) {
     if (!context.mounted) return;
+    _snackBarKey++;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        key: ValueKey('snack_$_snackBarKey'),
         content: Text(message),
         duration: const Duration(seconds: 3),
       ),
@@ -1183,17 +1448,21 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Berechnet das in Karten-Koordinaten sichtbare Rechteck (Viewport).
   /// Tokens außerhalb dieses Bereichs werden nicht gezeichnet (Viewport-Culling).
+  /// Das Ergebnis wird gecached, da es sich nur bei Transformation ändert.
   Rect _getVisibleMapRect() {
+    if (_cachedVisibleRect != null) return _cachedVisibleRect!;
+
     final matrix = widget.transformationController.value;
     final inverseMatrix = Matrix4.tryInvert(matrix);
     if (inverseMatrix == null) {
       // Falls die Matrix nicht invertiert werden kann, den gesamten Kartenbereich zurückgeben
-      return Rect.fromLTWH(
+      _cachedVisibleRect = Rect.fromLTWH(
         0,
         0,
         widget.mapWidth * widget.tileWidth + widget.tileWidth / 2,
         (widget.mapHeight * widget.tileHeight * 3 / 4) + widget.tileHeight / 4,
       );
+      return _cachedVisibleRect!;
     }
 
     // Die Bildschirmgröße über den BuildContext ermitteln
@@ -1210,71 +1479,67 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
     // Das umschließende Rechteck in Karten-Koordinaten berechnen
     final minX = [
-      topLeft.dx,
-      topRight.dx,
-      bottomLeft.dx,
-      bottomRight.dx
+      topLeft.dx, topRight.dx, bottomLeft.dx, bottomRight.dx
     ].reduce((a, b) => a < b ? a : b);
     final minY = [
-      topLeft.dy,
-      topRight.dy,
-      bottomLeft.dy,
-      bottomRight.dy
+      topLeft.dy, topRight.dy, bottomLeft.dy, bottomRight.dy
     ].reduce((a, b) => a < b ? a : b);
     final maxX = [
-      topLeft.dx,
-      topRight.dx,
-      bottomLeft.dx,
-      bottomRight.dx
+      topLeft.dx, topRight.dx, bottomLeft.dx, bottomRight.dx
     ].reduce((a, b) => a > b ? a : b);
     final maxY = [
-      topLeft.dy,
-      topRight.dy,
-      bottomLeft.dy,
-      bottomRight.dy
+      topLeft.dy, topRight.dy, bottomLeft.dy, bottomRight.dy
     ].reduce((a, b) => a > b ? a : b);
 
     // Einen großzügigen Rand hinzufügen, damit Tokens nicht zu früh
     // ein-/ausblenden (ca. 2 Tile-Breiten als Puffer)
     const margin = 200.0;
-    return Rect.fromLTRB(
+    _cachedVisibleRect = Rect.fromLTRB(
       minX - margin,
       minY - margin,
       maxX + margin,
       maxY + margin,
     );
+    return _cachedVisibleRect!;
   }
 
   /// Berechnet alle erreichbaren Hex-Felder für den ausgewählten Token
   /// basierend auf seinen verbleibenden Bewegungspunkten.
   /// Verwendet BFS über die Hex-Nachbarschaft (odd-r).
+  /// Das Ergebnis wird gecached, solange sich Auswahl oder Bewegung nicht ändern.
   Set<int> get _reachableHexFields {
     if (_selectedToken == null || _selectedToken!.movementValue <= 0) {
       return {};
     }
+
+    // Cache verwenden, wenn Auswahl und Bewegung gleich geblieben sind
+    if (_cachedReachableFields != null &&
+        _cachedReachableToken == _selectedToken &&
+        _cachedReachableMovement == _selectedToken!.movementValue &&
+        !_cacheDirty) {
+      return _cachedReachableFields!;
+    }
+
     final hex = _getTokenHex(_selectedToken!);
     final maxMovement = _selectedToken!.movementValue;
     final occupied = _getOccupiedHexFields(excludeToken: _selectedToken);
 
     // BFS: Queue von (x, y, remainingSteps)
-    final visited = <int>{_hexKey(hex.x, hex.y)};
+    visited.reset();
     final reachable = <int>{};
-    final queue = [(x: hex.x, y: hex.y, steps: maxMovement)];
+    visited.add(_HexUtils.hexKey(hex.x, hex.y, widget.mapWidth));
+    final queue = Queue<({int x, int y, int steps})>();
+    queue.add((x: hex.x, y: hex.y, steps: maxMovement));
 
     while (queue.isNotEmpty) {
-      final current = queue.removeAt(0);
+      final current = queue.removeFirst();
       if (current.steps <= 0) continue;
 
-      // Nachbar-Offsets für odd-r Hex-Gitter (staggerindex="odd")
-      final neighbors = (current.y % 2 == 0)
-          ? [(-1, -1), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)]
-          : [(0, -1), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)];
-
-      for (final (dx, dy) in neighbors) {
-        final nx = current.x + dx;
-        final ny = current.y + dy;
+      for (final offset in _HexUtils.neighborOffsets(current.y)) {
+        final nx = current.x + offset.dx;
+        final ny = current.y + offset.dy;
         if (nx < 0 || nx >= widget.mapWidth || ny < 0 || ny >= widget.mapHeight) continue;
-        final key = _hexKey(nx, ny);
+        final key = _HexUtils.hexKey(nx, ny, widget.mapWidth);
         if (visited.contains(key)) continue;
         visited.add(key);
         if (occupied.contains(key)) continue;
@@ -1283,7 +1548,84 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       }
     }
 
+    _cachedReachableFields = reachable;
+    _cachedReachableToken = _selectedToken;
+    _cachedReachableMovement = maxMovement;
     return reachable;
+  }
+
+  /// Baut die Widgets für erreichbare Felder (grüne Overlays).
+  List<Widget> _buildReachableFieldWidgets(
+    Set<int> reachableFields,
+    Rect visibleRect,
+  ) {
+    if (reachableFields.isEmpty) return const [];
+
+    final widgets = <Widget>[];
+    for (final key in reachableFields) {
+      final x = key % widget.mapWidth;
+      final y = key ~/ widget.mapWidth;
+      final pixel = _hexToPixel(x: x, y: y);
+
+      // Viewport-Culling
+      if (!visibleRect.contains(pixel)) continue;
+
+      widgets.add(
+        Positioned(
+          left: pixel.dx - widget.tileWidth / 2,
+          top: pixel.dy - widget.tileHeight / 2,
+          child: IgnorePointer(
+            child: Container(
+              width: widget.tileWidth.toDouble(),
+              height: widget.tileHeight.toDouble(),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.25),
+                border: Border.all(
+                  color: Colors.green.withValues(alpha: 0.6),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  /// Baut die Widgets für targetierbare Gegner (rote Highlights).
+  List<Widget> _buildTargetingHighlightWidgets(Rect visibleRect) {
+    if (_pendingAction == null || _targetableEnemies.isEmpty) return const [];
+
+    final widgets = <Widget>[];
+    for (final enemy in _targetableEnemies) {
+      if (enemy.woundValue <= 0) continue;
+      if (!visibleRect.contains(enemy.position)) continue;
+
+      final hex = _getTokenHex(enemy);
+      final pixel = _hexToPixel(x: hex.x, y: hex.y);
+
+      widgets.add(
+        Positioned(
+          left: pixel.dx - widget.tileWidth / 2,
+          top: pixel.dy - widget.tileHeight / 2,
+          child: IgnorePointer(
+            child: Container(
+              width: widget.tileWidth.toDouble(),
+              height: widget.tileHeight.toDouble(),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.3),
+                border: Border.all(
+                  color: Colors.red.withValues(alpha: 0.8),
+                  width: 2.0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
   }
 
   /// Baut die Widgets für alle Tokens auf der Karte.
@@ -1300,76 +1642,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     final reachableFields = _reachableHexFields;
 
     // Highlight-Widgets für erreichbare Felder zeichnen
-    if (reachableFields.isNotEmpty) {
-      for (final key in reachableFields) {
-        final x = key % widget.mapWidth;
-        final y = key ~/ widget.mapWidth;
-        final pixel = _hexToPixel(x: x, y: y);
-
-        // Viewport-Culling
-        if (!visibleRect.contains(pixel)) continue;
-
-        widgets.add(
-          Positioned(
-            left: pixel.dx - widget.tileWidth / 2,
-            top: pixel.dy - widget.tileHeight / 2,
-            child: IgnorePointer(
-              child: Container(
-                width: widget.tileWidth.toDouble(),
-                height: widget.tileHeight.toDouble(),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.25),
-                  border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.6),
-                    width: 1.5,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    '', // leer – nur Farbe
-                    style: const TextStyle(fontSize: 8, color: Colors.white70),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    }
+    widgets.addAll(_buildReachableFieldWidgets(reachableFields, visibleRect));
 
     // Im Targeting-Modus: rote Highlights für targetierbare Gegner zeichnen
-    if (_pendingAction != null && _targetableEnemies.isNotEmpty) {
-      for (final enemy in _targetableEnemies) {
-        if (enemy.woundValue <= 0) continue;
-        if (!visibleRect.contains(enemy.position)) continue;
+    widgets.addAll(_buildTargetingHighlightWidgets(visibleRect));
 
-        final key = _hexKey(_getTokenHex(enemy).x, _getTokenHex(enemy).y);
-        final x = key % widget.mapWidth;
-        final y = key ~/ widget.mapWidth;
-        final pixel = _hexToPixel(x: x, y: y);
-
-        widgets.add(
-          Positioned(
-            left: pixel.dx - widget.tileWidth / 2,
-            top: pixel.dy - widget.tileHeight / 2,
-            child: IgnorePointer(
-              child: Container(
-                width: widget.tileWidth.toDouble(),
-                height: widget.tileHeight.toDouble(),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.3),
-                  border: Border.all(
-                    color: Colors.red.withValues(alpha: 0.8),
-                    width: 2.0,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    }
-
+    // Tokens zeichnen
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
       if (token.woundValue <= 0) continue;
@@ -1384,10 +1662,6 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         continue;
       }
 
-      // Token visuell zentrieren: Die Positioned-Widgets platzieren den
-      // Token so, dass die Kreismitte auf der Hex-Zentrum-Position liegt.
-      // Für Host-Tokens (Dough Dumpster, Dough Zombies) wird die Hitbox
-      // zusätzlich etwas größer gemacht.
       final tokenSize = (widget.tileWidth * 0.7).clamp(20.0, 48.0);
       final halfTokenSize = tokenSize / 2;
 
@@ -1444,38 +1718,47 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
             _infoRow('Schaden', token.damageValue.toString()),
             _infoRow('Reichweite', token.rangeValue.toString()),
             _infoRow('Trefferpunkte', token.woundValue.toString()),
-            if (isPlayerUnit) ...[
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
-                    ? () => _enterTargetingMode(CombatAction.melee)
-                    : null,
-                icon: const Icon(Icons.local_fire_department, size: 16),
-                label: const Text('Nahkampf'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                ),
-              ),
-              if (token is ObjectLineCook && token.rangeValue > 0)
-                const SizedBox(height: 4),
-              if (token.rangeValue > 0)
-                ElevatedButton.icon(
-                  onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
-                      ? () => _enterTargetingMode(CombatAction.ranged)
-                      : null,
-                  icon: const Icon(Icons.arrow_forward, size: 16),
-                  label: const Text('Fernkampf'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                  ),
-                ),
-            ],
+            if (isPlayerUnit) ..._buildPlayerActionButtons(token),
           ],
         ),
       ),
     );
   }
 
+  /// Baut die Aktions-Buttons für Spieler-Einheiten im Info-Panel.
+  List<Widget> _buildPlayerActionButtons(ObjectToken token) {
+    final buttons = <Widget>[
+      const SizedBox(height: 8),
+      ElevatedButton.icon(
+        onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
+            ? () => _enterTargetingMode(CombatAction.melee)
+            : null,
+        icon: const Icon(Icons.local_fire_department, size: 16),
+        label: const Text('Nahkampf'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    ];
+
+    if (token.rangeValue > 0) {
+      buttons.add(const SizedBox(height: 4));
+      buttons.add(
+        ElevatedButton.icon(
+          onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
+              ? () => _enterTargetingMode(CombatAction.ranged)
+              : null,
+          icon: const Icon(Icons.arrow_forward, size: 16),
+          label: const Text('Fernkampf'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+          ),
+        ),
+      );
+    }
+
+    return buttons;
+  }
 
   /// Hilfswidget für eine einzelne Info-Zeile.
   Widget _infoRow(String label, String value) {
@@ -1498,6 +1781,30 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         ],
       ),
     );
+  }
+}
+
+/// Ein spezialisiertes Set für BFS-Besuchsmarkierungen, das Wiederverwendung
+/// des internen Speichers ermöglicht, ohne jedes Mal eine neue Allokation
+/// durchführen zu müssen.
+class _BfsVisitedSet {
+  final Map<int, int> _storage = {};
+  int _generation = 0;
+
+  /// Setzt die Besuchsmarkierungen zurück, ohne den internen Speicher
+  /// freizugeben.
+  void reset() {
+    _generation++;
+  }
+
+  /// Fügt einen Wert als besucht hinzu.
+  void add(int key) {
+    _storage[key] = _generation;
+  }
+
+  /// Prüft, ob ein Wert besucht wurde.
+  bool contains(int key) {
+    return _storage[key] == _generation;
   }
 }
 

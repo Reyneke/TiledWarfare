@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/main_app.dart';
 
+/// Entry point for the TiledWarfare application.
+///
+/// Initializes Flutter bindings if needed (e.g., for async operations
+/// such as loading assets or plugins before [runApp]) and launches the
+/// root [MainApp] widget.
+///
+/// For project-wide documentation, see the `doc/` directory which contains
+/// class diagrams, sequence diagrams, dependency graphs, and summaries
+/// designed to help new contributors onboard quickly.
+///
+/// Bug reports are maintained in `doc/doc/bug_reports/`.
+/// Currently tracked issues:
+/// - report_001: Zombie tokens not properly removed upon death
+/// - report_002: Zombies stacking on the same hex fields (spawning + movement
+///   lack collision checks, causing invisible stacking and log/count mismatch)
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MainApp());
 }
-/*
-Erklärung: Die Trefferpunkte des Dough Zombie "Karen Hill" scheinen nicht
-mit dem Infosheet übereinzustimmen, da zwei Spiellogiken zusammenwirken:
-
-1) Nach einem tötlichen Treffer wird der Spielerzug sofort beendet
-   (_checkAutoEndPlayerTurn -> _endPlayerTurn), sobald der Line Cook
-   keine Aktionen mehr hat. Der Host übernimmt und lässt den Dough Dumpster
-   1w6 neue Zombies spawnen (performAllDumpsterSpawning).
-
-2) Zombies erhalten per Zufall einen Namen aus RandomNames(). Ein neu
-   gespawnter Zombie kann zufällig denselben Namen ("Karen Hill") erhalten
-   wie der soeben getötete Zombie. Der neue Zombie hat volle 3 Trefferpunkte,
-   sodass es aussieht, als hätte der alte Zombie seine HP regeneriert.
-
-Kurz: Der Zombie wurde getötet und entfernt, aber ein neuer Zombie mit
-demselben Namen ist an seine Stelle getreten.
-*/

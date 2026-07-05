@@ -275,6 +275,7 @@ class ObjectHost {
   /// Bewegt einen einzelnen Zombie auf das nächste Ziel zu.
   /// Die Bewegung erfolgt hexgitter-basiert: Der Zombie rückt genau ein
   /// Hex-Feld in Richtung des Ziels vor und rastet auf dem Hex-Zentrum ein.
+  /// Überspringt belegte Hex-Felder, um Stapelung zu vermeiden.
   void _moveZombieTowardsTarget(
       ObjectDoughZombie zombie, List<ObjectLineCook> targets) {
     if (targets.isEmpty) return;
@@ -304,6 +305,13 @@ class ObjectHost {
     // Wenn Zombie und Ziel auf dem gleichen Hex-Feld sind, nichts tun
     if (dx == 0 && dy == 0) return;
 
+    // Alle aktuell belegten Hex-Felder ermitteln (außer dem Zombie selbst),
+    // damit wir nicht auf besetzte Felder laufen
+    final occupied = _buildOccupiedHostHexes();
+    // Entferne den Zombie selbst aus der belegten-Menge, damit er sich
+    // von seinem eigenen Feld wegbewegen kann
+    occupied.remove(zombieHex.y * 100 + zombieHex.x);
+
     // Schrittweite = min(1, movementValue) Hex-Felder
     // Zombies movementValue = 1, also genau 1 Schritt
     final steps = zombie.movementValue.clamp(1, 100);
@@ -324,14 +332,18 @@ class ObjectHost {
           ? [(-1, -1), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)]
           : [(0, -1), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)];
 
-      // Den Nachbarn mit der geringsten Entfernung zum Ziel wählen
+      // Den Nachbarn mit der geringsten Entfernung zum Ziel wählen,
+      // der nicht belegt ist
       ({int dx, int dy}) bestNeighbor = (dx: 0, dy: 0);
       int bestDistance = 999999;
 
       for (final (ndx, ndy) in neighbors) {
         final nx = currentX + ndx;
         final ny = currentY + ndy;
-        if (nx < 0 || ny < 0) continue; // Kartenränder – kein Problem, da grob
+        if (nx < 0 || ny < 0) continue; // Kartenränder überspringen
+
+        // Belegte Felder überspringen (Kollisionsvermeidung)
+        if (occupied.contains(ny * 100 + nx)) continue;
 
         final dist = ((targetHex.x - nx).abs() + (targetHex.y - ny).abs());
         if (dist < bestDistance) {
@@ -455,6 +467,78 @@ class ObjectHost {
     return logMessages;
   }
 
+  /// Baut eine Menge aller aktuell belegten Hex-Felder des Hosts auf.
+  /// Wird verwendet, um Kollisionen beim Spawning und Bewegen zu vermeiden.
+  Set<int> _buildOccupiedHostHexes() {
+    final occupied = <int>{};
+    for (final dumpster in doughDumpsterList) {
+      final dh = _pixelToHex(dumpster.position);
+      // Kartenbreite ist unbekannt, verwende 100 als konservative Schätzung
+      occupied.add(dh.y * 100 + dh.x);
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) continue;
+        final zh = _pixelToHex(zombie.position);
+        occupied.add(zh.y * 100 + zh.x);
+      }
+    }
+    return occupied;
+  }
+
+  /// Findet ein freies Hex-Feld in der Nähe eines Ausgangs-Hex.
+  /// Durchsucht spiralförmig beginnend beim Start-Hex, bis ein freies Feld
+  /// gefunden wird oder der maximale Radius erreicht ist.
+  /// Gibt das erste freie Hex als Pixel-Position zurück.
+  Offset _findFreeHexNear({
+    required int startX,
+    required int startY,
+    required Set<int> occupied,
+    int maxRadius = 12,
+  }) {
+    // Prüfe, ob das Start-Hex selbst frei ist
+    if (!occupied.contains(startY * 100 + startX)) {
+      return _hexToPixel(x: startX, y: startY);
+    }
+
+    // Spiralförmige Suche
+    for (int radius = 1; radius <= maxRadius; radius++) {
+      // Obere Kante
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = startX + dx;
+        final y = startY - radius;
+        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Untere Kante
+      for (int dx = -radius; dx <= radius; dx++) {
+        final x = startX + dx;
+        final y = startY + radius;
+        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Linke Kante (ohne Ecken)
+      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
+        final x = startX - radius;
+        final y = startY + dy;
+        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+      // Rechte Kante (ohne Ecken)
+      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
+        final x = startX + radius;
+        final y = startY + dy;
+        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
+          return _hexToPixel(x: x, y: y);
+        }
+      }
+    }
+
+    // Fallback: Start-Position zurückgeben
+    return _hexToPixel(x: startX, y: startY);
+  }
+
   /// Lässt alle Dough Dumpster neue Zombies spawnen (für jede neue Runde).
   /// Gibt Log-Nachrichten zurück.
   List<String> performAllDumpsterSpawning() {
@@ -465,23 +549,24 @@ class ObjectHost {
       final newZombies = dumpster.spawnZombies();
       if (newZombies.isNotEmpty) {
         logMessages.add('${dumpster.name} spawniert ${newZombies.length} neue Zombies!');
-        // Zombies um den Dumpster herum positionieren
+        
+        // Alle aktuell belegten Hex-Felder ermitteln, inkl. der bereits
+        // in diesem Spawning-Durchgang platzierten Zombies
+        final occupied = _buildOccupiedHostHexes();
         final dumpsterHex = _pixelToHex(dumpster.position);
-        final neighborOffsets = <({int dx, int dy})>[
-          (dx: 0, dy: -1), (dx: -1, dy: 0),
-          (dx: 1, dy: 0), (dx: 0, dy: 1),
-          (dx: -1, dy: -1), (dx: 1, dy: 1),
-        ];
+
+        // Zombies spiralförmig um den Dumpster herum auf freien Feldern platzieren
         for (int i = 0; i < newZombies.length; i++) {
-          if (i < neighborOffsets.length) {
-            final offset = neighborOffsets[i];
-            newZombies[i].position = _hexToPixel(
-              x: (dumpsterHex.x + offset.dx).clamp(0, 50),
-              y: (dumpsterHex.y + offset.dy).clamp(0, 50),
-            );
-          } else {
-            newZombies[i].position = dumpster.position;
-          }
+          final freePosition = _findFreeHexNear(
+            startX: dumpsterHex.x,
+            startY: dumpsterHex.y,
+            occupied: occupied,
+          );
+          newZombies[i].position = freePosition;
+          // Neu platzierten Zombie als belegt markieren, damit nachfolgende
+          // Zombies in derselben Runde nicht auf demselben Feld spawnen
+          final zh = _pixelToHex(freePosition);
+          occupied.add(zh.y * 100 + zh.x);
         }
       }
     }
