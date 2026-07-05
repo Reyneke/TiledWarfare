@@ -6,7 +6,7 @@ class ObjectLineCook extends ObjectToken {
   ObjectLineCook() : super(
     name: "Line Cook: ${RandomNames(Zone.italy).fullName()}",
     imagePath: "assets/images/token/token_cook_basic.png",
-    attackValue: 40,
+    attackValue: 80,
     defenseValue: 40,
     movementValue: 3,
     damageValue: 2,

@@ -9,11 +9,11 @@
             "scaleInEditor": 1
         },
         "street_battle.tmx": {
-            "scale": 1,
-            "selectedLayer": 2,
+            "scale": 1.5,
+            "selectedLayer": 3,
             "viewCenter": {
-                "x": 483.5,
-                "y": 228.5
+                "x": 478.99999999999994,
+                "y": 221
             }
         }
     },

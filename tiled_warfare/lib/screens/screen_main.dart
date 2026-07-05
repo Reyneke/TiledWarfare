@@ -27,6 +27,9 @@ class _ScreenMainState extends State<ScreenMain> {
   /// der vom [WidgetMapLoader] bereitgestellt wird.
   TransformationController? _mapTransformationController;
 
+  /// Die geparsten Spawnpunkte aus der Map.
+  List<({String name, double x, double y})> _spawnPoints = [];
+
   /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Karte geladen wurde,
   /// um die Kartendimensionen an den [WidgetCaretaker] weiterzugeben.
   void _onMapLoaded({
@@ -47,6 +50,14 @@ class _ScreenMainState extends State<ScreenMain> {
   /// [TransformationController] erstellt wurde.
   void _onTransformationControllerCreated(TransformationController controller) {
     _mapTransformationController = controller;
+  }
+
+  /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Spawnpunkte aus der
+  /// Map geparst wurden.
+  void _onSpawnPointsParsed(List<({String name, double x, double y})> spawnPoints) {
+    setState(() {
+      _spawnPoints = spawnPoints;
+    });
   }
 
 
@@ -86,6 +97,7 @@ class _ScreenMainState extends State<ScreenMain> {
             onMapLoaded: _onMapLoaded,
             onTransformationControllerCreated:
                 _onTransformationControllerCreated,
+            onSpawnPointsParsed: _onSpawnPointsParsed,
           ),
           // Token-Overlay im Vordergrund
           if (_mapTransformationController != null)
@@ -98,6 +110,7 @@ class _ScreenMainState extends State<ScreenMain> {
                   mapWidth: _mapWidth,
                   mapHeight: _mapHeight,
                   transformationController: _mapTransformationController!,
+                  spawnPoints: _spawnPoints,
                 ),
               ),
             ),

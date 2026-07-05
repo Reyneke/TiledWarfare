@@ -25,6 +25,10 @@ class ObjectToken {
   /// Wird gesetzt, sobald der Token auf der Karte platziert wird.
   Offset position = Offset.zero;
 
+  /// Ob der Token in der aktuellen Runde bereits eine Kampfaktion ausgeführt hat.
+  /// Wird zu Beginn jeder Runde zurückgesetzt.
+  bool hasActed = false;
+
   ObjectToken({
     required this.name,
     required this.imagePath,
