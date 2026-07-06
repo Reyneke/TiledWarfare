@@ -27,4 +27,5 @@ flutter:
     - assets/images/
     - assets/images/token/
     - assets/maps/
+    - assets/maps/map0/
     

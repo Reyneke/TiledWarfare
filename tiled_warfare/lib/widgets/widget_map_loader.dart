@@ -28,11 +28,16 @@ class WidgetMapLoader extends StatefulWidget {
   final void Function(List<({String name, double x, double y})> spawnPoints)?
       onSpawnPointsParsed;
 
+  /// Der Pfad zur .tmx-Datei, die geladen werden soll.
+  /// Standardmäßig wird "assets/maps/street_battle.tmx" verwendet.
+  final String mapPath;
+
   const WidgetMapLoader({
     super.key,
     this.onMapLoaded,
     this.onTransformationControllerCreated,
     this.onSpawnPointsParsed,
+    this.mapPath = 'assets/maps/street_battle.tmx',
   });
 
 
@@ -47,7 +52,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   int _mapHeight = 30;
   int _tileWidth = 32;
   int _tileHeight = 32;
-  final int _tilesetColumns = 16;
+  int _tilesetColumns = 16;
   bool _isLoading = true;
   String? _error;
   final TransformationController _transformationController = TransformationController();
@@ -71,7 +76,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   Future<void> _loadMap() async {
     try {
       // TMX-Datei laden und parsen
-      final tmxString = await rootBundle.loadString('assets/maps/street_battle.tmx');
+      final tmxString = await rootBundle.loadString(widget.mapPath);
       final document = XmlDocument.parse(tmxString);
       final mapElement = document.findElements('map').first;
 
@@ -100,7 +105,51 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       _tileData = tileData;
 
       // Tileset-Bild laden
-      var byteData = await rootBundle.load('assets/maps/Thespazztikone_tilemaps_005_neu.png');
+      // Ermittle das Verzeichnis der TMX-Datei, um relative Pfade aufzulösen
+      final mapDir = widget.mapPath.substring(
+        0,
+        widget.mapPath.lastIndexOf('/'),
+      );
+
+      // Lade den TSX-Tileset, um das tatsächliche Bild und die Spaltenanzahl zu finden
+      String tilesetImagePath;
+      try {
+        final tilesetElement = mapElement.findElements('tileset').first;
+        final tsxSource = tilesetElement.getAttribute('source');
+        if (tsxSource != null) {
+          // TSX-Datei laden
+          final tsxPath = '$mapDir/$tsxSource';
+          final tsxString = await rootBundle.loadString(tsxPath);
+          final tsxDocument = XmlDocument.parse(tsxString);
+          final tsxTileset = tsxDocument.findElements('tileset').first;
+
+          // Spaltenanzahl aus dem TSX übernehmen
+          final columnsAttr = tsxTileset.getAttribute('columns');
+          if (columnsAttr != null) {
+            _tilesetColumns = int.parse(columnsAttr);
+          }
+
+          final imageElement = tsxTileset.findElements('image').first;
+          final imageSource = imageElement.getAttribute('source');
+          tilesetImagePath = '$mapDir/$imageSource';
+        } else {
+          // Spaltenanzahl direkt aus dem TMX-tileset übernehmen
+          final columnsAttr = tilesetElement.getAttribute('columns');
+          if (columnsAttr != null) {
+            _tilesetColumns = int.parse(columnsAttr);
+          }
+
+          // Fallback: image-Attribut direkt im tileset-Element
+          final imageElement = tilesetElement.findElements('image').first;
+          final imageSource = imageElement.getAttribute('source');
+          tilesetImagePath = '$mapDir/$imageSource';
+        }
+      } catch (_) {
+        // Fallback für den ursprünglichen hardcodierten Pfad
+        tilesetImagePath = 'assets/maps/Thespazztikone_tilemaps_005_neu.png';
+      }
+
+      var byteData = await rootBundle.load(tilesetImagePath);
       var codec = await ui.instantiateImageCodec(byteData.buffer.asUint8List());
       var frameInfo = await codec.getNextFrame();
       _tilesetImage = frameInfo.image;

@@ -9,6 +9,21 @@ import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:image_picker/image_picker.dart';
 
+/// Repräsentiert eine verfügbare Karte im assets/maps Verzeichnis.
+class MapPreviewEntry {
+  final String mapPath;
+  final String title;
+  final String? previewPath;
+  final String tmxPath;
+
+  MapPreviewEntry({
+    required this.mapPath,
+    required this.title,
+    this.previewPath,
+    required this.tmxPath,
+  });
+}
+
 /// Bildschirm zur Verwaltung des Restaurants und des Teams.
 ///
 /// Zeigt den Restaurant-Namen, ein Profilbild (austauschbar via ImagePicker),
@@ -40,6 +55,18 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   /// Menge der Charaktere, die als "gefechtsbereit" markiert sind.
   final Set<ObjectApprentice> _battleReadyCharacters = {};
 
+  /// Verfügbare Karten aus assets/maps/.
+  List<MapPreviewEntry> _mapEntries = [];
+
+  /// Ladezustand der Karten-Liste.
+  bool _isLoadingMaps = true;
+
+  /// Fehler beim Laden der Karten-Liste.
+  String? _mapLoadingError;
+
+  /// Index der ausgewählten Karte in [_mapEntries], oder null falls keine.
+  int? _selectedMapIndex;
+
   // ── Lifecycle ────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -55,6 +82,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     }
 
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
+
+    _discoverMaps();
   }
 
   @override
@@ -65,6 +94,42 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
 
   void _onThemeChanged() {
     setState(() {});
+  }
+
+  /// Erstellt die Liste der verfügbaren Karten anhand der bekannten
+  /// Karten-Ordner in [assets/maps/].
+  ///
+  /// Da Flutter im Release-Modus kein [AssetManifest.json] bereitstellt,
+  /// und es keine dynamische Directory-Listing-API für Assets gibt, werden
+  /// die Karten hier direkt über ihre bekannten Pfade definiert.
+  /// Neue Karten müssen sowohl in [pubspec.yaml] unter [flutter.assets]
+  /// als auch in dieser Methode registriert werden.
+  Future<void> _discoverMaps() async {
+    // Alle bekannten Karten auflisten.
+    // Jeder Eintrag enthält den Ordner-Pfad, den Titel und den TMX-Pfad.
+    // Hier werden später im Rahmen der Routinen-Erweiterung weitere Karten
+    // hinzugefügt; aktuell ist nur map0 (Street Battle) vorhanden.
+    final maps = <MapPreviewEntry>[
+      MapPreviewEntry(
+        mapPath: 'assets/maps/map0',
+        title: 'Street Battle',
+        previewPath: null,
+        tmxPath: 'assets/maps/map0/street_battle.tmx',
+      ),
+    ];
+
+    // Zukünftige Karten hier hinzufügen:
+    // MapPreviewEntry(
+    //   mapPath: 'assets/maps/map1',
+    //   title: 'Market Square',
+    //   previewPath: 'assets/maps/map1/preview.png',
+    //   tmxPath: 'assets/maps/map1/market_square.tmx',
+    // ),
+
+    setState(() {
+      _mapEntries = maps;
+      _isLoadingMaps = false;
+    });
   }
 
   // ── Hilfsmethoden ────────────────────────────────────────────────────
@@ -127,7 +192,18 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   /// Einheiten an [ObjectPlayer].
   void _goToBattle() {
     _profile.selectTeamForBattle(_battleReadyCharacters.toList());
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const ScreenMain()));
+
+    // Wenn keine Karte explizit ausgewählt wurde, die erste Karte verwenden
+    final selectedEntry = _selectedMapIndex != null
+        ? _mapEntries[_selectedMapIndex!]
+        : _mapEntries.first;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScreenMain(mapPath: selectedEntry.tmxPath),
+      ),
+    );
   }
 
   void _pickImage() async {
@@ -179,6 +255,83 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
         );
       }
     }
+  }
+
+  /// Erstellt das Widget für eine einzelne Karten-Vorschaukachel.
+  Widget _buildMapTile(int index, MapPreviewEntry mapEntry, ThemeData theme) {
+    final isSelected = _selectedMapIndex == index;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedMapIndex = isSelected ? null : index;
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: isSelected
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.primary,
+                    width: 2,
+                  ),
+                )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                // Vorschaubild (PNG oder Platzhalter)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: mapEntry.previewPath != null
+                        ? Image.asset(
+                            mapEntry.previewPath!,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _buildPlaceholder(theme),
+                          )
+                        : _buildPlaceholder(theme),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Titel
+                Expanded(
+                  child: Text(
+                    mapEntry.title,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Icon(
+                  isSelected ? Icons.check_circle : Icons.chevron_right,
+                  color: isSelected ? theme.colorScheme.primary : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Platzhalter-Grafik, wenn kein Vorschaubild vorhanden ist.
+  Widget _buildPlaceholder(ThemeData theme) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.map,
+        size: 40,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
   }
 
   // ── Build ────────────────────────────────────────────────────────────
@@ -399,11 +552,64 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
 
             const SizedBox(height: 8),
 
+            // ── Verfügbare Karten ─────────────────────────────────────
+            Text(
+              'Verfügbare Karten',
+              style: theme.textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+
+            if (_isLoadingMaps)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_mapLoadingError != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'Fehler beim Laden der Karten:\n$_mapLoadingError',
+                    style: TextStyle(color: theme.colorScheme.error),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            else if (_mapEntries.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Center(
+                    child: Text(
+                      'Keine Karten gefunden.',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _mapEntries.length,
+                itemBuilder: (context, index) {
+                  return _buildMapTile(index, _mapEntries[index], theme);
+                },
+              ),
+
+            const SizedBox(height: 8),
+
             FilledButton.tonalIcon(
               icon: const Icon(Icons.play_arrow),
               label: const Text('Gefecht starten'),
               onPressed:
-                  _battleReadyCharacters.isNotEmpty ? _goToBattle : null,
+                  _battleReadyCharacters.isNotEmpty && _mapEntries.isNotEmpty
+                      ? _goToBattle
+                      : null,
             ),
           ],
         ),

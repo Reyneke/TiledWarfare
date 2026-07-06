@@ -4,7 +4,10 @@ import 'package:tiled_warfare/widgets/widget_caretaker.dart';
 import 'package:tiled_warfare/widgets/widget_map_loader.dart';
 
 class ScreenMain extends StatefulWidget {
-  const ScreenMain({super.key});
+  /// Pfad zur .tmx-Datei, die geladen werden soll.
+  final String mapPath;
+
+  const ScreenMain({super.key, this.mapPath = 'assets/maps/street_battle.tmx'});
 
   @override
   State<ScreenMain> createState() => _ScreenMainState();
@@ -94,6 +97,7 @@ class _ScreenMainState extends State<ScreenMain> {
         children: [
           // Karte im Hintergrund
           WidgetMapLoader(
+            mapPath: widget.mapPath,
             onMapLoaded: _onMapLoaded,
             onTransformationControllerCreated:
                 _onTransformationControllerCreated,
