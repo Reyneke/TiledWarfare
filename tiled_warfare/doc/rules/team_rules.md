@@ -130,6 +130,8 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
    - +5 pro `defenseValue` über 30
    - −10 bei `overkilled`-Schaden (doppelter Schaden)
 
+**Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert deutlich (z. B. +20) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
+
 ### 4.3 Heilung
 
 - Die Verletzung heilt **um eine Stufe pro Echtzeit-Tag**
@@ -137,6 +139,8 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
 - Heilungsreihenfolge: `dying → injured → hurt → reeling → ready`
 - Jede Stufe dauert **einen Echtzeit-Tag**
 - Ein Charakter im Status `dying` braucht also 4 Tage bis `ready`
+
+**Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter **eine Stufe pro Echtzeitstunde** statt pro Tag. Ein `dying`-Charakter ist so in 4 Stunden wieder voll einsatzbereit.
 
 ### 4.4 Kampf mit Verletzungen
 
@@ -149,6 +153,25 @@ Sollte ein verletztes Teammitglied wieder ins Gefecht ziehen, bevor es den Statu
 | `afraid` | −15 auf `attackValue`, darf nicht angreifen, solange ein Gegner benachbart ist |
 | `injured` | −20 auf alle Werte, maximale Bewegung halbiert |
 | `dying` | Darf **nicht** am Gefecht teilnehmen |
+
+### 4.5 Teamarzt (Optionale Erweiterung)
+
+Der Spieler kann zwischen Gefechten einen Teamarzt anheuern, der die Überlebenschancen und Heilung des Teams verbessert (siehe Verweise in 4.2 und 4.3).
+
+**Anheuerung & Kosten:**
+- Teamärzte sind teuer und kommen in verschiedenen **Qualitätsstufen** (niedrig, mittel, hoch) – höhere Stufen verbessern Rettungswurf-Bonus und Heilungsrate weiter.
+- Die Kosten richten sich nach Qualität, Mannschaftsgröße und -zusammensetzung (ein Team aus Lehrlingen kostet weniger als eines mit Line Cooks).
+- Die Bezahlung erfolgt **pro Echtzeitwoche**.
+
+**Effekte (Basis, ohne Qualitätsabstufungen):**
+- Heilung: 1 Verletzungsstufe pro **Echtzeitstunde** (statt 1 pro Tag)
+- Rettungswurf: +20 auf den Zielwert, einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht
+
+**Notfall-Spritze:**
+Der Teamarzt kann einem Verletzten eine Spritze verabreichen, die ihn **sofort** wieder voll einsatzfähig macht. Die Spritze ist jedoch teuer (einmalige Zusatzkosten) und schiebt den Schaden nur **temporär** auf:
+- Nach **einem Echtzeit-Tag** kehren die so unterdrückten Verletzungen zurück.
+- Hinzu kommen alle Verletzungen, die der Charakter in der Zwischenzeit erlitten hat.
+- Eine normale Genesung (4.3) läuft während der Wirkungsdauer zwar weiter, heilt aber maximal eine Stufe pro Tag – zu langsam, um den Rückfall abzufangen.
 
 ---
 
