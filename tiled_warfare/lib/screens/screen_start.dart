@@ -41,9 +41,6 @@ class _ScreenStartState extends State<ScreenStart> {
   /// Ladezustand.
   bool _isLoading = true;
 
-  /// Theme-Mode (für AppBar-Umschaltung).
-  ThemeMode _themeMode = ThemeMode.light;
-
   /// Image-Picker-Instanz für Profilbilder.
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -51,7 +48,6 @@ class _ScreenStartState extends State<ScreenStart> {
   @override
   void initState() {
     super.initState();
-    _themeMode = AppTheme.themeModeNotifier.value;
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
     _loadProfiles();
   }
@@ -63,9 +59,7 @@ class _ScreenStartState extends State<ScreenStart> {
   }
 
   void _onThemeChanged() {
-    setState(() {
-      _themeMode = AppTheme.themeModeNotifier.value;
-    });
+    setState(() {});
   }
 
   // ── Daten laden ────────────────────────────────────────────────────────
@@ -366,8 +360,9 @@ class _ScreenStartState extends State<ScreenStart> {
   }
 
   void _toggleTheme() {
+    final currentThemeMode = AppTheme.themeModeNotifier.value;
     final ThemeMode next;
-    switch (_themeMode) {
+    switch (currentThemeMode) {
       case ThemeMode.light:
         next = ThemeMode.dark;
       case ThemeMode.dark:
@@ -426,6 +421,7 @@ class _ScreenStartState extends State<ScreenStart> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final currentThemeMode = AppTheme.themeModeNotifier.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -433,13 +429,13 @@ class _ScreenStartState extends State<ScreenStart> {
         actions: [
           IconButton(
             icon: Icon(
-              switch (_themeMode) {
+              switch (currentThemeMode) {
                 ThemeMode.light => Icons.light_mode,
                 ThemeMode.dark => Icons.dark_mode,
                 ThemeMode.system => Icons.settings_brightness,
               },
             ),
-            tooltip: 'Theme wechseln (${_themeMode.name})',
+            tooltip: 'Theme wechseln (${currentThemeMode.name})',
             onPressed: _toggleTheme,
           ),
         ],

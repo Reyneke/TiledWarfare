@@ -37,9 +37,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   /// Ob ein benutzerdefiniertes Bild aus der Galerie geladen wurde.
   bool _hasCustomImage = false;
 
-  /// Aktuelles Theme-Mode für die AppBar-Umschaltung.
-  ThemeMode _themeMode = ThemeMode.system;
-
   /// Menge der Charaktere, die als "gefechtsbereit" markiert sind.
   final Set<ObjectApprentice> _battleReadyCharacters = {};
 
@@ -57,7 +54,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
       _hasCustomImage = true;
     }
 
-    _themeMode = AppTheme.themeModeNotifier.value;
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
   }
 
@@ -68,15 +64,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   }
 
   void _onThemeChanged() {
-    setState(() {
-      _themeMode = AppTheme.themeModeNotifier.value;
-    });
+    setState(() {});
   }
 
   // ── Hilfsmethoden ────────────────────────────────────────────────────
   void _toggleTheme() {
+    final currentThemeMode = AppTheme.themeModeNotifier.value;
     final ThemeMode next;
-    switch (_themeMode) {
+    switch (currentThemeMode) {
       case ThemeMode.light:
         next = ThemeMode.dark;
       case ThemeMode.dark:
@@ -90,6 +85,42 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   /// Speichert den aktuellen Zustand des ObjectProfile asynchron.
   Future<void> _saveState() async {
     await _profile.saveToStorage();
+  }
+
+  /// Öffnet einen Dialog zum Ändern des Restaurantnamens.
+  Future<void> _showEditRestaurantNameDialog(BuildContext context) async {
+    final controller = TextEditingController(text: _profile.restaurantName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restaurantnamen ändern'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Restaurantname',
+            hintText: 'Neuen Namen eingeben',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty) {
+      setState(() {
+        _profile.restaurantName = newName;
+      });
+      await _saveState();
+    }
   }
 
   /// Wechselt zum Haupt-Spielbildschirm und übergibt die gefechtsbereiten
@@ -162,14 +193,19 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
             : 'Restaurant'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Restaurantnamen ändern',
+            onPressed: () => _showEditRestaurantNameDialog(context),
+          ),
+          IconButton(
             icon: Icon(
-              switch (_themeMode) {
+              switch (AppTheme.themeModeNotifier.value) {
                 ThemeMode.light => Icons.light_mode,
                 ThemeMode.dark => Icons.dark_mode,
                 ThemeMode.system => Icons.settings_brightness,
               },
             ),
-            tooltip: 'Theme wechseln (${_themeMode.name})',
+            tooltip: 'Theme wechseln (${AppTheme.themeModeNotifier.value.name})',
             onPressed: _toggleTheme,
           ),
         ],
