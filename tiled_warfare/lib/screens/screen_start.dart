@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
@@ -43,6 +44,9 @@ class _ScreenStartState extends State<ScreenStart> {
   /// Theme-Mode (für AppBar-Umschaltung).
   ThemeMode _themeMode = ThemeMode.light;
 
+  /// Image-Picker-Instanz für Profilbilder.
+  final ImagePicker _imagePicker = ImagePicker();
+
   // ── Lifecycle ──────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -66,8 +70,10 @@ class _ScreenStartState extends State<ScreenStart> {
 
   // ── Daten laden ────────────────────────────────────────────────────────
   Future<void> _loadProfiles() async {
-    setState(() => _isLoading = true);
     final profiles = await ProfileStorage.loadAllProfiles();
+    // Nur beim initialen Laden die Loading-Anzeige zeigen; bei Folge-Ladungen
+    // (z. B. nach Bild-Upload, Umbenennung) direkt die Liste ersetzen, damit
+    // kein unnötiger Spinner aufblitzt.
     setState(() {
       _profiles = profiles;
       // Prüfen, ob das zuvor ausgewählte Profil noch existiert
@@ -80,54 +86,178 @@ class _ScreenStartState extends State<ScreenStart> {
     });
   }
 
-  // ── Profile erstellen ──────────────────────────────────────────────────
-  Future<void> _showCreateProfileDialog() async {
-    final nameController = TextEditingController();
+  // ── Hilfsmethode: Profil anhand der ID in der aktuellen Liste suchen ────
+  /// Durchsucht [_profiles] nach einem Profil mit der angegebenen [id].
+  /// Gibt `null` zurück, wenn kein passendes Profil gefunden wurde.
+  ProfileData? _findProfileById(int id) {
+    for (final p in _profiles) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  // ── Generischer Formular-Dialog ─────────────────────────────────────────
+  /// Öffnet einen Dialog mit einem einzelnen Textfeld.
+  ///
+  /// [title] – Titel des Dialogs.
+  /// [labelText] – Label des Textfelds.
+  /// [hintText] – Platzhalter-Text im Textfeld.
+  /// [confirmText] – Beschriftung des Bestätigungsbuttons.
+  /// [initialValue] – Optionaler Startwert (z. B. beim Bearbeiten).
+  ///
+  /// Gibt den eingegebenen Text zurück oder `null`, wenn abgebrochen wurde.
+  Future<String?> _showTextFormDialog({
+    required String title,
+    required String labelText,
+    required String hintText,
+    required String confirmText,
+    String? initialValue,
+  }) async {
+    final nameController = TextEditingController(text: initialValue);
     final formKey = GlobalKey<FormState>();
 
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Neues Profil'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Profilname',
-              hintText: 'Name des Spielers',
-              border: OutlineInputBorder(),
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: labelText,
+                hintText: hintText,
+                border: const OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Bitte gib einen Namen ein.';
+                }
+                return null;
+              },
+              autofocus: true,
             ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Bitte gib einen Namen ein.';
-              }
-              return null;
-            },
-            autofocus: true,
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() == true) {
+                  Navigator.pop(context, nameController.text.trim());
+                }
+              },
+              child: Text(confirmText),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() == true) {
-                Navigator.pop(context, nameController.text.trim());
-              }
-            },
-            child: const Text('Erstellen'),
-          ),
-        ],
-      ),
+      );
+    } finally {
+      // TextEditingController immer disposes, nachdem der Dialog geschlossen
+      // wurde, um Memory-Leaks zu vermeiden.
+      nameController.dispose();
+    }
+  }
+
+  // ── Profile erstellen ──────────────────────────────────────────────────
+  Future<void> _showCreateProfileDialog() async {
+    final result = await _showTextFormDialog(
+      title: 'Neues Profil',
+      labelText: 'Profilname',
+      hintText: 'Name des Spielers',
+      confirmText: 'Erstellen',
     );
 
     if (result != null && result.isNotEmpty) {
       final newProfile = ProfileStorage.createProfile(result);
       await ProfileStorage.saveProfile(newProfile);
       await _loadProfiles();
+    }
+  }
+
+  // ── Profil umbenennen ──────────────────────────────────────────────────
+  /// Öffnet einen Dialog, in dem der Spieler seinen Namen ändern kann.
+  /// Die Profil-ID bleibt dabei unverändert.
+  Future<void> _showRenameProfileDialog(ProfileData profile) async {
+    final result = await _showTextFormDialog(
+      title: 'Profil umbenennen',
+      labelText: 'Neuer Name',
+      hintText: 'Name des Spielers',
+      confirmText: 'Speichern',
+      initialValue: profile.name,
+    );
+
+    if (result != null && result.isNotEmpty && result != profile.name) {
+      profile.name = result;
+      await ProfileStorage.saveProfile(profile);
+      await _loadProfiles();
+    }
+  }
+
+  // ── Profilbild ändern ──────────────────────────────────────────────────
+  /// Öffnet die Bildergalerie (oder Kamera), damit der Spieler ein neues
+  /// Profilbild auswählen kann. Das ausgewählte Bild wird in den Profilordner
+  /// kopiert und der Pfad in [ProfileData.profileImagePath] gespeichert.
+  ///
+  /// Jedes neue Bild bekommt einen eindeutigen Dateinamen mit Zeitstempel,
+  /// damit Flatters [FileImage]-Cache nicht die alte Version ausliefert.
+  Future<void> _pickProfileImage(ProfileData profile) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      // Profilbild in den Profil-Ordner kopieren
+      final profileDir = Directory('profiles/${profile.id}');
+      if (!await profileDir.exists()) {
+        await profileDir.create(recursive: true);
+      }
+
+      final imageExtension = pickedFile.name.contains('.')
+          ? '.${pickedFile.name.split('.').last}'
+          : '.png';
+      // Zeitstempel-basierter Dateiname, um den Image-Cache zu umgehen
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final destPath = '${profileDir.path}/profile_$timestamp$imageExtension';
+      final destFile = File(destPath);
+
+      // Alte Profilbilder bereinigen (alle, die zuvor unter diesem Profil
+      // abgelegt wurden), damit der Ordner nicht überquillt.
+      if (await profileDir.exists()) {
+        final oldImages = await profileDir
+            .list()
+            .where((entity) =>
+                entity is File &&
+                entity.path.contains('profile_'))
+            .toList();
+        for (final old in oldImages) {
+          await (old as File).delete();
+        }
+      }
+
+      // Neues Bild kopieren
+      await destFile.writeAsBytes(await pickedFile.readAsBytes());
+
+      // Profildaten aktualisieren
+      profile.profileImagePath = destPath;
+      await ProfileStorage.saveProfile(profile);
+      await _loadProfiles();
+    } catch (_) {
+      // Fehler behandeln (z. B. keine Berechtigung, kein Speicherplatz)
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fehler beim Laden des Profilbildes.'),
+        ),
+      );
     }
   }
 
@@ -167,46 +297,11 @@ class _ScreenStartState extends State<ScreenStart> {
   Future<void> _showCreateRestaurantDialog() async {
     if (_selectedProfile == null) return;
 
-    final nameController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Neues Restaurant'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Restaurantname',
-              hintText: 'Name des Restaurants',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Bitte gib einen Namen ein.';
-              }
-              return null;
-            },
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() == true) {
-                Navigator.pop(context, nameController.text.trim());
-              }
-            },
-            child: const Text('Erstellen'),
-          ),
-        ],
-      ),
+    final result = await _showTextFormDialog(
+      title: 'Neues Restaurant',
+      labelText: 'Restaurantname',
+      hintText: 'Name des Restaurants',
+      confirmText: 'Erstellen',
     );
 
     if (result != null && result.isNotEmpty) {
@@ -215,7 +310,6 @@ class _ScreenStartState extends State<ScreenStart> {
         RestaurantData(name: result),
       );
       await _loadProfiles();
-      // Das ausgewählte Profil neu laden (Referenzen aktualisieren)
       _updateSelectedProfile();
     }
   }
@@ -229,7 +323,8 @@ class _ScreenStartState extends State<ScreenStart> {
       builder: (context) => AlertDialog(
         title: const Text('Restaurant löschen'),
         content: Text(
-          'Soll das Restaurant "${_selectedProfile!.restaurants[index].name}" '
+          'Soll das Restaurant '
+          '"${_selectedProfile!.restaurants[index].name}" '
           'wirklich gelöscht werden?',
         ),
         actions: [
@@ -266,10 +361,7 @@ class _ScreenStartState extends State<ScreenStart> {
   /// Aktualisiert die [_selectedProfile]-Referenz nach Datenänderungen.
   void _updateSelectedProfile() {
     if (_selectedProfile != null) {
-      _selectedProfile = _profiles.firstWhere(
-        (p) => p.id == _selectedProfile!.id,
-        orElse: () => _selectedProfile!,
-      );
+      _selectedProfile = _findProfileById(_selectedProfile!.id);
     }
   }
 
@@ -295,13 +387,10 @@ class _ScreenStartState extends State<ScreenStart> {
   Future<void> _login() async {
     if (_selectedProfile == null) return;
 
-    // Immer die frischesten Daten aus dem Storage laden, damit nicht versehentlich
-    // eine veraltete In-Memory-Referenz ins ObjectProfile geschrieben wird.
-    final profiles = await ProfileStorage.loadAllProfiles();
-    final freshProfile = profiles.cast<ProfileData?>().firstWhere(
-          (p) => p!.id == _selectedProfile!.id,
-          orElse: () => null,
-        );
+    // Das aktuell ausgewählte Profil aus dem bereits geladenen Datenbestand
+    // verwenden. [_loadProfiles] wird nach jeder Datenänderung automatisch
+    // aufgerufen, sodass [_profiles] stets aktuell ist.
+    final freshProfile = _findProfileById(_selectedProfile!.id);
     if (freshProfile == null) return;
 
     // Frische Profildaten in das ObjectProfile-Singleton laden
@@ -323,10 +412,7 @@ class _ScreenStartState extends State<ScreenStart> {
 
     // Das zuvor ausgewählte Profil im frischen Datenbestand suchen
     if (_selectedProfile != null) {
-      final updated = _profiles.cast<ProfileData?>().firstWhere(
-            (p) => p!.id == _selectedProfile!.id,
-            orElse: () => null,
-          );
+      final updated = _findProfileById(_selectedProfile!.id);
       if (updated != null) {
         _selectedProfile = updated;
       } else {
@@ -467,14 +553,22 @@ class _ScreenStartState extends State<ScreenStart> {
               ? theme.colorScheme.primaryContainer
               : null,
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: isSelected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.surfaceContainerHighest,
-              child: Icon(
-                Icons.person,
-                color: isSelected
-                    ? theme.colorScheme.onPrimary
+            leading: GestureDetector(
+              onTap: () => _pickProfileImage(profile),
+              child: CircleAvatar(
+                backgroundColor: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest,
+                backgroundImage: profile.profileImagePath != null
+                    ? FileImage(File(profile.profileImagePath!))
+                    : null,
+                child: profile.profileImagePath == null
+                    ? Icon(
+                        Icons.person,
+                        color: isSelected
+                            ? theme.colorScheme.onPrimary
+                            : null,
+                      )
                     : null,
               ),
             ),
@@ -493,6 +587,11 @@ class _ScreenStartState extends State<ScreenStart> {
                       color: theme.colorScheme.primary)
                 else
                   const SizedBox(width: 24),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'Profil umbenennen',
+                  onPressed: () => _showRenameProfileDialog(profile),
+                ),
                 IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: theme.colorScheme.error),
@@ -574,7 +673,6 @@ class _ScreenStartState extends State<ScreenStart> {
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Image.file(
-                        // ignore: undefined_hidden_name
                         File(restaurant.logoPath!),
                         width: 40,
                         height: 40,

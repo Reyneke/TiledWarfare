@@ -8,7 +8,6 @@ import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
-
 /// Das WidgetCaretaker-Widget ist für das Erstellen und Verwalten von Objekten
 /// auf der Karte zuständig. Es enthält die Logik für das Platzieren von
 /// Einheiten, das Aktualisieren ihrer Positionen und das Anzeigen von
@@ -257,26 +256,36 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   }
 
   /// Initialisiert die Spielobjekte: platziert Start-Einheiten auf der Karte.
-  /// Verwendet die Spawnpunkte aus der Map-Datei, falls vorhanden.
-  /// Andernfalls werden die bisherigen Standard-Positionen verwendet.
+  ///
+  /// Nutzt die vom Spieler via [ScreenRestaurant] ausgewählten Einheiten aus
+  /// [ObjectPlayer.unitList] und positioniert sie auf den Spawnpunkten der Map.
+  /// Falls [ObjectPlayer.unitList] noch leer ist (z. B. beim ersten Start ohne
+  /// Restaurant-Verwaltung), werden 3 Standard-Line-Cooks erzeugt.
+  /// Falls keine Spawnpunkte in der Map definiert sind, werden Fallback-
+  /// Positionen verwendet.
   void _initializeGameObjects() {
     // Mit hochauflösendem Zeitstempel seeden, damit jeder Spielstart
     // eine andere Zufallsauswahl ergibt (auch bei schnellen Neustarts)
     final random = Random(DateTime.now().microsecondsSinceEpoch);
-    // Vorherige Spielobjekte entfernen, falls diese Methode erneut aufgerufen wird
-    _player.unitList.clear();
+    // Vorherige Host-Objekte entfernen, falls diese Methode erneut aufgerufen wird
     _host.doughDumpsterList.clear();
     _baseMovementValues.clear();
+
+    // ── Spieler-Einheiten initialisieren ──────────────────────────────
+    // Die unitList wurde bereits von ScreenRestaurant via selectTeamForBattle()
+    // befüllt. Falls sie noch leer ist (z. B. Direktstart ohne Restaurant),
+    // legen wir 3 Standard-Line-Cooks an.
+    if (_player.unitList.isEmpty) {
+      for (int i = 0; i < 3; i++) {
+        _player.spawnLineCook();
+      }
+    }
+
     // Spieler-Spawnpunkte (mit "spawn_player" im Namen) finden
     final playerSpawns = widget.spawnPoints
         .where((sp) => sp.name.startsWith('spawn_player'))
         .toList();
-    // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
-    final monsterSpawns = widget.spawnPoints
-        .where((sp) => sp.name.startsWith('spawn_monster'))
-        .toList();
 
-    // Einen zufälligen Spawnpunkt für die Spieler-Gruppe auswählen
     Offset playerSpawnPosition;
     if (playerSpawns.isNotEmpty) {
       final chosenSpawn = playerSpawns[random.nextInt(playerSpawns.length)];
@@ -286,15 +295,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       playerSpawnPosition = _hexToPixel(x: 2, y: 5);
     }
 
-    // Alle 3 Spieler-Einheiten gruppiert um den gewählten Spawnpunkt positionieren
-    for (int i = 0; i < 3; i++) {
-      final cook = _player.spawnLineCook();
+    // Vorhandene Spieler-Einheiten um den gewählten Spawnpunkt positionieren
+    final playerUnits = _player.unitList;
+    for (int i = 0; i < playerUnits.length; i++) {
+      final unit = playerUnits[i];
+      // Für Apprentice und Line Cook gleichermaßen positionieren
       // Leichter Versatz, damit die Tokens nicht exakt übereinander liegen
-      cook.position = Offset(
-        playerSpawnPosition.dx + (i - 1) * widget.tileWidth * 0.5,
-        playerSpawnPosition.dy + (i - 1) * widget.tileHeight * 0.5,
+      unit.position = Offset(
+        playerSpawnPosition.dx + (i - (playerUnits.length - 1) / 2) * widget.tileWidth * 0.5,
+        playerSpawnPosition.dy + (i - (playerUnits.length - 1) / 2) * widget.tileHeight * 0.5,
       );
     }
+
+    // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
+    final monsterSpawns = widget.spawnPoints
+        .where((sp) => sp.name.startsWith('spawn_monster'))
+        .toList();
 
     // Gegnerische Dough Dumpster am Monster-Spawnpunkt platzieren
     final dumpster = ObjectDoughDumpster();

@@ -35,6 +35,9 @@ class ObjectProfile {
   /// Pfad zum Profilbild (optional).
   String? profileImagePath;
 
+  /// Pfad zum Restaurant-Logo (optional). Wird separat gespeichert.
+  String? restaurantLogoPath;
+
   /// Ob ein benutzerdefiniertes Bild geladen wurde.
   bool hasCustomImage = false;
 
@@ -173,6 +176,9 @@ class ObjectProfile {
     budget = data.budget;
     profileImagePath = data.profileImagePath;
     hasCustomImage = data.profileImagePath != null;
+    restaurantLogoPath = data.restaurants.isNotEmpty
+        ? data.restaurants.first.logoPath
+        : null;
 
     // Personal wiederherstellen
     _personal.clear();
@@ -193,7 +199,8 @@ class ObjectProfile {
         profileImagePath: profileImagePath,
         staff: _personal.map(_apprenticeToStaffData).toList(),
         restaurants: restaurantName.isNotEmpty
-            ? [RestaurantData(name: restaurantName)]
+            ? [RestaurantData(name: restaurantName,
+                               logoPath: restaurantLogoPath)]
             : [],
       );
 

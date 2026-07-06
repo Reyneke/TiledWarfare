@@ -48,10 +48,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   void initState() {
     super.initState();
 
-    // Profilbild-Zustand aus dem ObjectProfile übernehmen
-    if (_profile.profileImagePath != null && _profile.profileImagePath!.isNotEmpty) {
-      _profileImagePath = _profile.profileImagePath!;
-      _hasCustomImage = _profile.hasCustomImage;
+    // Restaurant-Logo aus dem persistierten ObjectProfile-Singleton laden.
+    // Das Logo wird in [ObjectProfile.restaurantLogoPath] gehalten und
+    // über [RestaurantData.logoPath] in der ProfileData gespeichert.
+    if (_profile.restaurantLogoPath != null &&
+        _profile.restaurantLogoPath!.isNotEmpty) {
+      _profileImagePath = _profile.restaurantLogoPath!;
+      _hasCustomImage = true;
     }
 
     _themeMode = AppTheme.themeModeNotifier.value;
@@ -100,13 +103,50 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _profileImagePath = image.path;
-        _hasCustomImage = true;
-        _profile.profileImagePath = image.path;
-        _profile.hasCustomImage = true;
-      });
-      _saveState();
+      try {
+        // Restaurant-Logo in den Profil-Ordner kopieren, damit es nach einem
+        // App-Neustart noch verfügbar ist (der temporäre Galerie-Pfad würde
+        // sonst verloren gehen).
+        final profileDir = Directory('profiles/${_profile.id}');
+        if (!await profileDir.exists()) {
+          await profileDir.create(recursive: true);
+        }
+
+        final imageExtension = image.name.contains('.')
+            ? '.${image.name.split('.').last}'
+            : '.png';
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final destPath = '${profileDir.path}/restaurant_$timestamp$imageExtension';
+        final destFile = File(destPath);
+
+        // Alte Restaurant-Logos bereinigen
+        if (await profileDir.exists()) {
+          final oldLogos = await profileDir
+              .list()
+              .where((entity) =>
+                  entity is File && entity.path.contains('restaurant_'))
+              .toList();
+          for (final old in oldLogos) {
+            await (old as File).delete();
+          }
+        }
+
+        await destFile.writeAsBytes(await image.readAsBytes());
+
+        setState(() {
+          _profileImagePath = destPath;
+          _hasCustomImage = true;
+          _profile.restaurantLogoPath = destPath;
+        });
+        _saveState();
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fehler beim Laden des Restaurantlogos.'),
+          ),
+        );
+      }
     }
   }
 
