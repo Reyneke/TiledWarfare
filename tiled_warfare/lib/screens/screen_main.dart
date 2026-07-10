@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/objects/object_player.dart';
+import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/widgets/widget_caretaker.dart';
 import 'package:tiled_warfare/widgets/widget_map_loader.dart';
@@ -33,6 +35,20 @@ class _ScreenMainState extends State<ScreenMain> {
   /// Die geparsten Spawnpunkte aus der Map.
   List<({String name, double x, double y})> _spawnPoints = [];
 
+  /// Aktualisiert das Profil mit den Überlebenden des Gefechts,
+  /// entfernt Tote aus dem Personal und speichert.
+  void _syncUnitsAfterBattle() {
+    final player = ObjectPlayer();
+    final profile = ObjectProfile();
+    profile.syncUnitsAfterBattle(player.unitList);
+    profile.saveToStorage();
+  }
+
+  /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
+  void _onGameOver(bool playerWon) {
+    _syncUnitsAfterBattle();
+  }
+
   /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Karte geladen wurde,
   /// um die Kartendimensionen an den [WidgetCaretaker] weiterzugeben.
   void _onMapLoaded({
@@ -63,64 +79,70 @@ class _ScreenMainState extends State<ScreenMain> {
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tiled Warfare'),
-        actions: [
-          ValueListenableBuilder<ThemeMode>(
-            valueListenable: AppTheme.themeModeNotifier,
-            builder: (context, themeMode, child) {
-              return IconButton(
-                icon: Icon(
-                  themeMode == ThemeMode.dark
-                      ? Icons.light_mode
-                      : Icons.dark_mode,
-                ),
-                tooltip: themeMode == ThemeMode.dark
-                    ? 'Switch to Light Theme'
-                    : 'Switch to Dark Theme',
-                onPressed: () {
-                  AppTheme.themeModeNotifier.value =
-                      themeMode == ThemeMode.dark
-                          ? ThemeMode.light
-                          : ThemeMode.dark;
-                },
-              );
-            },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Karte im Hintergrund
-          WidgetMapLoader(
-            mapPath: widget.mapPath,
-            onMapLoaded: _onMapLoaded,
-            onTransformationControllerCreated:
-                _onTransformationControllerCreated,
-            onSpawnPointsParsed: _onSpawnPointsParsed,
-          ),
-          // Token-Overlay im Vordergrund
-          if (_mapTransformationController != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: false,
-                child: WidgetCaretaker(
-                  tileWidth: _tileWidth,
-                  tileHeight: _tileHeight,
-                  mapWidth: _mapWidth,
-                  mapHeight: _mapHeight,
-                  transformationController: _mapTransformationController!,
-                  spawnPoints: _spawnPoints,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) return;
+        _syncUnitsAfterBattle();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Tiled Warfare'),
+          actions: [
+            ValueListenableBuilder<ThemeMode>(
+              valueListenable: AppTheme.themeModeNotifier,
+              builder: (context, themeMode, child) {
+                return IconButton(
+                  icon: Icon(
+                    themeMode == ThemeMode.dark
+                        ? Icons.light_mode
+                        : Icons.dark_mode,
+                  ),
+                  tooltip: themeMode == ThemeMode.dark
+                      ? 'Switch to Light Theme'
+                      : 'Switch to Dark Theme',
+                  onPressed: () {
+                    AppTheme.themeModeNotifier.value =
+                        themeMode == ThemeMode.dark
+                            ? ThemeMode.light
+                            : ThemeMode.dark;
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+        body: Stack(
+          children: [
+            // Karte im Hintergrund
+            WidgetMapLoader(
+              mapPath: widget.mapPath,
+              onMapLoaded: _onMapLoaded,
+              onTransformationControllerCreated:
+                  _onTransformationControllerCreated,
+              onSpawnPointsParsed: _onSpawnPointsParsed,
+            ),
+            // Token-Overlay im Vordergrund
+            if (_mapTransformationController != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: false,
+                  child: WidgetCaretaker(
+                    tileWidth: _tileWidth,
+                    tileHeight: _tileHeight,
+                    mapWidth: _mapWidth,
+                    mapHeight: _mapHeight,
+                    transformationController: _mapTransformationController!,
+                    spawnPoints: _spawnPoints,
+                    onGameOver: _onGameOver,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
-
     );
   }
 }

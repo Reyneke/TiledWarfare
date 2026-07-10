@@ -5,6 +5,7 @@ import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:image_picker/image_picker.dart';
@@ -189,8 +190,10 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   }
 
   /// Wechselt zum Haupt-Spielbildschirm und übergibt die gefechtsbereiten
-  /// Einheiten an [ObjectPlayer].
-  void _goToBattle() {
+  /// Einheiten an [ObjectPlayer]. Nach der Rückkehr wird der Bildschirm
+  /// aktualisiert, um Änderungen an den Einheiten (z. B. Wundwerte,
+  /// Todesfälle) anzuzeigen.
+  Future<void> _goToBattle() async {
     _profile.selectTeamForBattle(_battleReadyCharacters.toList());
 
     // Wenn keine Karte explizit ausgewählt wurde, die erste Karte verwenden
@@ -198,12 +201,16 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
         ? _mapEntries[_selectedMapIndex!]
         : _mapEntries.first;
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ScreenMain(mapPath: selectedEntry.tmxPath),
       ),
     );
+
+    // Nach Rückkehr aus dem Gefecht: Bildschirm aktualisieren,
+    // damit aktualisierte Wundwerte und gefallene Einheiten sichtbar sind
+    setState(() {});
   }
 
   void _pickImage() async {
@@ -429,7 +436,18 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                     style: theme.textTheme.titleLarge,
                   ),
                 ),
-                const SizedBox(width: 16),
+                IconButton(
+                  icon: const Icon(Icons.group_add),
+                  tooltip: 'Personal verwalten (anheuern/entlassen)',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ScreenHireAndFire()),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
                 Icon(Icons.account_balance_wallet,
                     color: theme.colorScheme.secondary),
                 const SizedBox(width: 8),

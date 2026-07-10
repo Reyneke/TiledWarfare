@@ -307,8 +307,8 @@ class ObjectHost {
     if (dx == 0 && dy == 0) return;
 
     // Alle aktuell belegten Hex-Felder ermitteln (außer dem Zombie selbst),
-    // damit wir nicht auf besetzte Felder laufen
-    final occupied = _buildOccupiedHostHexes();
+    // inklusive der Spieler-Einheiten, damit Zombies nicht auf ihnen stacken
+    final occupied = _buildOccupiedHostHexes(playerUnits: targets);
     // Entferne den Zombie selbst aus der belegten-Menge, damit er sich
     // von seinem eigenen Feld wegbewegen kann
     occupied.remove(zombieHex.y * 100 + zombieHex.x);
@@ -387,10 +387,14 @@ class ObjectHost {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
         // Einträge entfernen müssen
         for (final cook in player.unitList.toList()) {
-          final distance = (zombie.position - cook.position).distance;
+          // Hex-Entfernung zwischen Zombie und Ziel ermitteln
+          final zombieHex = _pixelToHex(zombie.position);
+          final cookHex = _pixelToHex(cook.position);
+          final hexDistance = (zombieHex.x - cookHex.x).abs() + (zombieHex.y - cookHex.y).abs();
 
-          // Prüfen, ob der Line Cook in Reichweite ist
-          if (distance <= zombie.rangeValue + 1) {
+          // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
+          if (hexDistance <= zombie.rangeValue + 1) {
+            final distance = (zombie.position - cook.position).distance;
             final result = player.performAction(
               action: CombatAction.melee,
               attacker: zombie,
@@ -470,7 +474,10 @@ class ObjectHost {
 
   /// Baut eine Menge aller aktuell belegten Hex-Felder des Hosts auf.
   /// Wird verwendet, um Kollisionen beim Spawning und Bewegen zu vermeiden.
-  Set<int> _buildOccupiedHostHexes() {
+  /// Optional können Spieler-Einheiten übergeben werden, deren Hex-Felder
+  /// dann ebenfalls als belegt gelten (verhindert, dass Zombies auf
+  /// Spieler-Token laufen/stapeln).
+  Set<int> _buildOccupiedHostHexes({List<ObjectApprentice>? playerUnits}) {
     final occupied = <int>{};
     for (final dumpster in doughDumpsterList) {
       final dh = _pixelToHex(dumpster.position);
@@ -480,6 +487,15 @@ class ObjectHost {
         if (zombie.woundValue <= 0) continue;
         final zh = _pixelToHex(zombie.position);
         occupied.add(zh.y * 100 + zh.x);
+      }
+    }
+    // Auch Spieler-Einheiten als belegt markieren,
+    // damit Zombies nicht auf ihnen stacken
+    if (playerUnits != null) {
+      for (final unit in playerUnits) {
+        if (unit.woundValue <= 0) continue;
+        final uh = _pixelToHex(unit.position);
+        occupied.add(uh.y * 100 + uh.x);
       }
     }
     return occupied;

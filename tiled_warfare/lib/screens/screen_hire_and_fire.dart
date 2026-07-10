@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 
 /// Screen für das Anstellen und Entlassen von Zusatzpersonal.
@@ -10,6 +11,8 @@ import 'package:tiled_warfare/objects/object_team_medic.dart';
 /// werden in der Liste angezeigt.
 ///
 /// Aktuell wird nur [ObjectTeamMedic] als anstellbarer Typ unterstützt.
+///
+/// Alle Änderungen werden über [ObjectProfile] persistiert.
 class ScreenHireAndFire extends StatefulWidget {
   const ScreenHireAndFire({super.key});
 
@@ -18,11 +21,10 @@ class ScreenHireAndFire extends StatefulWidget {
 }
 
 class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
+  final ObjectProfile _profile = ObjectProfile();
+
   /// Liste der momentan verfügbaren Kandidaten (zum Anheuern).
   final List<ObjectTeamMedic> _availablePersonnel = [];
-
-  /// Liste der bereits angestellten Teammitglieder.
-  final List<ObjectTeamMedic> _hiredPersonnel = [];
 
   /// Anzahl der Kandidaten, die im Pool verfügbar sein sollen.
   static const int _poolSize = 15;
@@ -41,19 +43,21 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     }
   }
 
-  /// Stellt einen Kandidaten ein.
+  /// Stellt einen Kandidaten ein und persistiert die Änderung.
   void _hireMedic(ObjectTeamMedic medic) {
     setState(() {
       _availablePersonnel.remove(medic);
-      _hiredPersonnel.add(medic);
+      _profile.hireMedic(medic);
     });
+    _profile.saveToStorage();
   }
 
-  /// Entlässt einen angestellten Arzt.
+  /// Entlässt einen angestellten Arzt und persistiert die Änderung.
   void _fireMedic(ObjectTeamMedic medic) {
     setState(() {
-      _hiredPersonnel.remove(medic);
+      _profile.fireMedic(medic);
     });
+    _profile.saveToStorage();
   }
 
   /// Erzwingt eine vollständige Neugenerierung des Pools.
@@ -82,21 +86,21 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       body: Column(
         children: [
           // -- Angestellte --
-          if (_hiredPersonnel.isNotEmpty) ...[
+          if (_profile.hiredMedicsCount > 0) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
-                'Angestellte (${_hiredPersonnel.length})',
+                'Angestellte (${_profile.hiredMedicsCount})',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: theme.colorScheme.primary,
                 ),
               ),
             ),
             SizedBox(
-              height: 160,
+              height: 180,
               child: _buildPersonnelList(
                 context,
-                _hiredPersonnel,
+                _profile.hiredMedics,
                 isHired: true,
               ),
             ),

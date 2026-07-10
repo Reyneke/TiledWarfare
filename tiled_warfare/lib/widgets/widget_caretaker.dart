@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
-import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
+import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+
 /// Das WidgetCaretaker-Widget ist für das Erstellen und Verwalten von Objekten
 /// auf der Karte zuständig. Es enthält die Logik für das Platzieren von
 /// Einheiten, das Aktualisieren ihrer Positionen und das Anzeigen von
@@ -52,6 +55,10 @@ class WidgetCaretaker extends StatefulWidget {
   /// und Pixel-Koordinaten (x, y) aus der TMX-Datei.
   final List<({String name, double x, double y})> spawnPoints;
 
+  /// Callback, der aufgerufen wird, wenn das Spiel vorbei ist (Sieg oder Niederlage).
+  /// Der übergebene Boolean ist `true` bei Sieg, `false` bei Niederlage.
+  final void Function(bool playerWon)? onGameOver;
+
   const WidgetCaretaker({
     super.key,
     required this.tileWidth,
@@ -60,8 +67,8 @@ class WidgetCaretaker extends StatefulWidget {
     required this.mapHeight,
     required this.transformationController,
     this.spawnPoints = const [],
+    this.onGameOver,
   });
-
 
   @override
   State<WidgetCaretaker> createState() => _WidgetCaretakerState();
@@ -1054,10 +1061,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Erst ein Klick auf einen Gegner führt die Aktion aus.
   void _enterTargetingMode(CombatAction action) {
     if (_selectedToken == null) return;
-    if (_selectedToken is! ObjectLineCook) return;
+    if (_selectedToken is! ObjectApprentice) return;
     if (!_isPlayerTurn || _isGameOver) return;
 
-    final attacker = _selectedToken as ObjectLineCook;
+    final attacker = _selectedToken as ObjectApprentice;
 
     // Prüfen, ob der Token in dieser Runde bereits gehandelt hat
     if (attacker.hasActed) {
@@ -1100,8 +1107,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Führt die ausstehende Kampfaktion gegen das per Tap gewählte Ziel aus.
   void _executeActionOnTarget(CombatAction action, ObjectToken target) {
-    if (_selectedToken == null || _selectedToken is! ObjectLineCook) return;
-    final attacker = _selectedToken as ObjectLineCook;
+    if (_selectedToken == null || _selectedToken is! ObjectApprentice) return;
+    final attacker = _selectedToken as ObjectApprentice;
 
     // Entfernung in Hex-Feldern ermitteln
     final distanceInHex = _HexUtils.distance(
@@ -1182,6 +1189,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _invalidateCache();
   }
 
+  /// Aktualisiert das Profil mit den Überlebenden des Gefechts,
+  /// entfernt Tote aus dem Personal und speichert.
+  void _updateProfileAfterBattle() {
+    final profile = ObjectProfile();
+    profile.syncUnitsAfterBattle(_player.unitList);
+    profile.saveToStorage();
+  }
+
+  /// Kehrt zum Restaurant-Bildschirm zurück und aktualisiert das Profil.
+  void _returnToRestaurant() {
+    _updateProfileAfterBattle();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.
   /// Ist dies der Fall, wird der Spielerzug automatisch beendet.
   void _checkAutoEndPlayerTurn() {
@@ -1216,11 +1239,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Zeigt ein Kontextmenü für den ausgewählten Token an.
   void _showContextMenu(BuildContext context, Offset position) {
     if (_selectedToken == null) return;
-    if (_selectedToken is! ObjectLineCook) return;
+    if (_selectedToken is! ObjectApprentice) return;
     // Nur im Spieler-Zug darf das Kontextmenü geöffnet werden
     if (!_isPlayerTurn || _isGameOver) return;
 
-    final cook = _selectedToken as ObjectLineCook;
+    final cook = _selectedToken as ObjectApprentice;
     final actions = _player.getAvailableActions(cook);
 
     showMenu<String>(
@@ -1444,7 +1467,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
                 ),
               ),
             ],
-            // Spielende-Nachricht
+            // Spielende-Nachricht + Zurück-Button
             if (_isGameOver) ...[
               const SizedBox(height: 8),
               Text(
@@ -1453,6 +1476,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: _returnToRestaurant,
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Zurück zum Restaurant'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  backgroundColor: Colors.amber.shade100,
+                  foregroundColor: Colors.amber.shade900,
                 ),
               ),
             ],

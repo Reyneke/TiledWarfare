@@ -25,6 +25,9 @@ class ProfileData {
   /// Liste der angestellten Charaktere (serialisiert).
   final List<StaffData> staff;
 
+  /// Liste der angestellten Teamärzte (serialisiert).
+  final List<MedicData> medics;
+
   /// Liste der zu diesem Profil gehörenden Restaurants.
   final List<RestaurantData> restaurants;
 
@@ -35,8 +38,10 @@ class ProfileData {
     this.budget = 10000,
     this.profileImagePath,
     List<StaffData>? staff,
+    List<MedicData>? medics,
     List<RestaurantData>? restaurants,
   })  : staff = staff ?? [],
+        medics = medics ?? [],
         restaurants = restaurants ?? [];
 
   /// Erzeugt einen JSON-kompatiblen Map-Repräsentation.
@@ -47,6 +52,7 @@ class ProfileData {
         'budget': budget,
         if (profileImagePath != null) 'profileImagePath': profileImagePath,
         'staff': staff.map((s) => s.toJson()).toList(),
+        'medics': medics.map((m) => m.toJson()).toList(),
         'restaurants': restaurants.map((r) => r.toJson()).toList(),
       };
 
@@ -61,6 +67,10 @@ class ProfileData {
                 ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [],
+        medics: (json['medics'] as List<dynamic>?)
+                ?.map((e) => MedicData.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
         restaurants: (json['restaurants'] as List<dynamic>?)
                 ?.map((e) => RestaurantData.fromJson(e as Map<String, dynamic>))
                 .toList() ??
@@ -70,7 +80,8 @@ class ProfileData {
   @override
   String toString() =>
       'ProfileData(id=$id, name=$name, budget=$budget, '
-      'staff=${staff.length}, restaurants=${restaurants.length})';
+      'staff=${staff.length}, medics=${medics.length}, '
+      'restaurants=${restaurants.length})';
 }
 
 /// Serialisierbare Daten eines angestellten Charakters.
@@ -145,6 +156,48 @@ class StaffData {
         moneyValue: json['moneyValue'] as int? ?? 100,
         xpValue: json['xpValue'] as int? ?? 25,
         status: json['status'] as String? ?? 'ready',
+      );
+}
+
+/// Serialisierbare Daten eines angestellten Teamarztes.
+class MedicData {
+  /// Eindeutige ID des Teamarztes.
+  final int id;
+
+  /// Name des Teamarztes.
+  final String name;
+
+  /// Qualitätsstufe als String ('niedrig', 'mittel', 'hoch').
+  final String quality;
+
+  /// Wöchentliche Kosten in Euro.
+  final int costPerWeek;
+
+  /// Name des Enneagramm-Profils.
+  final String enneagramProfileName;
+
+  MedicData({
+    required this.id,
+    required this.name,
+    required this.quality,
+    required this.costPerWeek,
+    required this.enneagramProfileName,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'quality': quality,
+        'costPerWeek': costPerWeek,
+        'enneagramProfileName': enneagramProfileName,
+      };
+
+  factory MedicData.fromJson(Map<String, dynamic> json) => MedicData(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        quality: json['quality'] as String,
+        costPerWeek: json['costPerWeek'] as int,
+        enneagramProfileName: json['enneagramProfileName'] as String,
       );
 }
 

@@ -1,5 +1,7 @@
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
+import 'package:tiled_warfare/objects/object_host.dart';
+import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
@@ -66,6 +68,25 @@ class ObjectProfile {
 
   /// Gibt die Anzahl der angestellten Charaktere zurück.
   int get personalCount => _personal.length;
+
+  /// Liste aller angestellten Teamärzte.
+  final List<ObjectTeamMedic> _hiredMedics = [];
+
+  /// Gibt die Liste aller angestellten Teamärzte zurück.
+  List<ObjectTeamMedic> get hiredMedics => List.unmodifiable(_hiredMedics);
+
+  /// Gibt die Anzahl der angestellten Teamärzte zurück.
+  int get hiredMedicsCount => _hiredMedics.length;
+
+  /// Stellt einen Teamarzt ein.
+  void hireMedic(ObjectTeamMedic medic) {
+    _hiredMedics.add(medic);
+  }
+
+  /// Entlässt einen Teamarzt.
+  void fireMedic(ObjectTeamMedic medic) {
+    _hiredMedics.remove(medic);
+  }
 
   /// Heuert einen neuen [ObjectApprentice] (Lehrling) an und zieht die
   /// Kosten vom Budget ab.
@@ -152,6 +173,23 @@ class ObjectProfile {
     budget -= interest;
   }
 
+  /// Synchronisiert die überlebenden Einheiten nach einem Gefecht mit dem Personal.
+  /// Entfernt tote Einheiten (woundValue <= 0) aus dem Personal und
+  /// aktualisiert die Werte der Überlebenden.
+  void syncUnitsAfterBattle(List<ObjectApprentice> survivors) {
+    // Entferne alle toten Einheiten aus dem Personal
+    _personal.removeWhere((unit) => unit.woundValue <= 0);
+
+    // Aktualisiere die Werte der Überlebenden im Personal
+    for (final survivor in survivors) {
+      final index = _personal.indexWhere((p) => p.name == survivor.name);
+      if (index >= 0) {
+        // Überschreibe mit den aktuellen Werten aus dem Gefecht
+        _personal[index] = survivor;
+      }
+    }
+  }
+
   /// Setzt das Restaurant für einen Neustand zurück.
   void reset() {
     id = 0;
@@ -161,6 +199,7 @@ class ObjectProfile {
     profileImagePath = null;
     hasCustomImage = false;
     _personal.clear();
+    _hiredMedics.clear();
     _player = ObjectPlayer();
   }
 
@@ -188,6 +227,15 @@ class ObjectProfile {
         _personal.add(character);
       }
     }
+
+    // Teamärzte wiederherstellen
+    _hiredMedics.clear();
+    for (final md in data.medics) {
+      final medic = _medicDataToTeamMedic(md);
+      if (medic != null) {
+        _hiredMedics.add(medic);
+      }
+    }
   }
 
   /// Erzeugt aus diesem Singleton ein [ProfileData] zum Speichern.
@@ -198,6 +246,7 @@ class ObjectProfile {
         budget: budget,
         profileImagePath: profileImagePath,
         staff: _personal.map(_apprenticeToStaffData).toList(),
+        medics: _hiredMedics.map(_medicToMedicData).toList(),
         restaurants: restaurantName.isNotEmpty
             ? [RestaurantData(name: restaurantName,
                                logoPath: restaurantLogoPath)]
@@ -283,5 +332,33 @@ class ObjectProfile {
       orElse: () => CharacterStatus.ready,
     );
     return apprentice;
+  }
+
+  /// Konvertiert einen [ObjectTeamMedic] in [MedicData] für die Serialisierung.
+  static MedicData _medicToMedicData(ObjectTeamMedic m) => MedicData(
+        id: m.id,
+        name: m.name,
+        quality: m.quality.name,
+        costPerWeek: m.costPerWeek,
+        enneagramProfileName: m.enneagramProfile.name,
+      );
+
+  /// Konvertiert [MedicData] zurück in einen [ObjectTeamMedic].
+  /// Da die Felder von [ObjectTeamMedic] jetzt nicht mehr final sind,
+  /// können wir sie nachträglich setzen.
+  static ObjectTeamMedic? _medicDataToTeamMedic(MedicData md) {
+    final medic = ObjectTeamMedic();
+    medic.id = md.id;
+    medic.name = md.name;
+    medic.quality = MedicQuality.values.firstWhere(
+      (q) => q.name == md.quality,
+      orElse: () => MedicQuality.niedrig,
+    );
+    medic.costPerWeek = md.costPerWeek;
+    medic.enneagramProfile = EnneagramProfile.all.firstWhere(
+      (p) => p.name == md.enneagramProfileName,
+      orElse: () => EnneagramProfile.all.first,
+    );
+    return medic;
   }
 }

@@ -76,23 +76,23 @@ class MedicTreatmentQuality extends FuzzyVariable<int> {
 class ObjectTeamMedic {
   /// Eindeutige ID, bestehend aus einem CRC32-Hash des Namens und des
   /// Erstellungsdatums.
-  final int id;
+  int id;
 
   /// Zufällig generierter italienischer Name.
-  final String name;
+  String name;
 
   /// Qualitätsstufe des Teamarztes.
   ///
   /// Wird durch die Persönlichkeit (Enneagramm + Fuzzy) beeinflusst.
-  final MedicQuality quality;
+  MedicQuality quality;
 
   /// Die wöchentlichen Kosten des Teamarztes in Euro.
   ///
   /// Berechnet aus [quality] und der Teamzusammensetzung.
-  final int costPerWeek;
+  int costPerWeek;
 
   /// Das zufällig gewählte Enneagramm-Profil des Teamarztes.
-  final EnneagramProfile enneagramProfile;
+  EnneagramProfile enneagramProfile;
 
   /// Fuzzy-Variable für die Hilfsbereitschaft.
   final MedicHelpfulness helpfulness = MedicHelpfulness();
