@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// A node is the basic building block of a fuzzy rule expression. It can be
 /// a leaf node (i.e. one fuzzy set) or a composite node (e.g. a fuzzy AND
@@ -13,8 +13,9 @@ abstract class FuzzyNode {
   bool get isLeaf {
     if (children == null) {
       return false;
-    } else
+    } else {
       return children!.isEmpty;
+    }
   }
   //bool get isLeaf => children.isEmpty;
 

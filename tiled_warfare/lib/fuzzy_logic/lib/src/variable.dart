@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// Fuzzy
 class FuzzyVariable<T extends num> {
@@ -9,7 +9,9 @@ class FuzzyVariable<T extends num> {
 
   /// This *must* be called before the variable is worked with.
   void init() {
-    sets.forEach((FuzzySet<T> fuzzySet) => fuzzySet.variable = this);
+    for (var fuzzySet in sets) {
+      fuzzySet.variable = this;
+    }
   }
 
   /// Assigns the variable with a crisp value (that has a degree of membership

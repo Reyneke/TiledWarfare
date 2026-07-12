@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// FuzzyRule is a singular IF THEN rule. It is normally a part of a
 /// [FuzzyRuleBase].

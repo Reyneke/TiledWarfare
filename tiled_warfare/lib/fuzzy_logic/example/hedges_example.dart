@@ -1,5 +1,5 @@
-import '../lib/fuzzylogic.dart';
-import '../lib/fuzzyhedges.dart';
+import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
+import 'package:tiled_warfare/fuzzy_logic/lib/fuzzyhedges.dart';
 
 class Intelligence extends FuzzyVariable<int> {
   var Stupid = FuzzySet.LeftShoulder(0, 90, 100);

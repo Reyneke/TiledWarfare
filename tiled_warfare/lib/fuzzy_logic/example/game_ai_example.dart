@@ -1,4 +1,4 @@
-import '../lib/fuzzylogic.dart';
+import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 
 class Distance extends FuzzyVariable<int> {
   var Close = FuzzySet.LeftShoulder(0, 25, 150);

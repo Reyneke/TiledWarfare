@@ -11,11 +11,7 @@ import 'package:tiled_warfare/main_app.dart';
 /// class diagrams, sequence diagrams, dependency graphs, and summaries
 /// designed to help new contributors onboard quickly.
 ///
-/// Bug reports are maintained in `doc/doc/bug_reports/`.
-/// Currently tracked issues:
-/// - report_001: Zombie tokens not properly removed upon death
-/// - report_002: Zombies stacking on the same hex fields (spawning + movement
-///   lack collision checks, causing invisible stacking and log/count mismatch)
+/// Bug reports are maintained in `doc/bug_reports/`.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MainApp());

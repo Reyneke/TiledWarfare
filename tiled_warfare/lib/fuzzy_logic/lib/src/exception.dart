@@ -1,5 +1,5 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 class FuzzyLogicStateError extends StateError {
-  FuzzyLogicStateError(String message) : super(message);
+  FuzzyLogicStateError(super.message);
 }
