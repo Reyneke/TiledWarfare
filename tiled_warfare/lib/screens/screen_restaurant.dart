@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
@@ -253,7 +253,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
           _profile.restaurantLogoPath = destPath;
         });
         _saveState();
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Fehler beim Bild-Picking: $e');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

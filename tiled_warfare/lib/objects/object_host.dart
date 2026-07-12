@@ -4,7 +4,7 @@ import 'dart:ui' show Offset;
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';

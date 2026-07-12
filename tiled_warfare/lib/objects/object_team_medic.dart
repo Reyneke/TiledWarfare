@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
 import 'package:random_name_generator/random_name_generator.dart';
 
@@ -120,12 +120,12 @@ class ObjectTeamMedic {
   /// beeinflusst (Standard: 1.0, höher für größere Teams).
   ObjectTeamMedic({double personalCostMultiplier = 1.0})
       : name = RandomNames(Zone.italy).fullName(),
-        id = CRC32.compute(
-          '${RandomNames(Zone.italy).fullName()}_${DateTime.now().toIso8601String()}',
-        ),
+        id = 0, // temporary; will be computed in constructor body
         enneagramProfile =
             EnneagramProfile.all[Random().nextInt(EnneagramProfile.all.length)],
         quality = MedicQuality.values[Random().nextInt(MedicQuality.values.length)] {
+    // Compute ID from the actual name and current timestamp (not a duplicate random name).
+    id = CRC32.compute('$name${DateTime.now().toIso8601String()}');
     costPerWeek = _computeWeeklyCost(quality, personalCostMultiplier);
     _initializeFuzzyRules();
   }

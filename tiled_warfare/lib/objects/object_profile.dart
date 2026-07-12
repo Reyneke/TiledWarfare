@@ -4,7 +4,7 @@ import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 
@@ -250,9 +250,11 @@ class ObjectProfile {
   /// enthalten sind, gelten als gefallen und durchlaufen den Rettungswurf.
   void syncUnitsAfterBattle(List<ObjectApprentice> survivors) {
     // Zuerst: existierende Einträge aus [_personal] mit den Überlebenden
-    // aus dem Gefecht aktualisieren
+    // aus dem Gefecht aktualisieren.
+    // Vergleich über Identität statt name, da Namensgleichheit zu
+    // fehlerhaften Aktualisierungen führen kann.
     for (final survivor in survivors) {
-      final index = _personal.indexWhere((p) => p.name == survivor.name);
+      final index = _personal.indexWhere((p) => identical(p, survivor));
       if (index >= 0) {
         _personal[index] = survivor;
       }

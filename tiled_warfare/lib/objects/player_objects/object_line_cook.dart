@@ -1,6 +1,6 @@
 
 import 'package:random_name_generator/random_name_generator.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 
 class ObjectLineCook extends ObjectApprentice {
   ObjectLineCook() : super(

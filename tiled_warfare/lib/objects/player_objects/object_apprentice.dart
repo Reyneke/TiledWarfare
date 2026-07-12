@@ -1,4 +1,3 @@
-
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
@@ -6,7 +5,20 @@ import 'package:tiled_warfare/objects/object_token.dart';
 ///
 /// Siehe `doc/rules/team_rules.md` Abschnitt 4.1 für detaillierte
 /// Beschreibung der einzelnen Status und ihrer Auswirkungen.
-enum CharacterStatus {ready, reeling, hurt, afraid, injured, dying, dead, overkilled}
+enum CharacterStatus {
+  ready(0),
+  reeling(1),
+  hurt(2),
+  afraid(3),
+  injured(4),
+  dying(5),
+  dead(6),
+  overkilled(7);
+
+  /// Schweregrad des Status (je höher, desto schwerer verletzt).
+  final int severity;
+  const CharacterStatus(this.severity);
+}
 
 /// Repräsentiert einen angestellten Charakter (Lehrling) im Restaurant-Team.
 ///
@@ -54,13 +66,14 @@ class ObjectApprentice extends ObjectToken {
   /// Gibt `true` zurück, wenn ein oder mehrere Levelaufstiege stattfanden.
   bool earnXP(int xp) {
     currentXPValue += xp;
-    final threshold = levelValue * 1000;
-    if (currentXPValue < threshold) return false;
-
-    // Anzahl der Levelaufstiege berechnen
-    final levelsGained = currentXPValue ~/ threshold;
-    levelValue += levelsGained;
-    currentXPValue = currentXPValue % threshold;
-    return true;
+    bool leveledUp = false;
+    // Nach jedem Levelaufstieg wird die neue Schwelle berechnet, damit
+    // überschüssige XP korrekt auf die Folgelevel angerechnet werden.
+    while (currentXPValue >= levelValue * 1000) {
+      currentXPValue -= levelValue * 1000;
+      levelValue++;
+      leveledUp = true;
+    }
+    return leveledUp;
   }
 }

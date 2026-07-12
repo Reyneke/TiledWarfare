@@ -8,7 +8,7 @@ import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
-import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 
 /// Das WidgetCaretaker-Widget ist für das Erstellen und Verwalten von Objekten
