@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
+import 'package:tiled_warfare/objects/player_objects/object_appretice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
 import 'package:random_name_generator/random_name_generator.dart';
 
@@ -89,7 +90,9 @@ class ObjectTeamMedic {
   /// Die wöchentlichen Kosten des Teamarztes in Euro.
   ///
   /// Berechnet aus [quality] und der Teamzusammensetzung.
-  int costPerWeek;
+  /// Wird im Konstruktor-Rumpf gesetzt, da [quality] zu diesem Zeitpunkt
+  /// bereits initialisiert ist.
+  late int costPerWeek;
 
   /// Das zufällig gewählte Enneagramm-Profil des Teamarztes.
   EnneagramProfile enneagramProfile;
@@ -111,11 +114,10 @@ class ObjectTeamMedic {
   /// Der [name] wird automatisch als zufälliger italienischer Name generiert.
   /// [id] wird aus einem CRC32-Hash von [name] und dem aktuellen Datum
   /// berechnet.
-  /// [quality] und [costPerWeek] werden basierend auf einer zufälligen
-  /// Persönlichkeit ([EnneagramProfile]) und Fuzzy Logic bestimmt.
-  /// [personalCostMultiplier] gibt an, wie stark die individuelle
-  /// Persönlichkeit die Kosten beeinflusst (Standard: 1.0 für einen
-  /// einzelnen Charakter, höher für größere Teams).
+  /// [quality] wird zufällig gewählt – [costPerWeek] wird daraus konsistent
+  /// berechnet (beide nutzen denselben Qualitätswert).
+  /// [personalCostMultiplier] gibt an, wie stark die Teamgröße die Kosten
+  /// beeinflusst (Standard: 1.0, höher für größere Teams).
   ObjectTeamMedic({double personalCostMultiplier = 1.0})
       : name = RandomNames(Zone.italy).fullName(),
         id = CRC32.compute(
@@ -123,11 +125,8 @@ class ObjectTeamMedic {
         ),
         enneagramProfile =
             EnneagramProfile.all[Random().nextInt(EnneagramProfile.all.length)],
-        quality = MedicQuality.values[Random().nextInt(MedicQuality.values.length)],
-        costPerWeek = _computeWeeklyCost(
-          MedicQuality.values[Random().nextInt(MedicQuality.values.length)],
-          personalCostMultiplier,
-        ) {
+        quality = MedicQuality.values[Random().nextInt(MedicQuality.values.length)] {
+    costPerWeek = _computeWeeklyCost(quality, personalCostMultiplier);
     _initializeFuzzyRules();
   }
 
@@ -204,12 +203,19 @@ class ObjectTeamMedic {
   /// `false` (z. B. weil der Arzt nicht hilfsbereit genug ist oder die
   /// Behandlung fehlschlägt).
   ///
+  /// Gemäß team_rules.md Abschnitt 4.3 heilt der Teamarzt eine
+  /// Verletzungsstufe pro Echtzeitstunde. Diese Methode heilt den
+  /// [CharacterStatus] des Charakters um eine Stufe in der
+  /// Heilungsreihenfolge: `dying → injured → hurt → reeling → ready`.
+  ///
   /// Die Erfolgswahrscheinlichkeit hängt von der aktuellen [helpfulness] und
   /// [treatmentQuality] ab, die wiederum durch das Enneagramm und die
   /// Fuzzy-Regeln bestimmt werden.
-  bool treatCharacter(ObjectToken character) {
-    if (character.woundValue > 0) {
-      // Keine Behandlung nötig, Charakter ist gesund.
+  bool treatCharacter(ObjectApprentice character) {
+    // Nur verletzte Charaktere behandeln
+    if (character.status == CharacterStatus.ready ||
+        character.status == CharacterStatus.dead ||
+        character.status == CharacterStatus.overkilled) {
       return false;
     }
 
@@ -227,7 +233,23 @@ class ObjectTeamMedic {
     }
 
     // Behandlung erfolgreich – Charakter um eine Stufe heilen.
-    character.woundValue += 1;
+    // Heilungsreihenfolge: dying → injured → hurt → reeling → ready
+    switch (character.status) {
+      case CharacterStatus.dying:
+        character.status = CharacterStatus.injured;
+        break;
+      case CharacterStatus.injured:
+        character.status = CharacterStatus.hurt;
+        break;
+      case CharacterStatus.hurt:
+        character.status = CharacterStatus.reeling;
+        break;
+      case CharacterStatus.reeling:
+        character.status = CharacterStatus.ready;
+        break;
+      default:
+        return false; // Keine Heilung nötig
+    }
     return true;
   }
 

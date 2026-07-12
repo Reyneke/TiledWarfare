@@ -2,8 +2,8 @@
   {
     "id": 3507838291,
     "name": "Reyneke",
-    "creationDate": "2026-07-10T19:56:20.044059",
-    "budget": 9200,
+    "creationDate": "2026-07-12T17:19:11.594803",
+    "budget": 8800,
     "profileImagePath": "profiles/3507838291/profile_1783334585943.png",
     "staff": [
       {
@@ -12,7 +12,7 @@
         "type": "apprentice",
         "levelValue": 1,
         "currentXPValue": 0,
-        "woundValue": 3,
+        "woundValue": 1,
         "attackValue": 40,
         "defenseValue": 20,
         "movementValue": 6,
@@ -20,7 +20,7 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "dying"
       },
       {
         "name": "Apprentice: Greta",
@@ -28,7 +28,7 @@
         "type": "apprentice",
         "levelValue": 1,
         "currentXPValue": 0,
-        "woundValue": 3,
+        "woundValue": 1,
         "attackValue": 40,
         "defenseValue": 20,
         "movementValue": 6,
@@ -36,23 +36,7 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
-      },
-      {
-        "name": "Apprentice: Matteo",
-        "imagePath": "assets/images/token/token_cook_basic.png",
-        "type": "apprentice",
-        "levelValue": 1,
-        "currentXPValue": 0,
-        "woundValue": 3,
-        "attackValue": 40,
-        "defenseValue": 20,
-        "movementValue": 6,
-        "damageValue": 2,
-        "rangeValue": 3,
-        "moneyValue": 100,
-        "xpValue": 25,
-        "status": "ready"
+        "status": "dying"
       },
       {
         "name": "Apprentice: Antonio",
@@ -88,6 +72,38 @@
       },
       {
         "name": "Apprentice: Viviana",
+        "imagePath": "assets/images/token/token_cook_basic.png",
+        "type": "apprentice",
+        "levelValue": 1,
+        "currentXPValue": 0,
+        "woundValue": 3,
+        "attackValue": 40,
+        "defenseValue": 20,
+        "movementValue": 6,
+        "damageValue": 2,
+        "rangeValue": 3,
+        "moneyValue": 100,
+        "xpValue": 25,
+        "status": "ready"
+      },
+      {
+        "name": "Apprentice: Jessica",
+        "imagePath": "assets/images/token/token_cook_basic.png",
+        "type": "apprentice",
+        "levelValue": 1,
+        "currentXPValue": 0,
+        "woundValue": 3,
+        "attackValue": 40,
+        "defenseValue": 20,
+        "movementValue": 6,
+        "damageValue": 2,
+        "rangeValue": 3,
+        "moneyValue": 100,
+        "xpValue": 25,
+        "status": "ready"
+      },
+      {
+        "name": "Apprentice: Natalia",
         "imagePath": "assets/images/token/token_cook_basic.png",
         "type": "apprentice",
         "levelValue": 1,

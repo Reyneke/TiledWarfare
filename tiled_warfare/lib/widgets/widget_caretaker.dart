@@ -528,7 +528,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Nur in geraden Runden spawnen (alle 2 Runden)
     if (_currentRound % 2 != 0) return;
     
-    final spawnLogs = _host.performAllDumpsterSpawning();
+    // playerUnits übergeben, damit Zombies nicht auf Spieler-Tokens spawnen (Bugfix)
+    final spawnLogs = _host.performAllDumpsterSpawning(
+      playerUnits: _player.unitList,
+    );
     for (final log in spawnLogs) {
       _showMessage(log);
     }
@@ -1200,8 +1203,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Kehrt zum Restaurant-Bildschirm zurück und aktualisiert das Profil.
   void _returnToRestaurant() {
     _updateProfileAfterBattle();
+    // Benachrichtige ScreenMain über das Spiel-Ende (Callback)
+    widget.onGameOver?.call(!_player.unitList.isEmpty);
     if (context.mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      // Nur eine Route zurückspringen (zu ScreenRestaurant),
+      // nicht bis zum Startbildschirm
+      Navigator.of(context).pop();
     }
   }
 

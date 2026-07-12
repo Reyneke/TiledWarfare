@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
@@ -173,21 +175,91 @@ class ObjectProfile {
     budget -= interest;
   }
 
-  /// Synchronisiert die überlebenden Einheiten nach einem Gefecht mit dem Personal.
-  /// Entfernt tote Einheiten (woundValue <= 0) aus dem Personal und
-  /// aktualisiert die Werte der Überlebenden.
-  void syncUnitsAfterBattle(List<ObjectApprentice> survivors) {
-    // Entferne alle toten Einheiten aus dem Personal
-    _personal.removeWhere((unit) => unit.woundValue <= 0);
+  /// Führt für alle Einheiten, die im Gefecht gefallen sind (`woundValue ≤ 0`),
+  /// einen Rettungswurf (W100) durch und aktualisiert den [CharacterStatus].
+  ///
+  /// Gemäß team_rules.md Abschnitt 4.2 und 4.5:
+  /// - Basis-Zielwert: 50
+  /// - +10 pro Level des Charakters
+  /// - +5 pro defenseValue über 30
+  /// - −10 bei übermäßigem Schaden (overkilled)
+  /// - Zusätzlich: [ObjectTeamMedic.effectiveSurvivalBonus], falls ein Arzt angestellt ist
+  ///
+  /// Einmal gescheiterte Würfe können gegen Bezahlung wiederholt werden,
+  /// wenn ein Teamarzt verfügbar ist.
+  void _performSurvivalRolls() {
+    final random = Random();
+    final hasMedic = _hiredMedics.isNotEmpty;
+    final medicBonus = hasMedic
+        ? _hiredMedics.map((m) => m.effectiveSurvivalBonus).reduce(
+            (a, b) => a > b ? a : b)
+        : 0;
 
-    // Aktualisiere die Werte der Überlebenden im Personal
+    for (final unit in _personal.toList()) {
+      if (unit.woundValue > 0) continue; // Einheit lebt noch
+
+      // Zielwert berechnen
+      int targetValue = 50; // Basis
+      targetValue += unit.levelValue * 10; // +10 pro Level
+      if (unit.defenseValue > 30) {
+        targetValue += (unit.defenseValue - 30) * 5; // +5 pro Punkt über 30
+      }
+      // −10 bei übermäßigem Schaden (Verlust von mehr als woundValue)
+      // Vereinfacht: wenn die Einheit durch `overkilled`-Schaden starb
+      if (unit.status == CharacterStatus.overkilled) {
+        targetValue -= 10;
+      }
+      targetValue += medicBonus; // Teamarzt-Bonus
+
+      // Erster Rettungswurf
+      int roll = random.nextInt(100) + 1;
+      if (roll <= targetValue.clamp(1, 100)) {
+        // Gerettet! Verletzungsstatus setzen (nicht tot)
+        unit.woundValue = 1; // Minimal überleben
+        unit.status = CharacterStatus.dying;
+        continue;
+      }
+
+      // Bei Misserfolg und vorhandenem Teamarzt: Wiederholung gegen Bezahlung
+      if (hasMedic && budget >= 200) {
+        budget -= 200; // Kosten für Wiederbelebung
+        roll = random.nextInt(100) + 1;
+        if (roll <= targetValue.clamp(1, 100)) {
+          unit.woundValue = 1;
+          unit.status = CharacterStatus.dying;
+          continue;
+        }
+      }
+
+      // Endgültig tot
+      unit.status = CharacterStatus.dead;
+    }
+
+    // Tote Einheiten aus dem Personal entfernen
+    _personal.removeWhere((unit) => unit.status == CharacterStatus.dead);
+  }
+
+  /// Synchronisiert die überlebenden Einheiten nach einem Gefecht mit dem Personal.
+  ///
+  /// Führt für gefallene Einheiten ([CharacterStatus]) Rettungswürfe gemäß
+  /// team_rules.md Abschnitt 4.2 durch. Überlebende Einheiten erhalten ihre
+  /// Kampfwerte zurück. Tote Einheiten werden endgültig entfernt.
+  ///
+  /// [survivors] sind die Einheiten, die das Gefecht überlebt haben
+  /// (woundValue > 0). Einheiten in [_personal], die nicht in [survivors]
+  /// enthalten sind, gelten als gefallen und durchlaufen den Rettungswurf.
+  void syncUnitsAfterBattle(List<ObjectApprentice> survivors) {
+    // Zuerst: existierende Einträge aus [_personal] mit den Überlebenden
+    // aus dem Gefecht aktualisieren
     for (final survivor in survivors) {
       final index = _personal.indexWhere((p) => p.name == survivor.name);
       if (index >= 0) {
-        // Überschreibe mit den aktuellen Werten aus dem Gefecht
         _personal[index] = survivor;
       }
     }
+
+    // Rettungswürfe für alle Einheiten mit woundValue ≤ 0 durchführen
+    _performSurvivalRolls();
   }
 
   /// Setzt das Restaurant für einen Neustand zurück.

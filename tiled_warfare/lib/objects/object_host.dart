@@ -558,7 +558,10 @@ class ObjectHost {
 
   /// Lässt alle Dough Dumpster neue Zombies spawnen (für jede neue Runde).
   /// Gibt Log-Nachrichten zurück.
-  List<String> performAllDumpsterSpawning() {
+  ///
+  /// [playerUnits] werden als belegte Hex-Felder markiert, damit Zombies
+  /// nicht auf Spieler-Tokens spawnen (Kollisionsvermeidung).
+  List<String> performAllDumpsterSpawning({List<ObjectApprentice>? playerUnits}) {
     final logMessages = <String>[];
     // Über eine Kopie iterieren, da während des Spawnens keine neuen
     // Dumpster zur Liste hinzugefügt werden sollen (ConcurrentModification vermeiden)
@@ -569,7 +572,8 @@ class ObjectHost {
         
         // Alle aktuell belegten Hex-Felder ermitteln, inkl. der bereits
         // in diesem Spawning-Durchgang platzierten Zombies
-        final occupied = _buildOccupiedHostHexes();
+        // Wichtig: playerUnits übergeben, damit Zombies nicht auf Spieler-Tokens spawnen
+        final occupied = _buildOccupiedHostHexes(playerUnits: playerUnits);
         final dumpsterHex = _pixelToHex(dumpster.position);
 
         // Zombies spiralförmig um den Dumpster herum auf freien Feldern platzieren
