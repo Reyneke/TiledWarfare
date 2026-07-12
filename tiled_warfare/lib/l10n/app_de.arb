@@ -1,0 +1,470 @@
+{
+  "@@locale": "de",
+  "@@last_modified": "2024-07-12T20:47:00+02:00",
+
+  "appTitle": "Tiled Warfare",
+  "@appTitle": {
+    "description": "Der Titel der App"
+  },
+
+  "cancel": "Abbrechen",
+  "@cancel": {
+    "description": "Abbrechen-Button in Dialogen"
+  },
+  "delete": "Löschen",
+  "@delete": {
+    "description": "Löschen-Button in Dialogen"
+  },
+  "save": "Speichern",
+  "@save": {
+    "description": "Speichern-Button in Dialogen"
+  },
+  "create": "Erstellen",
+  "@create": {
+    "description": "Erstellen-Button in Dialogen"
+  },
+  "edit": "Bearbeiten",
+  "@edit": {
+    "description": "Edit-Button"
+  },
+
+  "newProfile": "Neues Profil",
+  "@newProfile": {
+    "description": "Titel im Dialog zum Erstellen eines neuen Profils"
+  },
+  "renameProfile": "Profil umbenennen",
+  "@renameProfile": {
+    "description": "Titel im Dialog zum Umbenennen eines Profils"
+  },
+  "deleteProfile": "Profil löschen",
+  "@deleteProfile": {
+    "description": "Titel im Bestätigungsdialog zum Löschen eines Profils"
+  },
+  "deleteProfileConfirm": "Soll das Profil \"{name}\" wirklich gelöscht werden?\nAlle zugehörigen Daten werden unwiderruflich entfernt.",
+  "@deleteProfileConfirm": {
+    "description": "Bestätigungstext zum Löschen eines Profils",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "profileName": "Profilname",
+  "@profileName": {
+    "description": "Label für das Profilname-Textfeld"
+  },
+  "playerNameHint": "Name des Spielers",
+  "@playerNameHint": {
+    "description": "Platzhaltertext für den Spielernamen"
+  },
+  "pleaseEnterName": "Bitte gib einen Namen ein.",
+  "@pleaseEnterName": {
+    "description": "Validierungsfehler, wenn kein Name eingegeben wurde"
+  },
+
+  "newRestaurant": "Neues Restaurant",
+  "@newRestaurant": {
+    "description": "Titel im Dialog zum Erstellen eines neuen Restaurants"
+  },
+  "renameRestaurant": "Restaurantnamen ändern",
+  "@renameRestaurant": {
+    "description": "Titel im Dialog zum Ändern des Restaurantnamens"
+  },
+  "deleteRestaurant": "Restaurant löschen",
+  "@deleteRestaurant": {
+    "description": "Titel im Bestätigungsdialog zum Löschen eines Restaurants"
+  },
+  "deleteRestaurantConfirm": "Soll das Restaurant \"{name}\" wirklich gelöscht werden?",
+  "@deleteRestaurantConfirm": {
+    "description": "Bestätigungstext zum Löschen eines Restaurants",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "restaurantName": "Restaurantname",
+  "@restaurantName": {
+    "description": "Label für das Restaurantname-Textfeld"
+  },
+  "restaurantNameHint": "Name des Restaurants",
+  "@restaurantNameHint": {
+    "description": "Platzhaltertext für den Restaurantnamen"
+  },
+  "newNameHint": "Neuen Namen eingeben",
+  "@newNameHint": {
+    "description": "Platzhaltertext beim Umbenennen"
+  },
+
+  "profileSection": "Profile",
+  "@profileSection": {
+    "description": "Überschrift für den Profilbereich"
+  },
+  "newProfileTooltip": "Neues Profil",
+  "@newProfileTooltip": {
+    "description": "Tooltip für den 'Neues Profil'-Button"
+  },
+  "renameProfileTooltip": "Profil umbenennen",
+  "@renameProfileTooltip": {
+    "description": "Tooltip für den 'Profil umbenennen'-Button"
+  },
+  "deleteProfileTooltip": "Profil löschen",
+  "@deleteProfileTooltip": {
+    "description": "Tooltip für den 'Profil löschen'-Button"
+  },
+  "noProfilesYet": "Noch keine Profile vorhanden.\nErstelle ein neues Profil!",
+  "@noProfilesYet": {
+    "description": "Text, wenn noch keine Profile existieren"
+  },
+  "profileSubtitle": "ID: {id}\nErstellt: {date}\nRestaurants: {count}",
+  "@profileSubtitle": {
+    "description": "Untertitel eines Profils mit ID, Erstellungsdatum und Restaurantanzahl",
+    "placeholders": {
+      "id": { "type": "int" },
+      "date": { "type": "String" },
+      "count": { "type": "int" }
+    }
+  },
+  "profileImageError": "Fehler beim Laden des Profilbildes.",
+  "@profileImageError": {
+    "description": "Snackbar-Fehlermeldung beim Profilbild-Laden"
+  },
+
+  "restaurantSection": "Restaurants",
+  "@restaurantSection": {
+    "description": "Überschrift für den Restaurantbereich"
+  },
+  "newRestaurantTooltip": "Neues Restaurant",
+  "@newRestaurantTooltip": {
+    "description": "Tooltip für den 'Neues Restaurant'-Button"
+  },
+  "deleteRestaurantTooltip": "Restaurant löschen",
+  "@deleteRestaurantTooltip": {
+    "description": "Tooltip für den 'Restaurant löschen'-Button"
+  },
+  "selectProfileFirst": "Wähle zuerst ein Profil aus.",
+  "@selectProfileFirst": {
+    "description": "Hinweis, wenn noch kein Profil ausgewählt wurde"
+  },
+  "noRestaurantsYet": "Noch keine Restaurants vorhanden.\nErstelle ein neues Restaurant!",
+  "@noRestaurantsYet": {
+    "description": "Text, wenn noch keine Restaurants existieren"
+  },
+  "loginAs": "Einloggen als {name}",
+  "@loginAs": {
+    "description": "Button-Text zum Einloggen mit Profilnamen",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "selectProfilePrompt": "Bitte Profil auswählen",
+  "@selectProfilePrompt": {
+    "description": "Button-Text, wenn kein Profil ausgewählt ist"
+  },
+  "themeToggle": "Theme wechseln ({mode})",
+  "@themeToggle": {
+    "description": "Tooltip für den Theme-Umschalt-Button",
+    "placeholders": {
+      "mode": { "type": "String" }
+    }
+  },
+
+  "personnelManagement": "Personalverwaltung",
+  "@personnelManagement": {
+    "description": "AppBar-Titel für den Personalverwaltungs-Screen"
+  },
+  "regeneratePool": "Pool neu generieren",
+  "@regeneratePool": {
+    "description": "Tooltip für den Pool-Neugenerierungs-Button"
+  },
+  "hiredPersonnel": "Angestellte ({count})",
+  "@hiredPersonnel": {
+    "description": "Überschrift für angestelltes Personal",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "availableCandidates": "Verfügbare Kandidaten ({count})",
+  "@availableCandidates": {
+    "description": "Überschrift für verfügbare Kandidaten",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noCandidatesAvailable": "Keine Kandidaten verfügbar.",
+  "@noCandidatesAvailable": {
+    "description": "Text, wenn keine Kandidaten verfügbar sind"
+  },
+  "generateNewPool": "Neuen Pool generieren",
+  "@generateNewPool": {
+    "description": "Button zum Generieren eines neuen Kandidaten-Pools"
+  },
+  "qualityLow": "Niedrig",
+  "@qualityLow": {
+    "description": "Medic-Qualität: Niedrig"
+  },
+  "qualityMedium": "Mittel",
+  "@qualityMedium": {
+    "description": "Medic-Qualität: Mittel"
+  },
+  "qualityHigh": "Hoch",
+  "@qualityHigh": {
+    "description": "Medic-Qualität: Hoch"
+  },
+  "costPerWeek": "{cost} € / Woche",
+  "@costPerWeek": {
+    "description": "Wöchentliche Kosten eines Angestellten",
+    "placeholders": {
+      "cost": { "type": "int" }
+    }
+  },
+  "fire": "Entlassen",
+  "@fire": {
+    "description": "Button zum Entlassen von Personal"
+  },
+  "hire": "Anstellen",
+  "@hire": {
+    "description": "Button zum Anstellen von Personal"
+  },
+
+  "restaurant": "Restaurant",
+  "@restaurant": {
+    "description": "Fallback-Name für das Restaurant"
+  },
+  "player": "Spieler",
+  "@player": {
+    "description": "Fallback-Name für den Spieler"
+  },
+  "budgetLabel": "{budget} €",
+  "@budgetLabel": {
+    "description": "Budget-Anzeige",
+    "placeholders": {
+      "budget": { "type": "int" }
+    }
+  },
+  "personnelCount": "Personal ({count})",
+  "@personnelCount": {
+    "description": "Überschrift für die Personal-Liste",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noPersonnelYet": "Noch kein Personal eingestellt.\nHeuere einen Lehrling an!",
+  "@noPersonnelYet": {
+    "description": "Text, wenn noch kein Personal eingestellt wurde"
+  },
+  "hireNewPersonnel": "Neues Personal anheuern",
+  "@hireNewPersonnel": {
+    "description": "Button zum Anheuern von neuem Personal"
+  },
+  "notEnoughBudget": "Budget reicht nicht zum Anheuern!",
+  "@notEnoughBudget": {
+    "description": "Snackbar-Fehlermeldung, wenn das Budget nicht reicht"
+  },
+  "availableMaps": "Verfügbare Karten",
+  "@availableMaps": {
+    "description": "Überschrift für die Karten-Liste"
+  },
+  "mapLoadError": "Fehler beim Laden der Karten:\n{error}",
+  "@mapLoadError": {
+    "description": "Fehlermeldung beim Laden der Karten",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "noMapsFound": "Keine Karten gefunden.",
+  "@noMapsFound": {
+    "description": "Text, wenn keine Karten gefunden wurden"
+  },
+  "startBattle": "Gefecht starten",
+  "@startBattle": {
+    "description": "Button zum Starten des Gefechts"
+  },
+  "restaurantLogoError": "Fehler beim Laden des Restaurantlogos.",
+  "@restaurantLogoError": {
+    "description": "Snackbar-Fehlermeldung beim Restaurantlogo-Laden"
+  },
+  "changeProfileImage": "Profilbild ändern",
+  "@changeProfileImage": {
+    "description": "Tooltip für den 'Profilbild ändern'-Button"
+  },
+  "managePersonnel": "Personal verwalten (anheuern/entlassen)",
+  "@managePersonnel": {
+    "description": "Tooltip für den 'Personal verwalten'-Button"
+  },
+
+  "characterDetail": "Charakterdetails",
+  "@characterDetail": {
+    "description": "Titel für den Charakter-Detail-Screen"
+  },
+  "rankLineCook": "Line Cook",
+  "@rankLineCook": {
+    "description": "Rangbezeichnung: Line Cook"
+  },
+  "rankApprentice": "Apprentice",
+  "@rankApprentice": {
+    "description": "Rangbezeichnung: Apprentice"
+  },
+  "level": "Level {value}",
+  "@level": {
+    "description": "Level-Anzeige",
+    "placeholders": {
+      "value": { "type": "int" }
+    }
+  },
+  "hitPoints": "LP: {value}",
+  "@hitPoints": {
+    "description": "Trefferpunkte/Lebenspunkte-Anzeige",
+    "placeholders": {
+      "value": { "type": "int" }
+    }
+  },
+  "statsLine": "\u2694\uFE0F {attack}  \uD83D\uDEE1\uFE0F {defense}  \uD83C\uDFC3 {movement}  \uD83D\uDCA5 {damage}  \uD83C\uDFAF {range}",
+  "@statsLine": {
+    "description": "Kampfwerte-Aufstellung",
+    "placeholders": {
+      "attack": { "type": "int" },
+      "defense": { "type": "int" },
+      "movement": { "type": "int" },
+      "damage": { "type": "int" },
+      "range": { "type": "int" }
+    }
+  },
+  "kdRatio": "K/D: {ratio}",
+  "@kdRatio": {
+    "description": "K/D-Ratio-Anzeige",
+    "placeholders": {
+      "ratio": { "type": "String" }
+    }
+  },
+  "matchStats": "Matches: {wins}S / {losses}N / {draws}U",
+  "@matchStats": {
+    "description": "Match-Statistiken Siege/Niederlagen/Unentschieden",
+    "placeholders": {
+      "wins": { "type": "int" },
+      "losses": { "type": "int" },
+      "draws": { "type": "int" }
+    }
+  },
+  "noMatchData": "Noch keine Match-Daten",
+  "@noMatchData": {
+    "description": "Hinweis, wenn noch keine Match-Daten vorhanden sind"
+  },
+  "matchHistory": "Match-Historie",
+  "@matchHistory": {
+    "description": "Überschrift für die Match-Historie-Tabelle"
+  },
+  "noMatchHistory": "Keine Match-Historie vorhanden.",
+  "@noMatchHistory": {
+    "description": "Text, wenn keine Match-Historie vorhanden ist"
+  },
+  "tableDate": "Datum",
+  "@tableDate": {
+    "description": "Tabellenkopf: Datum"
+  },
+  "tableOpponent": "Gegner",
+  "@tableOpponent": {
+    "description": "Tabellenkopf: Gegner"
+  },
+  "tableResult": "Ergebnis",
+  "@tableResult": {
+    "description": "Tabellenkopf: Ergebnis"
+  },
+  "tableKD": "K/D",
+  "@tableKD": {
+    "description": "Tabellenkopf: K/D-Ratio"
+  },
+  "tableEvents": "Ereignisse",
+  "@tableEvents": {
+    "description": "Tabellenkopf: Ereignisse"
+  },
+
+  "teamMedic": "Teamarzt:",
+  "@teamMedic": {
+    "description": "Label für Teamarzt-Aktionen"
+  },
+  "treat": "Behandeln",
+  "@treat": {
+    "description": "Button zum Behandeln durch den Teamarzt"
+  },
+  "treatmentSuccess": "{name} wurde behandelt.",
+  "@treatmentSuccess": {
+    "description": "Snackbar-Text bei erfolgreicher Behandlung",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "treatmentFailed": "Behandlung fehlgeschlagen.",
+  "@treatmentFailed": {
+    "description": "Snackbar-Text bei fehlgeschlagener Behandlung"
+  },
+  "emergencyShot": "Notfall-Spritze",
+  "@emergencyShot": {
+    "description": "Button für die Notfall-Spritze"
+  },
+  "emergencyShotSuccess": "{name} wurde eine Notfall-Spritze verabreicht.",
+  "@emergencyShotSuccess": {
+    "description": "Snackbar-Text bei erfolgreicher Notfall-Spritze",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "emergencyShotFailed": "Notfall-Spritze fehlgeschlagen.",
+  "@emergencyShotFailed": {
+    "description": "Snackbar-Text bei fehlgeschlagener Notfall-Spritze"
+  },
+
+  "xpLabel": "XP: {current} / {threshold}",
+  "@xpLabel": {
+    "description": "XP-Balken-Beschriftung",
+    "placeholders": {
+      "current": { "type": "int" },
+      "threshold": { "type": "int" }
+    }
+  },
+  "levelUpPossible": "Level-Aufstieg möglich!",
+  "@levelUpPossible": {
+    "description": "Hinweis, wenn ein Level-Aufstieg möglich ist"
+  },
+
+  "info": "Info",
+  "@info": {
+    "description": "Info-Button im Kontextmenü"
+  },
+  "close": "Schließen",
+  "@close": {
+    "description": "Schließen-Button"
+  },
+  "melee": "Nahkampf",
+  "@melee": {
+    "description": "Nahkampf-Aktion"
+  },
+  "ranged": "Fernkampf",
+  "@ranged": {
+    "description": "Fernkampf-Aktion"
+  },
+
+  "apprenticeLabel": "Apprentice",
+  "@apprenticeLabel": {
+    "description": "Typbezeichnung für Apprentice-Charaktere"
+  },
+
+  "fallenLabel": "Ausgefallen",
+  "@fallenLabel": {
+    "description": "Label für gefallene Charaktere"
+  },
+
+  "medicAssignTooltip": "Teamarzt einsetzen",
+  "@medicAssignTooltip": {
+    "description": "Tooltip für den Teamarzt-Button"
+  },
+
+  "characterInfo": "AW: {attack} | VW: {defense} | BW: {movement} | SW: {damage} | RW: {range} | LP: {hp}",
+  "@characterInfo": {
+    "description": "Charakter-Info-Zeile",
+    "placeholders": {
+      "attack": { "type": "int" },
+      "defense": { "type": "int" },
+      "movement": { "type": "int" },
+      "damage": { "type": "int" },
+      "range": { "type": "int" },
+      "hp": { "type": "int" }
+    }
+  }
+}

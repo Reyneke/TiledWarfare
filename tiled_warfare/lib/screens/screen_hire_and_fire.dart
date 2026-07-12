@@ -1,18 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
+import 'package:tiled_warfare/l10n/app_localizations.dart';
 
-/// Screen für das Anstellen und Entlassen von Zusatzpersonal.
-///
-/// Dieser Screen stellt eine Liste mit verfügbaren Zusatzpersonal
-/// (z. B. einem Teamarzt aus [ObjectTeamMedic]) dar. Der Spieler kann
-/// Personal anstellen (hiren) oder wieder entlassen (feuern). Wichtige
-/// Informationen wie Name, Qualität, wöchentliche Kosten und Persönlichkeit
-/// werden in der Liste angezeigt.
-///
-/// Aktuell wird nur [ObjectTeamMedic] als anstellbarer Typ unterstützt.
-///
-/// Alle Änderungen werden über [ObjectProfile] persistiert.
 class ScreenHireAndFire extends StatefulWidget {
   const ScreenHireAndFire({super.key});
 
@@ -22,11 +12,7 @@ class ScreenHireAndFire extends StatefulWidget {
 
 class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   final ObjectProfile _profile = ObjectProfile();
-
-  /// Liste der momentan verfügbaren Kandidaten (zum Anheuern).
   final List<ObjectTeamMedic> _availablePersonnel = [];
-
-  /// Anzahl der Kandidaten, die im Pool verfügbar sein sollen.
   static const int _poolSize = 15;
 
   @override
@@ -35,7 +21,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     _generateAvailablePersonnel();
   }
 
-  /// Generiert einen neuen Pool an verfügbaren Kandidaten.
   void _generateAvailablePersonnel() {
     _availablePersonnel.clear();
     for (var i = 0; i < _poolSize; i++) {
@@ -43,7 +28,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     }
   }
 
-  /// Stellt einen Kandidaten ein und persistiert die Änderung.
   void _hireMedic(ObjectTeamMedic medic) {
     setState(() {
       _availablePersonnel.remove(medic);
@@ -52,7 +36,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     _profile.saveToStorage();
   }
 
-  /// Entlässt einen angestellten Arzt und persistiert die Änderung.
   void _fireMedic(ObjectTeamMedic medic) {
     setState(() {
       _profile.fireMedic(medic);
@@ -60,7 +43,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     _profile.saveToStorage();
   }
 
-  /// Erzwingt eine vollständige Neugenerierung des Pools.
   void _regeneratePool() {
     setState(() {
       _availablePersonnel.clear();
@@ -71,26 +53,26 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Personalverwaltung'),
+        title: Text(l10n.personnelManagement),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Pool neu generieren',
+            tooltip: l10n.regeneratePool,
             onPressed: _availablePersonnel.isNotEmpty ? _regeneratePool : null,
           ),
         ],
       ),
       body: Column(
         children: [
-          // -- Angestellte --
           if (_profile.hiredMedicsCount > 0) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
-                'Angestellte (${_profile.hiredMedicsCount})',
+                l10n.hiredPersonnel(_profile.hiredMedicsCount),
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: theme.colorScheme.primary,
                 ),
@@ -106,15 +88,13 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
             ),
             const Divider(),
           ],
-
-          // -- Verfügbare Kandidaten --
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Verfügbare Kandidaten (${_availablePersonnel.length})',
+                  l10n.availableCandidates(_availablePersonnel.length),
                   style: theme.textTheme.titleMedium,
                 ),
               ],
@@ -134,7 +114,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     );
   }
 
-  /// Baut eine horizontal scrollbare Liste von Personal-Karten.
   Widget _buildPersonnelList(
     BuildContext context,
     List<ObjectTeamMedic> personnel, {
@@ -156,8 +135,8 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     );
   }
 
-  /// Baut den Leerzustand, wenn keine Kandidaten verfügbar sind.
   Widget _buildEmptyState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -169,7 +148,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Keine Kandidaten verfügbar.',
+            l10n.noCandidatesAvailable,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
@@ -178,7 +157,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
           FilledButton.icon(
             onPressed: _regeneratePool,
             icon: const Icon(Icons.refresh),
-            label: const Text('Neuen Pool generieren'),
+            label: Text(l10n.generateNewPool),
           ),
         ],
       ),
@@ -186,7 +165,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   }
 }
 
-/// Eine einzelne Karte, die einen Kandidaten oder Angestellten darstellt.
 class _PersonnelCard extends StatelessWidget {
   final ObjectTeamMedic medic;
   final bool isHired;
@@ -204,23 +182,23 @@ class _PersonnelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
-    // Qualität in Text und Farbe übersetzen.
     String qualityLabel;
     Color qualityColor;
     IconData qualityIcon;
 
     switch (medic.quality) {
       case MedicQuality.niedrig:
-        qualityLabel = 'Niedrig';
+        qualityLabel = l10n.qualityLow;
         qualityColor = Colors.grey;
         qualityIcon = Icons.medical_services_outlined;
       case MedicQuality.mittel:
-        qualityLabel = 'Mittel';
+        qualityLabel = l10n.qualityMedium;
         qualityColor = Colors.blue;
         qualityIcon = Icons.medical_services;
       case MedicQuality.hoch:
-        qualityLabel = 'Hoch';
+        qualityLabel = l10n.qualityHigh;
         qualityColor = Colors.amber;
         qualityIcon = Icons.medical_services;
     }
@@ -238,7 +216,6 @@ class _PersonnelCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Name + Status-Badge
               Row(
                 children: [
                   Expanded(
@@ -254,8 +231,6 @@ class _PersonnelCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-
-              // Qualität
               Row(
                 children: [
                   Icon(qualityIcon, size: 16, color: qualityColor),
@@ -270,14 +245,12 @@ class _PersonnelCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-
-              // Kosten
               Row(
                 children: [
                   Icon(Icons.euro, size: 16, color: colorScheme.onSurface),
                   const SizedBox(width: 4),
                   Text(
-                    '${medic.costPerWeek} € / Woche',
+                    l10n.costPerWeek(medic.costPerWeek),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w500,
                     ),
@@ -285,8 +258,6 @@ class _PersonnelCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-
-              // Persönlichkeit
               Row(
                 children: [
                   Icon(Icons.psychology,
@@ -301,17 +272,14 @@ class _PersonnelCard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const Spacer(),
-
-              // Aktion-Button
               SizedBox(
                 width: double.infinity,
                 child: isHired
                     ? OutlinedButton.icon(
                         onPressed: onFire,
                         icon: const Icon(Icons.person_remove, size: 18),
-                        label: const Text('Entlassen'),
+                        label: Text(l10n.fire),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: colorScheme.error,
                         ),
@@ -319,7 +287,7 @@ class _PersonnelCard extends StatelessWidget {
                     : FilledButton.icon(
                         onPressed: onHire,
                         icon: const Icon(Icons.person_add, size: 18),
-                        label: const Text('Anstellen'),
+                        label: Text(l10n.hire),
                       ),
               ),
             ],

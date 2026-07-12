@@ -2,49 +2,30 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:tiled_warfare/main_app.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/screens/screen_restaurant.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
+import 'package:tiled_warfare/l10n/app_localizations.dart';
 
 /// Start-Bildschirm zur Verwaltung lokaler Nutzerdaten.
-///
-/// Bietet drei Hauptbereiche:
-/// 1. **Profilverwaltung**: Liste der lokalen Profile + Buttons zum Verwalten.
-/// 2. **Restaurantverwaltung**: Liste der Restaurants eines ausgewählten Profils
-///    mit Logo + Buttons zum Verwalten.
-/// 3. **Login-Button**: Mit dem ausgewählten Profil und Restaurant einloggen.
-///
-/// Beim Anlegen eines neuen Profils wird ein Dialog geöffnet, in dem der
-/// Nutzer einen Namen eingibt. Es wird automatisch eine eindeutige CRC32-ID
-/// generiert (Hash aus Name + Erstellungsdatum). Alle Daten werden lokal im
-/// Ordner `profiles/<id>/` gespeichert.
 class ScreenStart extends StatefulWidget {
-  const ScreenStart({super.key});
+  final LocaleProvider localeProvider;
+  const ScreenStart({super.key, required this.localeProvider});
 
   @override
   State<ScreenStart> createState() => _ScreenStartState();
 }
 
 class _ScreenStartState extends State<ScreenStart> {
-  // ── State ──────────────────────────────────────────────────────────────
-  /// Alle geladenen Profile.
   List<ProfileData> _profiles = [];
-
-  /// Das aktuell ausgewählte Profil (für die Restaurantliste).
   ProfileData? _selectedProfile;
-
-  /// Das aktuell ausgewählte Restaurant (für den Login).
   RestaurantData? _selectedRestaurant;
-
-  /// Ladezustand.
   bool _isLoading = true;
-
-  /// Image-Picker-Instanz für Profilbilder.
   final ImagePicker _imagePicker = ImagePicker();
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -62,15 +43,10 @@ class _ScreenStartState extends State<ScreenStart> {
     setState(() {});
   }
 
-  // ── Daten laden ────────────────────────────────────────────────────────
   Future<void> _loadProfiles() async {
     final profiles = await ProfileStorage.loadAllProfiles();
-    // Nur beim initialen Laden die Loading-Anzeige zeigen; bei Folge-Ladungen
-    // (z. B. nach Bild-Upload, Umbenennung) direkt die Liste ersetzen, damit
-    // kein unnötiger Spinner aufblitzt.
     setState(() {
       _profiles = profiles;
-      // Prüfen, ob das zuvor ausgewählte Profil noch existiert
       if (_selectedProfile != null &&
           !profiles.any((p) => p.id == _selectedProfile!.id)) {
         _selectedProfile = null;
@@ -80,9 +56,6 @@ class _ScreenStartState extends State<ScreenStart> {
     });
   }
 
-  // ── Hilfsmethode: Profil anhand der ID in der aktuellen Liste suchen ────
-  /// Durchsucht [_profiles] nach einem Profil mit der angegebenen [id].
-  /// Gibt `null` zurück, wenn kein passendes Profil gefunden wurde.
   ProfileData? _findProfileById(int id) {
     for (final p in _profiles) {
       if (p.id == id) return p;
@@ -90,16 +63,6 @@ class _ScreenStartState extends State<ScreenStart> {
     return null;
   }
 
-  // ── Generischer Formular-Dialog ─────────────────────────────────────────
-  /// Öffnet einen Dialog mit einem einzelnen Textfeld.
-  ///
-  /// [title] – Titel des Dialogs.
-  /// [labelText] – Label des Textfelds.
-  /// [hintText] – Platzhalter-Text im Textfeld.
-  /// [confirmText] – Beschriftung des Bestätigungsbuttons.
-  /// [initialValue] – Optionaler Startwert (z. B. beim Bearbeiten).
-  ///
-  /// Gibt den eingegebenen Text zurück oder `null`, wenn abgebrochen wurde.
   Future<String?> _showTextFormDialog({
     required String title,
     required String labelText,
@@ -109,6 +72,7 @@ class _ScreenStartState extends State<ScreenStart> {
   }) async {
     final nameController = TextEditingController(text: initialValue);
     final formKey = GlobalKey<FormState>();
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       return await showDialog<String>(
@@ -126,7 +90,7 @@ class _ScreenStartState extends State<ScreenStart> {
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Bitte gib einen Namen ein.';
+                  return l10n.pleaseEnterName;
                 }
                 return null;
               },
@@ -136,7 +100,7 @@ class _ScreenStartState extends State<ScreenStart> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
+              child: Text(l10n.cancel),
             ),
             FilledButton(
               onPressed: () {
@@ -150,19 +114,17 @@ class _ScreenStartState extends State<ScreenStart> {
         ),
       );
     } finally {
-      // TextEditingController immer disposes, nachdem der Dialog geschlossen
-      // wurde, um Memory-Leaks zu vermeiden.
       nameController.dispose();
     }
   }
 
-  // ── Profile erstellen ──────────────────────────────────────────────────
   Future<void> _showCreateProfileDialog() async {
+    final l10n = AppLocalizations.of(context)!;
     final result = await _showTextFormDialog(
-      title: 'Neues Profil',
-      labelText: 'Profilname',
-      hintText: 'Name des Spielers',
-      confirmText: 'Erstellen',
+      title: l10n.newProfile,
+      labelText: l10n.profileName,
+      hintText: l10n.playerNameHint,
+      confirmText: l10n.create,
     );
 
     if (result != null && result.isNotEmpty) {
@@ -172,15 +134,13 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Profil umbenennen ──────────────────────────────────────────────────
-  /// Öffnet einen Dialog, in dem der Spieler seinen Namen ändern kann.
-  /// Die Profil-ID bleibt dabei unverändert.
   Future<void> _showRenameProfileDialog(ProfileData profile) async {
+    final l10n = AppLocalizations.of(context)!;
     final result = await _showTextFormDialog(
-      title: 'Profil umbenennen',
-      labelText: 'Neuer Name',
-      hintText: 'Name des Spielers',
-      confirmText: 'Speichern',
+      title: l10n.renameProfile,
+      labelText: l10n.profileName,
+      hintText: l10n.playerNameHint,
+      confirmText: l10n.save,
       initialValue: profile.name,
     );
 
@@ -191,13 +151,6 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Profilbild ändern ──────────────────────────────────────────────────
-  /// Öffnet die Bildergalerie (oder Kamera), damit der Spieler ein neues
-  /// Profilbild auswählen kann. Das ausgewählte Bild wird in den Profilordner
-  /// kopiert und der Pfad in [ProfileData.profileImagePath] gespeichert.
-  ///
-  /// Jedes neue Bild bekommt einen eindeutigen Dateinamen mit Zeitstempel,
-  /// damit Flatters [FileImage]-Cache nicht die alte Version ausliefert.
   Future<void> _pickProfileImage(ProfileData profile) async {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
@@ -209,7 +162,6 @@ class _ScreenStartState extends State<ScreenStart> {
 
       if (pickedFile == null) return;
 
-      // Profilbild in den Profil-Ordner kopieren
       final profileDir = Directory('profiles/${profile.id}');
       if (!await profileDir.exists()) {
         await profileDir.create(recursive: true);
@@ -218,13 +170,10 @@ class _ScreenStartState extends State<ScreenStart> {
       final imageExtension = pickedFile.name.contains('.')
           ? '.${pickedFile.name.split('.').last}'
           : '.png';
-      // Zeitstempel-basierter Dateiname, um den Image-Cache zu umgehen
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final destPath = '${profileDir.path}/profile_$timestamp$imageExtension';
       final destFile = File(destPath);
 
-      // Alte Profilbilder bereinigen (alle, die zuvor unter diesem Profil
-      // abgelegt wurden), damit der Ordner nicht überquillt.
       if (await profileDir.exists()) {
         final oldImages = await profileDir
             .list()
@@ -237,45 +186,38 @@ class _ScreenStartState extends State<ScreenStart> {
         }
       }
 
-      // Neues Bild kopieren
       await destFile.writeAsBytes(await pickedFile.readAsBytes());
 
-      // Profildaten aktualisieren
       profile.profileImagePath = destPath;
       await ProfileStorage.saveProfile(profile);
       await _loadProfiles();
     } catch (_) {
-      // Fehler behandeln (z. B. keine Berechtigung, kein Speicherplatz)
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Fehler beim Laden des Profilbildes.'),
-        ),
+        SnackBar(content: Text(l10n.profileImageError)),
       );
     }
   }
 
-  // ── Profil löschen ─────────────────────────────────────────────────────
   Future<void> _confirmDeleteProfile(ProfileData profile) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Profil löschen'),
-        content: Text(
-          'Soll das Profil "${profile.name}" wirklich gelöscht werden?\n'
-          'Alle zugehörigen Daten werden unwiderruflich entfernt.',
-        ),
+        title: Text(l10n.deleteProfile),
+        content: Text(l10n.deleteProfileConfirm(profile.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Löschen'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -287,15 +229,15 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Restaurant erstellen ───────────────────────────────────────────────
   Future<void> _showCreateRestaurantDialog() async {
     if (_selectedProfile == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final result = await _showTextFormDialog(
-      title: 'Neues Restaurant',
-      labelText: 'Restaurantname',
-      hintText: 'Name des Restaurants',
-      confirmText: 'Erstellen',
+      title: l10n.newRestaurant,
+      labelText: l10n.restaurantName,
+      hintText: l10n.restaurantNameHint,
+      confirmText: l10n.create,
     );
 
     if (result != null && result.isNotEmpty) {
@@ -308,30 +250,26 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Restaurant löschen ─────────────────────────────────────────────────
   Future<void> _confirmDeleteRestaurant(int index) async {
     if (_selectedProfile == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Restaurant löschen'),
-        content: Text(
-          'Soll das Restaurant '
-          '"${_selectedProfile!.restaurants[index].name}" '
-          'wirklich gelöscht werden?',
-        ),
+        title: Text(l10n.deleteRestaurant),
+        content: Text(l10n.deleteRestaurantConfirm(_selectedProfile!.restaurants[index].name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Löschen'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -351,8 +289,6 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Hilfsmethoden ──────────────────────────────────────────────────────
-  /// Aktualisiert die [_selectedProfile]-Referenz nach Datenänderungen.
   void _updateSelectedProfile() {
     if (_selectedProfile != null) {
       _selectedProfile = _findProfileById(_selectedProfile!.id);
@@ -373,25 +309,23 @@ class _ScreenStartState extends State<ScreenStart> {
     AppTheme.themeModeNotifier.value = next;
   }
 
-  /// Navigiert zum [ScreenRestaurant] mit den Daten des ausgewählten Profils.
-  ///
-  /// Lädt vor dem Navigieren die aktuellsten Profildaten aus dem Speicher in das
-  /// [ObjectProfile]-Singleton, sodass der Restaurant-Bildschirm Budget, Personal,
-  /// Profilbild usw. nutzen kann. Nach der Rückkehr werden die Profile neu geladen,
-  /// damit Änderungen aus dem Restaurant-Bildschirm sichtbar werden.
+  void _switchLanguage() {
+    final locale = widget.localeProvider.locale;
+    if (locale.languageCode == 'de') {
+      widget.localeProvider.setLocale(const Locale('en'));
+    } else {
+      widget.localeProvider.setLocale(const Locale('de'));
+    }
+  }
+
   Future<void> _login() async {
     if (_selectedProfile == null) return;
 
-    // Das aktuell ausgewählte Profil aus dem bereits geladenen Datenbestand
-    // verwenden. [_loadProfiles] wird nach jeder Datenänderung automatisch
-    // aufgerufen, sodass [_profiles] stets aktuell ist.
     final freshProfile = _findProfileById(_selectedProfile!.id);
     if (freshProfile == null) return;
 
-    // Frische Profildaten in das ObjectProfile-Singleton laden
     ObjectProfile().loadFromData(freshProfile);
 
-    // Warte auf die Rückkehr aus dem Restaurant-Bildschirm
     if (!mounted) return;
     await Navigator.push(
       context,
@@ -400,12 +334,9 @@ class _ScreenStartState extends State<ScreenStart> {
       ),
     );
 
-    // Nach der Rückkehr: Profile neu laden, um geänderte Daten (Budget, Personal,
-    // Profilbild) aus dem Storage zu übernehmen.
     if (!mounted) return;
     await _loadProfiles();
 
-    // Das zuvor ausgewählte Profil im frischen Datenbestand suchen
     if (_selectedProfile != null) {
       final updated = _findProfileById(_selectedProfile!.id);
       if (updated != null) {
@@ -417,16 +348,26 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentThemeMode = AppTheme.themeModeNotifier.value;
+    final l10n = AppLocalizations.of(context)!;
+    final currentLocale = widget.localeProvider.locale;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tiled Warfare – Start'),
+        title: Text('${l10n.appTitle} – Start'),
         actions: [
+          // Language switch
+          IconButton(
+            icon: Text(
+              currentLocale.languageCode.toUpperCase(),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            tooltip: currentLocale.languageCode == 'de' ? 'Switch to English' : 'Zu Deutsch wechseln',
+            onPressed: _switchLanguage,
+          ),
           IconButton(
             icon: Icon(
               switch (currentThemeMode) {
@@ -435,7 +376,7 @@ class _ScreenStartState extends State<ScreenStart> {
                 ThemeMode.system => Icons.settings_brightness,
               },
             ),
-            tooltip: 'Theme wechseln (${currentThemeMode.name})',
+            tooltip: l10n.themeToggle(currentThemeMode.name),
             onPressed: _toggleTheme,
           ),
         ],
@@ -447,14 +388,13 @@ class _ScreenStartState extends State<ScreenStart> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── 1. Profilverwaltung ──────────────────────────────
                   _buildSectionHeader(
                     context,
                     icon: Icons.people,
-                    title: 'Profile',
+                    title: l10n.profileSection,
                     action: IconButton(
                       icon: const Icon(Icons.add),
-                      tooltip: 'Neues Profil',
+                      tooltip: l10n.newProfileTooltip,
                       onPressed: _showCreateProfileDialog,
                     ),
                   ),
@@ -463,14 +403,13 @@ class _ScreenStartState extends State<ScreenStart> {
 
                   const SizedBox(height: 24),
 
-                  // ── 2. Restaurantverwaltung ──────────────────────────
                   _buildSectionHeader(
                     context,
                     icon: Icons.restaurant,
-                    title: 'Restaurants',
+                    title: l10n.restaurantSection,
                     action: IconButton(
                       icon: const Icon(Icons.add),
-                      tooltip: 'Neues Restaurant',
+                      tooltip: l10n.newRestaurantTooltip,
                       onPressed: _selectedProfile != null
                           ? _showCreateRestaurantDialog
                           : null,
@@ -481,13 +420,12 @@ class _ScreenStartState extends State<ScreenStart> {
 
                   const SizedBox(height: 24),
 
-                  // ── 3. Login-Button ──────────────────────────────────
                   FilledButton.icon(
                     icon: const Icon(Icons.login),
                     label: Text(
                       _selectedProfile != null
-                          ? 'Einloggen als ${_selectedProfile!.name}'
-                          : 'Bitte Profil auswählen',
+                          ? l10n.loginAs(_selectedProfile!.name)
+                          : l10n.selectProfilePrompt,
                     ),
                     onPressed:
                         _selectedProfile != null ? _login : null,
@@ -498,7 +436,6 @@ class _ScreenStartState extends State<ScreenStart> {
     );
   }
 
-  // ── Section Header ─────────────────────────────────────────────────────
   Widget _buildSectionHeader(
     BuildContext context, {
     required IconData icon,
@@ -517,15 +454,16 @@ class _ScreenStartState extends State<ScreenStart> {
     );
   }
 
-  // ── Profil-Liste ───────────────────────────────────────────────────────
   Widget _buildProfileList(BuildContext context, ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+
     if (_profiles.isEmpty) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
             child: Text(
-              'Noch keine Profile vorhanden.\nErstelle ein neues Profil!',
+              l10n.noProfilesYet,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -570,9 +508,7 @@ class _ScreenStartState extends State<ScreenStart> {
             ),
             title: Text(profile.name),
             subtitle: Text(
-              'ID: ${profile.id}\n'
-              'Erstellt: ${_formatDate(profile.creationDate)}\n'
-              'Restaurants: ${profile.restaurants.length}',
+              l10n.profileSubtitle(profile.id, _formatDate(profile.creationDate), profile.restaurants.length),
             ),
             isThreeLine: true,
             trailing: Row(
@@ -585,13 +521,13 @@ class _ScreenStartState extends State<ScreenStart> {
                   const SizedBox(width: 24),
                 IconButton(
                   icon: const Icon(Icons.edit),
-                  tooltip: 'Profil umbenennen',
+                  tooltip: l10n.renameProfileTooltip,
                   onPressed: () => _showRenameProfileDialog(profile),
                 ),
                 IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: theme.colorScheme.error),
-                  tooltip: 'Profil löschen',
+                  tooltip: l10n.deleteProfileTooltip,
                   onPressed: () => _confirmDeleteProfile(profile),
                 ),
               ],
@@ -609,15 +545,16 @@ class _ScreenStartState extends State<ScreenStart> {
     );
   }
 
-  // ── Restaurant-Liste ──────────────────────────────────────────────────
   Widget _buildRestaurantList(BuildContext context, ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+
     if (_selectedProfile == null) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
             child: Text(
-              'Wähle zuerst ein Profil aus.',
+              l10n.selectProfileFirst,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -636,8 +573,7 @@ class _ScreenStartState extends State<ScreenStart> {
           padding: const EdgeInsets.all(24.0),
           child: Center(
             child: Text(
-              'Noch keine Restaurants vorhanden.\n'
-              'Erstelle ein neues Restaurant!',
+              l10n.noRestaurantsYet,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -698,7 +634,7 @@ class _ScreenStartState extends State<ScreenStart> {
                 IconButton(
                   icon: Icon(Icons.delete_outline,
                       color: theme.colorScheme.error),
-                  tooltip: 'Restaurant löschen',
+                  tooltip: l10n.deleteRestaurantTooltip,
                   onPressed: () =>
                       _confirmDeleteRestaurant(index),
                 ),
@@ -716,7 +652,6 @@ class _ScreenStartState extends State<ScreenStart> {
     );
   }
 
-  // ── Hilfsfunktionen ──────────────────────────────────────────────────
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.'
