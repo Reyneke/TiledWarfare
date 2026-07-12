@@ -5,6 +5,7 @@ import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/screens/screen_character_detail.dart';
 import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
@@ -499,9 +500,21 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                   final bool canFight =
                       character.status != CharacterStatus.dying;
 
+                  final hasMedic = _profile.hiredMedics.isNotEmpty;
+                  final needsTreat = character.status != CharacterStatus.ready;
+
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ScreenCharacterDetail(
+                                character: character),
+                          ),
+                        );
+                      },
                       leading: CircleAvatar(
                         backgroundColor: canFight
                             ? (isReady
@@ -529,19 +542,59 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                           if (!canFight) '💀 Ausgefallen',
                         ].join(' · '),
                       ),
-                      trailing: Checkbox(
-                        value: isReady,
-                        onChanged: canFight
-                            ? (value) {
-                                setState(() {
-                                  if (value == true) {
-                                    _battleReadyCharacters.add(character);
-                                  } else {
-                                    _battleReadyCharacters.remove(character);
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Teamarzt: Behandeln-Button
+                          if (hasMedic && needsTreat)
+                            IconButton(
+                              icon: const Icon(Icons.healing,
+                                  color: Colors.green),
+                              tooltip: 'Teamarzt einsetzen',
+                              onPressed: () {
+                                final medic =
+                                    _profile.hiredMedics.first;
+                                if (medic.treatCharacter(character)) {
+                                  setState(() {});
+                                  _saveState();
+                                }
+                              },
+                            ),
+                          // Teamarzt: Notfall-Spritze (auch für sterbende Charaktere)
+                          if (hasMedic &&
+                              (character.woundValue <= 0 ||
+                               character.status == CharacterStatus.dying))
+                            IconButton(
+                              icon: const Icon(Icons.emergency,
+                                  color: Colors.red),
+                              tooltip: 'Notfall-Spritze',
+                              onPressed: () {
+                                final medic =
+                                    _profile.hiredMedics.first;
+                                if (medic.emergencyShot(character)) {
+                                  setState(() {});
+                                  _saveState();
+                                }
+                              },
+                            ),
+                          // Gefechtsbereitschaft-Checkbox
+                          Checkbox(
+                            value: isReady,
+                            onChanged: canFight
+                                ? (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _battleReadyCharacters
+                                            .add(character);
+                                      } else {
+                                        _battleReadyCharacters
+                                            .remove(character);
+                                      }
+                                    });
                                   }
-                                });
-                              }
-                            : null,
+                                : null,
+                          ),
+                        ],
                       ),
                       isThreeLine: true,
                     ),

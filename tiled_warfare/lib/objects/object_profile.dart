@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
@@ -239,6 +240,33 @@ class ObjectProfile {
     _personal.removeWhere((unit) => unit.status == CharacterStatus.dead);
   }
 
+  /// Fügt für alle angestellten Charaktere einen Match-Record hinzu.
+  ///
+  /// Diese Methode wird nach jedem Gefecht aufgerufen, um die Match-Historie
+  /// der Charaktere zu aktualisieren. Jeder Charakter erhält einen Eintrag
+  /// mit dem Ergebnis des Gefechts.
+  ///
+  /// [opponentName] ist der Name des Gegners (z. B. "Street Battle").
+  /// [result] ist das Ergebnis des Matches (Sieg/Niederlage/Unentschieden).
+  /// [kills] und [deaths] sind optionale Maps von Charakternamen zu
+  /// Kill/Death-Zahlen (falls verfügbar).
+  void addMatchRecordsForBattle({
+    required String opponentName,
+    required MatchResult result,
+    Map<String, int>? kills,
+    Map<String, int>? deaths,
+  }) {
+    for (final character in _personal) {
+      character.matchHistory.add(MatchRecord(
+        date: DateTime.now(),
+        opponentName: opponentName,
+        result: result,
+        kills: kills?[character.name] ?? 0,
+        deaths: deaths?[character.name] ?? 0,
+      ));
+    }
+  }
+
   /// Synchronisiert die überlebenden Einheiten nach einem Gefecht mit dem Personal.
   ///
   /// Führt für gefallene Einheiten ([CharacterStatus]) Rettungswürfe gemäß
@@ -363,6 +391,7 @@ class ObjectProfile {
         moneyValue: a.moneyValue,
         xpValue: a.xpValue,
         status: a.status.name,
+        matchHistory: a.matchHistory.map((m) => m.toJson()).toList(),
       );
 
   static ObjectApprentice? _staffDataToApprentice(StaffData sd) {
@@ -405,6 +434,10 @@ class ObjectProfile {
       (e) => e.name == sd.status,
       orElse: () => CharacterStatus.ready,
     );
+    // Match-Historie wiederherstellen
+    apprentice.matchHistory = sd.matchHistory
+        .map((m) => MatchRecord.fromJson(m))
+        .toList();
     return apprentice;
   }
 

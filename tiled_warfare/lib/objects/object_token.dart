@@ -89,4 +89,33 @@ class ObjectToken {
     this.moneyValue = 100,
     this.xpValue = 25,
   });
+
+  /// Erzeugt eine Kopie dieses Tokens mit optional geänderten Werten.
+  ObjectToken copyWith({
+    String? name,
+    String? imagePath,
+    int? woundValue,
+    int? attackValue,
+    int? defenseValue,
+    int? movementValue,
+    int? damageValue,
+    int? rangeValue,
+    int? moneyValue,
+    int? xpValue,
+    Offset? position,
+    bool? hasActed,
+  }) {
+    return ObjectToken(
+      name: name ?? this.name,
+      imagePath: imagePath ?? this.imagePath,
+      woundValue: woundValue ?? this.woundValue,
+      attackValue: attackValue ?? this.attackValue,
+      defenseValue: defenseValue ?? this.defenseValue,
+      movementValue: movementValue ?? this.movementValue,
+      damageValue: damageValue ?? this.damageValue,
+      rangeValue: rangeValue ?? this.rangeValue,
+      moneyValue: moneyValue ?? this.moneyValue,
+      xpValue: xpValue ?? this.xpValue,
+    );
+  }
 }

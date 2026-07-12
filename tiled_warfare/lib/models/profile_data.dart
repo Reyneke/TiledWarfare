@@ -1,3 +1,6 @@
+import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/objects/object_host.dart';
+
 /// Datenmodell für ein einzelnes Nutzerprofil.
 ///
 /// Enthält alle Informationen, die lokal gespeichert werden:
@@ -107,6 +110,9 @@ class StaffData {
   int xpValue;
   String status;
 
+  /// Match-Historie (serialisiert als Liste von Maps).
+  List<Map<String, dynamic>> matchHistory;
+
   StaffData({
     required this.name,
     required this.imagePath,
@@ -122,7 +128,8 @@ class StaffData {
     this.moneyValue = 100,
     this.xpValue = 25,
     this.status = 'ready',
-  });
+    List<Map<String, dynamic>>? matchHistory,
+  }) : matchHistory = matchHistory ?? [];
 
   Map<String, dynamic> toJson() => {
         'name': name,
@@ -139,6 +146,7 @@ class StaffData {
         'moneyValue': moneyValue,
         'xpValue': xpValue,
         'status': status,
+        'matchHistory': matchHistory,
       };
 
   factory StaffData.fromJson(Map<String, dynamic> json) => StaffData(
@@ -156,6 +164,9 @@ class StaffData {
         moneyValue: json['moneyValue'] as int? ?? 100,
         xpValue: json['xpValue'] as int? ?? 25,
         status: json['status'] as String? ?? 'ready',
+        matchHistory: (json['matchHistory'] as List<dynamic>?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
       );
 }
 

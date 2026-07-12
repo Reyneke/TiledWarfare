@@ -1,4 +1,5 @@
 import 'package:random_name_generator/random_name_generator.dart';
+import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
 /// Status eines Charakters ausserhalb des Gefechts.
@@ -40,6 +41,9 @@ class ObjectApprentice extends ObjectToken {
 
   /// Aktueller Verletzungs-Status (ready = gesund).
   CharacterStatus status = CharacterStatus.ready;
+
+  /// Match-Historie dieses Charakters.
+  List<MatchRecord> matchHistory = [];
 
   ObjectApprentice({
     String? name,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
@@ -10,6 +11,17 @@ class ScreenMain extends StatefulWidget {
   final String mapPath;
 
   const ScreenMain({super.key, this.mapPath = 'assets/maps/street_battle.tmx'});
+
+  /// Extrahiert den Kartennamen aus dem Pfad für die Match-Historie.
+  static String mapNameFromPath(String path) {
+    // Z. B. "assets/maps/map0/street_battle.tmx" → "Street Battle"
+    final filename = path.split('/').last.replaceAll('.tmx', '');
+    return filename
+        .split('_')
+        .map((word) =>
+            word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
+        .join(' ');
+  }
 
   @override
   State<ScreenMain> createState() => _ScreenMainState();
@@ -36,7 +48,7 @@ class _ScreenMainState extends State<ScreenMain> {
   List<({String name, double x, double y})> _spawnPoints = [];
 
   /// Aktualisiert das Profil mit den Überlebenden des Gefechts,
-  /// entfernt Tote aus dem Personal und speichert.
+  /// entfernt Tote aus dem Personal, speichert Match-Historie und persistiert.
   void _syncUnitsAfterBattle() {
     final player = ObjectPlayer();
     final profile = ObjectProfile();
@@ -44,8 +56,21 @@ class _ScreenMainState extends State<ScreenMain> {
     profile.saveToStorage();
   }
 
+  /// Fügt Match-Records für das abgeschlossene Gefecht hinzu.
+  void _addMatchRecords(bool playerWon) {
+    final profile = ObjectProfile();
+    final opponentName = ScreenMain.mapNameFromPath(widget.mapPath);
+    final result = playerWon ? MatchResult.win : MatchResult.loss;
+
+    profile.addMatchRecordsForBattle(
+      opponentName: opponentName,
+      result: result,
+    );
+  }
+
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
   void _onGameOver(bool playerWon) {
+    _addMatchRecords(playerWon);
     _syncUnitsAfterBattle();
   }
 

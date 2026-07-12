@@ -253,8 +253,8 @@ class ObjectTeamMedic {
     return true;
   }
 
-  /// Führt eine Notfall-Spritze durch, die einen Charakter sofort wieder
-  /// voll einsatzfähig macht (temporärer Effekt).
+  /// Führt eine Notfall-Spritze durch, die einen schwer verletzten oder
+  /// sterbenden Charakter sofort wieder voll einsatzfähig macht (temporärer Effekt).
   ///
   /// Gibt `true` zurück, wenn die Spritze verabreicht wurde.
   ///
@@ -263,8 +263,10 @@ class ObjectTeamMedic {
   /// - Nach einem Echtzeit-Tag kehren die unterdrückten Verletzungen zurück.
   /// - Die Spritze ist teuer (einmalige Zusatzkosten).
   bool emergencyShot(ObjectToken character) {
-    if (character.woundValue > 0) {
-      // Charakter ist nicht verletzt genug für eine Notfall-Spritze.
+    // Nur bei toten (woundValue <= 0) oder sterbenden Charakteren sinnvoll
+    final bool isDying = character is ObjectApprentice &&
+        character.status == CharacterStatus.dying;
+    if (character.woundValue > 0 && !isDying) {
       return false;
     }
 
@@ -276,6 +278,11 @@ class ObjectTeamMedic {
 
     // Charakter provisorisch auf 1 Wundstufe setzen (lebend, aber verletzt).
     character.woundValue = 1;
+
+    // Status zurücksetzen, falls es ein ObjectApprentice ist
+    if (character is ObjectApprentice) {
+      character.status = CharacterStatus.ready;
+    }
 
     // Hinweis: Der zurückkehrende Schaden nach einem Tag muss durch
     // einen Timer/ein Event-System außerhalb dieser Klasse behandelt werden.
@@ -310,17 +317,34 @@ class ObjectTeamMedic {
     );
   }
 
+  /// Gibt einen deterministischen Score für das Enneagramm-Profil (0–100).
+  ///
+  /// Verwendet den Index des Profils in der `all`-Liste, um einen
+  /// reproduzierbaren und zwischen Runs/Plattformen konsistenten Wert
+  /// zu liefern. Ersetzt die frühere `hashCode`-basierte Berechnung,
+  /// die nicht portabel war.
+  static int _enneagramScore(EnneagramProfile profile) {
+    final index = EnneagramProfile.all.indexOf(profile);
+    // Gleichmäßige Verteilung über 0–100 (91 = 12 Profile * 7.58)
+    return ((index + 1) * 8) % 100;
+  }
+
   /// Bewertet die aktuelle Hilfsbereitschaft auf einer Skala von 0–100.
+  ///
+  /// Basis sind 50 Punkte, modifiziert durch das Enneagramm-Profil
+  /// (0–42 Punkte) und die Qualitätsstufe (0–10 Punkte).
+  /// Ergebnis ist deterministisch und reproduzierbar.
   int _evaluateHelpfulness() {
-    // Vereinfachte Evaluierung: Mittelwert über die Fuzzy-Mengen.
-    // In einer vollständigen Implementierung würden die Fuzzy-Regeln
-    // mit den aktuellen Spielzuständen ausgewertet.
-    return 50 + (enneagramProfile.name.hashCode % 50);
+    return 50 + _enneagramScore(enneagramProfile) + quality.survivalBonus;
   }
 
   /// Bewertet die aktuelle Behandlungsqualität auf einer Skala von 0–100.
+  ///
+  /// Basis ist der [MedicQuality.survivalBonus] (10–30), modifiziert
+  /// durch das Enneagramm-Profil (0–42 Punkte).
+  /// Ergebnis ist deterministisch und reproduzierbar.
   int _evaluateTreatmentQuality() {
-    return quality.survivalBonus + (enneagramProfile.name.hashCode % 20);
+    return quality.survivalBonus + (_enneagramScore(enneagramProfile) ~/ 2);
   }
 
   @override

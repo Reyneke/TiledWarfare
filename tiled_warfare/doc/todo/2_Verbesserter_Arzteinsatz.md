@@ -59,7 +59,9 @@
   - Kampfwerte: Angriff, Verteidigung, Bewegung, Schaden, Reichweite
   - Kill/Death-Ratio (sofern Match-Logs vorhanden)
   - Gewonnene / verlorene / unentschiedene Matches (aus Match-Historie)
-  Mittig: vorhandene XP, XP bis zur nächsten Stufe als Balkengrafik.
+  Mittig: 
+  - Level
+  - vorhandene XP, XP bis zur nächsten Stufe als Balkengrafik
 - **Mittig/unten:** Individuelle Match-Historie des Charakters in tabellarischer Form:
   - Spalten: Datum, Gegner, Ergebnis (Sieg/Niederlage/Unentschieden), K/D, besondere Ereignisse
   - Quelle: `MatchLog`-Einträge aus dem Spielverlauf

@@ -2,8 +2,8 @@
   {
     "id": 3507838291,
     "name": "Reyneke",
-    "creationDate": "2026-07-12T17:19:11.594803",
-    "budget": 8800,
+    "creationDate": "2026-07-12T20:05:35.229225",
+    "budget": 8600,
     "profileImagePath": "profiles/3507838291/profile_1783334585943.png",
     "staff": [
       {
@@ -15,12 +15,13 @@
         "woundValue": 1,
         "attackValue": 40,
         "defenseValue": 20,
-        "movementValue": 6,
+        "movementValue": 1,
         "damageValue": 2,
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "dying"
+        "status": "reeling",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Greta",
@@ -31,12 +32,13 @@
         "woundValue": 1,
         "attackValue": 40,
         "defenseValue": 20,
-        "movementValue": 6,
+        "movementValue": 1,
         "damageValue": 2,
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "dying"
+        "status": "hurt",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Antonio",
@@ -52,7 +54,8 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "ready",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Maria",
@@ -68,7 +71,8 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "ready",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Viviana",
@@ -84,7 +88,8 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "ready",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Jessica",
@@ -100,7 +105,8 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "ready",
+        "matchHistory": []
       },
       {
         "name": "Apprentice: Natalia",
@@ -116,7 +122,42 @@
         "rangeValue": 3,
         "moneyValue": 100,
         "xpValue": 25,
-        "status": "ready"
+        "status": "ready",
+        "matchHistory": []
+      },
+      {
+        "name": "Apprentice: Michele",
+        "imagePath": "assets/images/token/token_cook_basic.png",
+        "type": "apprentice",
+        "levelValue": 1,
+        "currentXPValue": 0,
+        "woundValue": 3,
+        "attackValue": 40,
+        "defenseValue": 20,
+        "movementValue": 6,
+        "damageValue": 2,
+        "rangeValue": 3,
+        "moneyValue": 100,
+        "xpValue": 25,
+        "status": "ready",
+        "matchHistory": []
+      },
+      {
+        "name": "Apprentice: Marco",
+        "imagePath": "assets/images/token/token_cook_basic.png",
+        "type": "apprentice",
+        "levelValue": 1,
+        "currentXPValue": 0,
+        "woundValue": 3,
+        "attackValue": 40,
+        "defenseValue": 20,
+        "movementValue": 6,
+        "damageValue": 2,
+        "rangeValue": 3,
+        "moneyValue": 100,
+        "xpValue": 25,
+        "status": "ready",
+        "matchHistory": []
       }
     ],
     "medics": [
