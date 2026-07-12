@@ -27,7 +27,7 @@ class ScreenMain extends StatefulWidget {
   State<ScreenMain> createState() => _ScreenMainState();
 }
 
-class _ScreenMainState extends State<ScreenMain> {
+class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// Die Pixel-Maße eines einzelnen Karten-Tiles (Breite).
   int _tileWidth = 32;
 
@@ -104,17 +104,161 @@ class _ScreenMainState extends State<ScreenMain> {
     });
   }
 
+  /// Zeigt einen Bestätigungsdialog, bevor das Spiel vorzeitig beendet wird.
+  /// Bei Bestätigung wird es als Sieg für den Host (Niederlage für den Spieler) gewertet.
+  Future<bool> _confirmExit(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Spiel beenden?'),
+        content: const Text('Möchtest du das Spiel wirklich vorzeitig beenden?\n'
+            'Dies wird als Niederlage für dich gewertet.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Beenden'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Behandelt das vorzeitige Verlassen des Spiels (Back-Button).
+  /// Zeigt einen Bestätigungsdialog und wertet es als Niederlage für den Spieler.
+  void _handleExitGame(BuildContext context) async {
+    final confirmed = await _confirmExit(context);
+    if (!confirmed || !context.mounted) return;
+    
+    // Als Niederlage des Spielers werten (Sieg für den Host)
+    _addMatchRecords(false); // false = Spieler hat verloren
+    _syncUnitsAfterBattle();
+    
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  /// Fokussiert die Kamera auf eine bestimmte Karten-Position (sanftes Scrollen).
+  /// Zentriert die übergebene Karten-Position in der Mitte des Bildschirms.
+  void _focusCameraOn(Offset mapPosition) {
+    final controller = _mapTransformationController;
+    if (controller == null) return;
+
+    try {
+      final screenSize = MediaQuery.of(context).size;
+      // AppBar-Höhe abziehen
+      final appBarHeight = kToolbarHeight;
+      final availableHeight = screenSize.height - appBarHeight;
+
+      // Aktuelle Zoom-Stufe ermitteln
+      final currentScale = controller.value.getMaxScaleOnAxis();
+      if (currentScale <= 0) return;
+
+      // Ziel-Position in Bildschirm-Koordinaten umrechnen:
+      // Bildschirmmitte = (screenSize.width / 2, availableHeight / 2)
+      // Wir müssen die Matrix so setzen, dass mapPosition auf die Bildschirmmitte fällt
+      final targetDx = screenSize.width / 2 - mapPosition.dx * currentScale;
+      final targetDy = availableHeight / 2 - mapPosition.dy * currentScale;
+
+      // Sanfte Animation zur Ziel-Position
+      final currentTranslation = Offset(
+        controller.value.getTranslation().x,
+        controller.value.getTranslation().y,
+      );
+      final targetTranslation = Offset(targetDx, targetDy);
+
+      // Nur animieren, wenn die Entfernung signifikant ist (> 50 Pixel)
+      if ((currentTranslation - targetTranslation).distance > 50) {
+        final animationController = AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 300),
+        );
+        final animation = Tween<Offset>(
+          begin: currentTranslation,
+          end: targetTranslation,
+        ).animate(CurvedAnimation(
+          parent: animationController,
+          curve: Curves.easeInOut,
+        ));
+
+        animation.addListener(() {
+          final value = animation.value;
+          final matrix = Matrix4.identity()
+            ..translate(value.dx, value.dy)
+            ..scale(currentScale);
+          controller.value = matrix;
+        });
+
+        animationController.forward();
+      }
+    } catch (_) {
+      // Bei Fehlern ignorieren (z. B. wenn der Controller noch nicht bereit ist)
+    }
+  }
+
+  /// Zentriert die Karte nach dem Laden in der Bildschirmmitte.
+  void _centerMap() {
+    final controller = _mapTransformationController;
+    if (controller == null) return;
+
+    try {
+      final screenSize = MediaQuery.of(context).size;
+      final appBarHeight = kToolbarHeight;
+      final availableHeight = screenSize.height - appBarHeight;
+
+      // Karten-Mitte in Pixeln berechnen
+      final mapCenterX = (_mapWidth * _tileWidth + _tileWidth / 2) / 2;
+      final mapCenterY = (_mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4) / 2;
+
+      // Passenden Zoom wählen, damit die gesamte Karte sichtbar ist
+      final mapWidthPx = _mapWidth * _tileWidth + _tileWidth / 2;
+      final mapHeightPx = _mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4;
+      final scaleX = screenSize.width / mapWidthPx;
+      final scaleY = availableHeight / mapHeightPx;
+      final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
+
+      // Matrix setzen: Kartenmitte zentrieren
+      final translateX = screenSize.width / 2 - mapCenterX * scale;
+      final translateY = availableHeight / 2 - mapCenterY * scale;
+
+      final matrix = Matrix4.identity()
+        ..translate(translateX, translateY)
+        ..scale(scale);
+      controller.value = matrix;
+    } catch (_) {
+      // Bei Fehlern ignorieren
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Zentriere die Karte nach dem ersten Build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _centerMap();
+    });
+
     return PopScope(
-      canPop: true,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) return;
-        _syncUnitsAfterBattle();
+        if (didPop) return;
+        _handleExitGame(context);
       },
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Tiled Warfare'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Spiel beenden',
+            onPressed: () => _handleExitGame(context),
+          ),
           actions: [
             ValueListenableBuilder<ThemeMode>(
               valueListenable: AppTheme.themeModeNotifier,
@@ -162,6 +306,7 @@ class _ScreenMainState extends State<ScreenMain> {
                     transformationController: _mapTransformationController!,
                     spawnPoints: _spawnPoints,
                     onGameOver: _onGameOver,
+                    onRequestCameraFocus: _focusCameraOn,
                   ),
                 ),
               ),

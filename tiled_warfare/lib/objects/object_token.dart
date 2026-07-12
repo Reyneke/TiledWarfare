@@ -1,4 +1,3 @@
-
 import 'dart:ui' show Offset;
 
 /// Enum der verfügbaren Kampfaktionen für eine Einheit.
@@ -10,6 +9,9 @@ enum CombatAction {
 
   /// Fernkampf-Angriff auf ein Ziel in Reichweite.
   ranged,
+
+  /// Fokussiertes Feuer: Alle verfügbaren Einheiten greifen ein gemeinsames Ziel an.
+  focusFire,
 }
 
 /// Basis-Klasse für alle Tokens (Einheiten) auf der Karte.
@@ -37,6 +39,10 @@ class ObjectToken {
 
   /// Relativer Pfad zum Token-Bild (z. B. "assets/images/token/token_cook_basic.png").
   String imagePath;
+
+  /// Pfad zum Charakterbild (optional). Wenn gesetzt, wird dieses Bild
+  /// zusätzlich zum Token-Farbkreis angezeigt.
+  String? characterImagePath;
 
   /// Aktuelle Trefferpunkte (Wundstufen).
   ///
@@ -73,13 +79,41 @@ class ObjectToken {
   /// Wird gesetzt, sobald der Token auf der Karte platziert wird.
   Offset position = Offset.zero;
 
+  /// Ziel-Pixel-Position für sanfte Animationen.
+  /// Wenn nicht null, wird der Token von seiner aktuellen Position
+  /// sanft zur Zielposition animiert.
+  Offset? targetPosition;
+
   /// Ob der Token in der aktuellen Runde bereits eine Kampfaktion ausgeführt hat.
   /// Wird zu Beginn jeder Runde zurückgesetzt.
   bool hasActed = false;
 
+  /// Zähler, wie oft dieser Token in der aktuellen Runde bereits angegriffen wurde.
+  /// Wird für den kumulativen Malus bei mehrfach angegriffenen Tokens verwendet.
+  ///
+  /// Jeder Angriff auf diesen Token erhöht den Zähler um 1, was zu folgenden Effekten führt:
+  /// - Verteidigungswert des Tokens: −5 % pro Angriff (kumulativ)
+  /// - Angriffswert aller Angreifer gegen diesen Token: +5 % pro Angriff (kumulativ)
+  ///
+  /// Der Zähler wird zu Beginn jedes neuen Zuges der kontrollierenden Seite zurückgesetzt.
+  int timesAttackedThisTurn = 0;
+
+  /// Gibt den kumulativen Verteidigungs-Malus (in Prozent) zurück,
+  /// der durch mehrfache Angriffe in dieser Runde entstanden ist.
+  ///
+  /// Jeder Angriff auf diesen Token verursacht −5 % auf alle Verteidigungswürfe.
+  int get defenseMalus => timesAttackedThisTurn * 5;
+
+  /// Gibt den kumulativen Angriffs-Bonus (in Prozent) zurück,
+  /// den Angreifer gegen diesen Token erhalten.
+  ///
+  /// Jeder Angriff auf diesen Token gibt Angreifern +5 % auf ihren Angriffswert.
+  int get attackBonus => timesAttackedThisTurn * 5;
+
   ObjectToken({
     required this.name,
     required this.imagePath,
+    this.characterImagePath,
     this.woundValue = 3,
     this.attackValue = 0,
     this.defenseValue = 0,
@@ -94,6 +128,7 @@ class ObjectToken {
   ObjectToken copyWith({
     String? name,
     String? imagePath,
+    String? characterImagePath,
     int? woundValue,
     int? attackValue,
     int? defenseValue,
@@ -108,6 +143,7 @@ class ObjectToken {
     return ObjectToken(
       name: name ?? this.name,
       imagePath: imagePath ?? this.imagePath,
+      characterImagePath: characterImagePath ?? this.characterImagePath,
       woundValue: woundValue ?? this.woundValue,
       attackValue: attackValue ?? this.attackValue,
       defenseValue: defenseValue ?? this.defenseValue,

@@ -359,8 +359,9 @@ class ObjectHost {
       newHexY += bestNeighbor.dy;
     }
 
-    // Auf Hex-Zentrum setzen
-    zombie.position = _hexToPixel(x: newHexX, y: newHexY);
+    // Auf Hex-Zentrum setzen – nutze targetPosition für sanfte Animation
+    final targetPixel = _hexToPixel(x: newHexX, y: newHexY);
+    zombie.targetPosition = targetPixel;
   }
 
   /// Führt Angriffe aller Zombies auf Line Cooks in Reichweite aus.
@@ -394,16 +395,17 @@ class ObjectHost {
 
           // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
           if (hexDistance <= zombie.rangeValue + 1) {
-            final distance = (zombie.position - cook.position).distance;
-            final result = player.performAction(
-              action: CombatAction.melee,
-              attacker: zombie,
-              defender: cook,
-              distance: distance.round(),
-            );
+              final distance = (zombie.position - cook.position).distance;
 
-            // Log-Nachricht für diesen Angriff erstellen
-            String logEntry = '${zombie.name} greift ${cook.name} an: ';
+              final result = player.performAction(
+                action: CombatAction.melee,
+                attacker: zombie,
+                defender: cook,
+                distance: distance.round(),
+              );
+
+              // Log-Nachricht für diesen Angriff erstellen
+              String logEntry = '${zombie.name} greift ${cook.name} an: ';
             if (result.hit) {
               logEntry += 'Treffer! ${result.damage} Schaden.';
             } else {
