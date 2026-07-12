@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:tiled_warfare/main_app.dart';
+import 'package:tiled_warfare/l10n/locale_provider.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
@@ -12,8 +12,7 @@ import 'package:tiled_warfare/l10n/app_localizations.dart';
 
 /// Start-Bildschirm zur Verwaltung lokaler Nutzerdaten.
 class ScreenStart extends StatefulWidget {
-  final LocaleProvider localeProvider;
-  const ScreenStart({super.key, required this.localeProvider});
+  const ScreenStart({super.key});
 
   @override
   State<ScreenStart> createState() => _ScreenStartState();
@@ -310,11 +309,12 @@ class _ScreenStartState extends State<ScreenStart> {
   }
 
   void _switchLanguage() {
-    final locale = widget.localeProvider.locale;
+    final localeProvider = LocaleProviderWidget.of(context);
+    final locale = localeProvider.locale;
     if (locale.languageCode == 'de') {
-      widget.localeProvider.setLocale(const Locale('en'));
+      localeProvider.setLocale(const Locale('en'));
     } else {
-      widget.localeProvider.setLocale(const Locale('de'));
+      localeProvider.setLocale(const Locale('de'));
     }
   }
 
@@ -353,7 +353,7 @@ class _ScreenStartState extends State<ScreenStart> {
     final theme = Theme.of(context);
     final currentThemeMode = AppTheme.themeModeNotifier.value;
     final l10n = AppLocalizations.of(context)!;
-    final currentLocale = widget.localeProvider.locale;
+    final currentLocale = LocaleProviderWidget.of(context).locale;
 
     return Scaffold(
       appBar: AppBar(

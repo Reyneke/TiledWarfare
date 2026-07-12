@@ -1,20 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
+import 'package:tiled_warfare/l10n/locale_provider.dart';
 import 'package:tiled_warfare/screens/screen_start.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
-
-/// Einfacher Locale-Provider als ChangeNotifier.
-/// Verwaltet die aktuell ausgewählte Sprache.
-class LocaleProvider extends ChangeNotifier {
-  Locale _locale = const Locale('de');
-  Locale get locale => _locale;
-
-  void setLocale(Locale locale) {
-    _locale = locale;
-    notifyListeners();
-  }
-}
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -30,11 +19,13 @@ class _MainAppState extends State<MainApp> {
   void initState() {
     super.initState();
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
+    _localeProvider.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
     AppTheme.themeModeNotifier.removeListener(_onThemeChanged);
+    _localeProvider.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -42,25 +33,32 @@ class _MainAppState extends State<MainApp> {
     setState(() {});
   }
 
+  void _onLocaleChanged() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Tiled Warfare',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: AppTheme.themeModeNotifier.value,
-      localizationsDelegates: [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: [
-        const Locale('de'),
-        const Locale('en'),
-      ],
-      locale: _localeProvider.locale,
-      home: ScreenStart(localeProvider: _localeProvider),
+    return LocaleProviderWidget(
+      notifier: _localeProvider,
+      child: MaterialApp(
+        title: 'Tiled Warfare',
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: AppTheme.themeModeNotifier.value,
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: [
+          const Locale('de'),
+          const Locale('en'),
+        ],
+        locale: _localeProvider.locale,
+        home: ScreenStart(),
+      ),
     );
   }
 }
