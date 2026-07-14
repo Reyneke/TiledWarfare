@@ -1,0 +1,71 @@
+name: Nightly Build
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  build-windows:
+    name: Nightly Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Upload Nightly Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-windows
+          path: build\windows\x64\runner\Release\tiled_warfare.exe
+          compression-level: 0
+
+  build-linux:
+    name: Nightly Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+      - run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - name: Upload Nightly Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-linux
+          path: build/linux/x64/release/bundle/
+          compression-level: 6
+
+  build-android:
+    name: Nightly Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build apk --release --android-skip-build-dependency-validation
+      - name: Upload Nightly Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+          compression-level: 0
+</write_to_file>
+<task_progress>
+- [x] `.github/workflows/release.yml` erstellt
+- [x] `.github/workflows/nightly.yml` erstellt
+- [ ] Secrets dokumentieren
+</task_progress>
+</write_to_file>

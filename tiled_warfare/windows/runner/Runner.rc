@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "tiled_warfare" "\0"
+            VALUE "CompanyName", "TiledWare Studios" "\0"
+            VALUE "FileDescription", "Tiled Warfare - A turn-based tactical game" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "tiled_warfare" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 TiledWare Studios. All rights reserved." "\0"
             VALUE "OriginalFilename", "tiled_warfare.exe" "\0"
-            VALUE "ProductName", "tiled_warfare" "\0"
+            VALUE "ProductName", "Tiled Warfare" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

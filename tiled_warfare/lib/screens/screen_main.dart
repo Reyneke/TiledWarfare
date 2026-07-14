@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
+import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/widgets/widget_caretaker.dart';
 import 'package:tiled_warfare/widgets/widget_map_loader.dart';
@@ -47,31 +48,19 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// Die geparsten Spawnpunkte aus der Map.
   List<({String name, double x, double y})> _spawnPoints = [];
 
-  /// Aktualisiert das Profil mit den Überlebenden des Gefechts,
-  /// entfernt Tote aus dem Personal, speichert Match-Historie und persistiert.
-  void _syncUnitsAfterBattle() {
-    final player = ObjectPlayer();
-    final profile = ObjectProfile();
-    profile.syncUnitsAfterBattle(player.unitList);
-    profile.saveToStorage();
-  }
-
-  /// Fügt Match-Records für das abgeschlossene Gefecht hinzu.
-  void _addMatchRecords(bool playerWon) {
-    final profile = ObjectProfile();
-    final opponentName = ScreenMain.mapNameFromPath(widget.mapPath);
-    final result = playerWon ? MatchResult.win : MatchResult.loss;
-
-    profile.addMatchRecordsForBattle(
-      opponentName: opponentName,
-      result: result,
-    );
-  }
-
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
+  /// Navigiert zum Ergebnis-Bildschirm, der XP verteilt und speichert.
   void _onGameOver(bool playerWon) {
-    _addMatchRecords(playerWon);
-    _syncUnitsAfterBattle();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScreenBattleResult(
+          playerWon: playerWon,
+          opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
+        ),
+      ),
+    );
   }
 
   /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Karte geladen wurde,
@@ -137,12 +126,16 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
     final confirmed = await _confirmExit(context);
     if (!confirmed || !context.mounted) return;
     
-    // Als Niederlage des Spielers werten (Sieg für den Host)
-    _addMatchRecords(false); // false = Spieler hat verloren
-    _syncUnitsAfterBattle();
-    
     if (context.mounted) {
-      Navigator.of(context).pop();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScreenBattleResult(
+            playerWon: false,
+            opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
+          ),
+        ),
+      );
     }
   }
 

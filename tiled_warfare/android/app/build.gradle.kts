@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.tiled_warfare"
+    namespace = "com.tiledware.tiled_warfare"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,21 +15,31 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.tiled_warfare"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.tiledware.tiled_warfare"
+        minSdk = 21  // Android 5.0 – mature, widely supported
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = 1
+        versionName = "0.1.0"
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // For production releases, use the release keystore:
+            // 1. Uncomment the signingConfigs block below
+            // 2. Set environment variables or use properties
+            /*
+            signingConfig = signingConfigs.getByName("release")
+            */
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../release-keystore.jks")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "android"
+            keyAlias = "tiled_warfare"
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "android"
         }
     }
 }

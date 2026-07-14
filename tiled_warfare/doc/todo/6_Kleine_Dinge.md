@@ -66,4 +66,4 @@ Wie der Name sagt, handelt es sich hier um kleinere Aufgaben, die noch erledigt 
 
 ## Offene Frage
 
-Was gibt es noch zu erledigen auf dem Weg zu einem ersten Prototypen, der unter Windows anderen präsentiert werden soll?
+Was gibt es noch zu erledigen auf dem Weg zu einem ersten Prototypen, der unter Windows, Android und Linux anderen präsentiert werden soll?
