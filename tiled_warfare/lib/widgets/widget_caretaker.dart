@@ -618,8 +618,48 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   }
 
   /// Führt die Angriffe aller Host-Zombies aus.
+  ///
+  /// Der Host entscheidet taktisch, ob er FocusFire einsetzt oder
+  /// jeden Zombie einzeln angreifen lässt. FocusFire wird bevorzugt,
+  /// wenn eine Spieler-Einheit bereits verwundbar ist (woundValue < 50%
+  /// des Maximalwerts) oder mehrere Zombies in Reichweite sind.
+  ///
+  /// Siehe auch: [ObjectHost.performHostFocusFire], [ObjectHost.performAllZombieAttacks].
   void _executeHostAttacks() {
-    final combatLogs = _host.performAllZombieAttacks(_player);
+    // Zähle verfügbare Zombies (lebend, in Reichweite zu irgendeinem Ziel)
+    int zombiesInRange = 0;
+    for (final dumpster in _host.doughDumpsterList) {
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0 || zombie.hasActed) continue;
+        for (final playerUnit in _player.unitList) {
+          if (playerUnit.woundValue <= 0) continue;
+          final zombieHex = _pixelToHex(zombie.position);
+          final cookHex = _pixelToHex(playerUnit.position);
+          final hexDistance = (zombieHex.x - cookHex.x).abs() + (zombieHex.y - cookHex.y).abs();
+          if (hexDistance <= zombie.rangeValue + 1) {
+            zombiesInRange++;
+            break;
+          }
+        }
+      }
+    }
+
+    // FocusFire einsetzen, wenn mindestens 3 Zombies ein Ziel erreichen können
+    // oder eine Spieler-Einheit bereits angeschlagen ist (woundValue <= 5)
+    final bool hasDamagedTarget = _player.unitList.any((u) => u.woundValue > 0 && u.woundValue <= 5);
+    final bool useFocusFire = zombiesInRange >= 3 || (zombiesInRange >= 2 && hasDamagedTarget);
+
+    List<String> combatLogs;
+    if (useFocusFire) {
+      combatLogs = _host.performHostFocusFire(_player);
+      if (combatLogs.isEmpty) {
+        // Fallback: Falls FocusFire kein Ziel fand, normale Angriffe ausführen
+        combatLogs = _host.performAllZombieAttacks(_player);
+      }
+    } else {
+      combatLogs = _host.performAllZombieAttacks(_player);
+    }
+
     for (final log in combatLogs) {
       _showMessage(log);
     }
@@ -1469,7 +1509,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         for (final action in actions)
           PopupMenuItem(
             value: action.name,
-            child: Text(action == CombatAction.melee ? 'Nahkampf' : 'Fernkampf'),
+            child: Text(
+              action == CombatAction.melee ? 'Nahkampf' :
+              action == CombatAction.ranged ? 'Fernkampf' :
+              action == CombatAction.focusFire ? 'FocusFire' :
+              action.name,
+            ),
           ),
       ],
     ).then((value) {
@@ -1487,6 +1532,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         _enterTargetingMode(CombatAction.melee);
       } else if (value == CombatAction.ranged.name) {
         _enterTargetingMode(CombatAction.ranged);
+      } else if (value == CombatAction.focusFire.name) {
+        _enterFocusFireTargetingMode();
       }
     });
   }

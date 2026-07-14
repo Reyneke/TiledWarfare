@@ -656,6 +656,54 @@ abstract class AppLocalizations {
   /// **'Ausgefallen'**
   String get fallenLabel;
 
+  /// Status: Charakter ist bereit (keine Verletzung)
+  ///
+  /// In de, this message translates to:
+  /// **'Bereit'**
+  String get statusReady;
+
+  /// Status: Charakter ist benommen
+  ///
+  /// In de, this message translates to:
+  /// **'Benommen'**
+  String get statusReeling;
+
+  /// Status: Charakter ist verletzt
+  ///
+  /// In de, this message translates to:
+  /// **'Verletzt'**
+  String get statusHurt;
+
+  /// Status: Charakter ist verängstigt
+  ///
+  /// In de, this message translates to:
+  /// **'Verängstigt'**
+  String get statusAfraid;
+
+  /// Status: Charakter ist schwer verletzt
+  ///
+  /// In de, this message translates to:
+  /// **'Schwer verletzt'**
+  String get statusInjured;
+
+  /// Status: Charakter liegt im Sterben
+  ///
+  /// In de, this message translates to:
+  /// **'Sterbend'**
+  String get statusDying;
+
+  /// Status: Charakter ist tot
+  ///
+  /// In de, this message translates to:
+  /// **'Tot'**
+  String get statusDead;
+
+  /// Status: Charakter wurde zerfetzt (übermäßiger Schaden)
+  ///
+  /// In de, this message translates to:
+  /// **'Zerfetzt'**
+  String get statusOverkilled;
+
   /// Tooltip für den Teamarzt-Button
   ///
   /// In de, this message translates to:

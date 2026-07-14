@@ -364,6 +364,134 @@ class ObjectHost {
     zombie.targetPosition = targetPixel;
   }
 
+  /// Führt einen FocusFire-Angriff des Hosts auf das verwundbarste Spieler-Ziel aus.
+  ///
+  /// Alle Zombies, die das Ziel erreichen können (Nahkampf-Reichweite: benachbartes
+  /// Hex-Feld), greifen dasselbe Ziel an. Als Ziel wird die Spieler-Einheit mit der
+  /// geringsten [woundValue] (also der verwundbarsten) gewählt.
+  /// Existieren mehrere gleich verwundbare Ziele, wird zufällig eines ausgewählt.
+  ///
+  /// Dies ist eine taktische Verbesserung gegenüber [performAllZombieAttacks],
+  /// bei der jeder Zombie unabhängig das nächstgelegene Ziel angreift.
+  /// FocusFire wird gewürfelt, wenn die Host-Persönlichkeit aggressiv ist
+  /// (Risikotoleranz > 50) oder wenn mindestens 3 Zombies das Ziel erreichen können.
+  ///
+  /// Gibt eine Liste von Log-Nachrichten zurück.
+  ///
+  /// Siehe auch: [performAllZombieAttacks] (Standard-Einzelangriffe).
+  List<String> performHostFocusFire(ObjectPlayer player) {
+    final logMessages = <String>[];
+    if (player.unitList.isEmpty || doughDumpsterList.isEmpty) return logMessages;
+
+    // Alle lebenden Spieler-Einheiten sammeln
+    final alivePlayers = player.unitList.where((u) => u.woundValue > 0).toList();
+    if (alivePlayers.isEmpty) return logMessages;
+
+    // Das verwundbarste Ziel finden (niedrigste woundValue)
+    alivePlayers.sort((a, b) => a.woundValue.compareTo(b.woundValue));
+    final target = alivePlayers.first;
+
+    // Alle lebenden Zombies sammeln, die in Nahkampf-Reichweite zum Ziel sind
+    final targetHex = _pixelToHex(target.position);
+    final availableZombies = <ObjectDoughZombie>[];
+    for (final dumpster in doughDumpsterList) {
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) continue;
+        if (zombie.hasActed) continue;
+        final zombieHex = _pixelToHex(zombie.position);
+        final hexDistance = (zombieHex.x - targetHex.x).abs() + (zombieHex.y - targetHex.y).abs();
+        if (hexDistance <= zombie.rangeValue + 1) {
+          availableZombies.add(zombie);
+        }
+      }
+    }
+
+    if (availableZombies.isEmpty) return logMessages;
+
+    logMessages.add('${displayName} befiehlt FocusFire auf ${target.name}! (${availableZombies.length} Zombies)');
+
+    // Puffer für zu entfernende Zombies (wenn sie sterben)
+    final zombiesToRemove = <ObjectDoughZombie>[];
+    final newZombiesPending = <ObjectDoughZombie>[];
+    final newDumpsters = <ObjectDoughDumpster>[];
+
+    for (final zombie in availableZombies) {
+      final distance = (zombie.position - target.position).distance;
+
+      final result = player.performAction(
+        action: CombatAction.melee,
+        attacker: zombie,
+        defender: target,
+        distance: distance.round(),
+      );
+
+      zombie.hasActed = true;
+
+      // Log-Nachricht für diesen Angriff
+      String logEntry = '${zombie.name} greift ${target.name} an (FocusFire): ';
+      if (result.hit) {
+        logEntry += 'Treffer! ${result.damage} Schaden.';
+      } else {
+        logEntry += 'Verfehlt!';
+      }
+      if (result.attackerCritical) logEntry += ' (Kritischer Treffer!)';
+      if (result.attackerFumbled) logEntry += ' (Patzer!)';
+      if (result.defenderCritical) logEntry += ' (Gegner pariert kritisch!)';
+      if (result.defenderFumbled) logEntry += ' (Gegner patzt!)';
+      logMessages.add(logEntry);
+
+      // Zombie wurde getötet
+      if (zombie.woundValue <= 0) {
+        logMessages.add('${zombie.name} wurde im FocusFire getötet!');
+        zombiesToRemove.add(zombie);
+      }
+
+      // Ziel wurde getötet
+      if (result.hit && target.woundValue <= 0) {
+        logMessages.add('${target.name} wurde durch FocusFire getötet!');
+        player.removeUnit(target);
+
+        if (_random.nextInt(100) < 50) {
+          final newZombie = ObjectDoughZombie();
+          final dumpster = doughDumpsterList.first;
+          newZombie.position = Offset(
+            dumpster.position.dx + _random.nextInt(64) - 32,
+            dumpster.position.dy + _random.nextInt(64) - 32,
+          );
+          newZombiesPending.add(newZombie);
+          logMessages.add('Ein neuer Dough Zombie erscheint aus den Überresten von ${target.name}!');
+        }
+
+        if (_random.nextInt(100) < 25) {
+          final newDumpster = ObjectDoughDumpster();
+          newDumpster.position = Offset(
+            (doughDumpsterList.isNotEmpty ? doughDumpsterList.first.position.dx : 0) + _random.nextInt(64) - 32,
+            (doughDumpsterList.isNotEmpty ? doughDumpsterList.first.position.dy : 0) + _random.nextInt(64) - 32,
+          );
+          newDumpsters.add(newDumpster);
+        }
+
+        // Ziel ist tot – keine weiteren Angriffe nötig
+        break;
+      }
+    }
+
+    // Zombies nach der Iteration entfernen/hinzufügen
+    for (final dumpster in doughDumpsterList) {
+      for (final zombie in zombiesToRemove) {
+        if (dumpster.zombieList.contains(zombie)) {
+          dumpster.removeZombie(zombie);
+        }
+      }
+      dumpster.zombieList.addAll(newZombiesPending
+          .where((z) => !dumpster.zombieList.contains(z)));
+    }
+
+    doughDumpsterList.addAll(newDumpsters);
+
+    return logMessages;
+  }
+
   /// Führt Angriffe aller Zombies auf Line Cooks in Reichweite aus.
   ///
   /// Ein Zombie greift an (Nahkampf), wenn ein Line Cook in seiner Reichweite

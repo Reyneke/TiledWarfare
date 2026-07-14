@@ -1,7 +1,7 @@
 {
   "id": 3507838291,
   "name": "Reyneke",
-  "creationDate": "2026-07-12T20:05:35.229225",
+  "creationDate": "2026-07-14T13:05:27.962992",
   "budget": 8600,
   "profileImagePath": "profiles/3507838291/profile_1783334585943.png",
   "staff": [
@@ -20,7 +20,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "reeling",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.223589",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Greta",
@@ -37,7 +52,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "hurt",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Antonio",
@@ -54,7 +84,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Maria",
@@ -62,7 +107,7 @@
       "type": "apprentice",
       "levelValue": 1,
       "currentXPValue": 0,
-      "woundValue": 3,
+      "woundValue": 1,
       "attackValue": 40,
       "defenseValue": 20,
       "movementValue": 6,
@@ -71,7 +116,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Viviana",
@@ -79,7 +139,7 @@
       "type": "apprentice",
       "levelValue": 1,
       "currentXPValue": 0,
-      "woundValue": 3,
+      "woundValue": 2,
       "attackValue": 40,
       "defenseValue": 20,
       "movementValue": 6,
@@ -88,7 +148,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Jessica",
@@ -96,7 +171,7 @@
       "type": "apprentice",
       "levelValue": 1,
       "currentXPValue": 0,
-      "woundValue": 3,
+      "woundValue": 1,
       "attackValue": 40,
       "defenseValue": 20,
       "movementValue": 6,
@@ -104,8 +179,23 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "ready",
-      "matchHistory": []
+      "status": "injured",
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Natalia",
@@ -122,7 +212,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Michele",
@@ -139,7 +244,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     },
     {
       "name": "Apprentice: Marco",
@@ -156,7 +276,22 @@
       "moneyValue": 100,
       "xpValue": 25,
       "status": "ready",
-      "matchHistory": []
+      "matchHistory": [
+        {
+          "date": "2026-07-14T12:23:39.224581",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        }
+      ]
     }
   ],
   "medics": [

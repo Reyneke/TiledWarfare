@@ -96,7 +96,65 @@ Wenn Angreifer und Verteidiger ihren Wert gleich gut unterwürfelt haben (gleich
 
 ---
 
-## 5. Schaden
+## 5. FocusFire (Fokussiertes Feuer)
+
+FocusFire ist eine taktische Kampfaktion, bei der mehrere Einheiten gleichzeitig ein einzelnes Ziel angreifen.
+
+### 5.1 Aktivierung
+
+- **Spieler-Seite:** Der Spieler wählt einen seiner Tokens aus und aktiviert über das Aktionsmenü die FocusFire-Funktion. Ihm werden daraufhin alle für ihn angreifbaren feindlichen Ziele angezeigt. Klickt er ein Ziel an, greifen alle seine Einheiten, die dazu in der Lage sind (in Reichweite, noch nicht gehandelt, nicht tot), dieses Ziel gemeinsam an.
+- **Host-Seite:** Der Host kann FocusFire auf eine beliebige Spieler-Einheit ausführen. Alle Host-Tokens, die dazu in der Lage sind, greifen dann das gewählte Ziel an.
+
+### 5.2 Ablauf
+
+1. Der Spieler/Host wählt ein Ziel für den FocusFire-Angriff aus.
+2. Das System ermittelt alle eigenen Einheiten, die folgende Kriterien erfüllen:
+   - Der Token hat in dieser Runde noch nicht gehandelt (`hasActed == false`).
+   - Der Token ist nicht tot (`woundValue > 0`).
+   - Der Token ist in Reichweite zum Ziel (Nahkampf: benachbartes Feld; Fernkampf: ≤ eigener `rangeValue`).
+3. Jede dieser Einheiten führt nacheinander einen **einzelnen Angriff** gemäß den Standard-Kampfregeln (Abschnitt 4) auf das gemeinsame Ziel aus.
+4. Nach jedem Angriff wird der angreifende Token als "hat gehandelt" markiert, sodass er in dieser Runde keine weiteren Aktionen ausführen kann.
+5. Das Ziel erhält für **jeden** einzelnen Angriff den kumulativen Malus (siehe Abschnitt 6).
+
+### 5.3 Taktische Bedeutung
+
+- FocusFire ermöglicht es, besonders gefährliche Gegner (z. B. Boss-Tokens) konzentriert auszuschalten.
+- Da jeder Angreifer nach seinem Angriff als "hat gehandelt" gilt, kann die Einheit in derselben Runde nicht mehr bewegt werden oder anderweitig agieren.
+- Der kumulative Verteidigungs-Malus (Abschnitt 6) macht jeden weiteren Angriff im selben Zug wahrscheinlicher erfolgreich.
+
+---
+
+## 6. Kumulativer Malus/Bonus bei mehrfachen Angriffen
+
+Jedes Mal, wenn ein Token angegriffen wird, erhält er einen **kumulativen Malus**, unabhängig davon, ob der Angriff getroffen hat oder nicht.
+
+### 6.1 Effekte
+
+- Der **Verteidiger** erleidet **−5 % auf seinen `defenseValue`** pro bereits erfolgtem Angriff in dieser Runde.
+- Der **Angreifer** erhält **+5 % auf seinen `attackValue`** pro bereits erfolgtem Angriff auf dasselbe Ziel in dieser Runde.
+
+### 6.2 Kumulation
+
+- Der Malus/Bonus ist **kumulativ**: nach 3 Angriffen auf dasselbe Ziel beträgt der Malus −15 % Verteidigung und der Bonus für den nächsten Angreifer +15 %.
+- Die Berechnung erfolgt **nach** dem aktuellen Angriff: Der aktuelle Angriff wird noch ohne den Zähler abgewickelt, und erst danach wird der Zähler erhöht. Nachfolgende Angriffe in derselben Runde profitieren dann vom erhöhten Malus/Bonus.
+
+### 6.3 Beispiel
+
+Ein Zombie (Defense 40) wird in einer Runde dreimal angegriffen:
+
+1. **1. Angriff:** Verteidigung = 40 (noch kein Malus). Nach dem Angriff → `timesAttackedThisTurn = 1`.
+2. **2. Angriff:** Verteidigung = 40 − 5 = **35** (Malus −5 %). Nach dem Angriff → `timesAttackedThisTurn = 2`.
+3. **3. Angriff:** Verteidigung = 40 − 10 = **30** (Malus −10 %). Nach dem Angriff → `timesAttackedThisTurn = 3`.
+
+Gleichzeitig erhält der Angreifer beim 2. Angriff +5 % auf seinen `attackValue`, beim 3. Angriff +10 % usw.
+
+### 6.4 Zurücksetzen
+
+Der Zähler (`timesAttackedThisTurn`) wird zu Beginn jedes neuen Zuges der kontrollierenden Seite zurückgesetzt. Dies gilt sowohl für Spieler- als auch für Host-Einheiten.
+
+---
+
+## 7. Schaden
 
 - Wenn der Angreifer erfolgreich trifft, wird **`damageValue`** (des Angreifers) von der **`woundValue`** (des Verteidigers) abgezogen.
 - **Formel:** `Neue woundValue = Aktuelle woundValue − damageValue`
@@ -108,7 +166,7 @@ Wenn Angreifer und Verteidiger ihren Wert gleich gut unterwürfelt haben (gleich
 
 ---
 
-## 6. Zugsystem / Aktionspunkte
+## 8. Zugsystem / Aktionspunkte
 
 Jeder Token erhält pro Zug **2 Aktionspunkte (AP)**.
 
@@ -126,7 +184,7 @@ Jeder Token erhält pro Zug **2 Aktionspunkte (AP)**.
 
 ---
 
-## 7. Initiative / Zugreihenfolge
+## 9. Initiative / Zugreihenfolge
 
 - Zu Beginn jeder Runde wird für jede Seite (Spieler/KI) ein **Initiative-Wurf** mit einem W100 durchgeführt.
 - Die Seite mit dem **höheren Ergebnis** beginnt die Runde und darf zuerst alle ihre Tokens aktivieren.
@@ -134,7 +192,7 @@ Jeder Token erhält pro Zug **2 Aktionspunkte (AP)**.
 
 ---
 
-## 8. Niederlage / Spielende
+## 10. Niederlage / Spielende
 
 - Ein Spieler gilt als **besiegt**, wenn alle seine Tokens eine `woundValue` ≤ 0 haben (also alle Einheiten tot sind).
 - Das Spiel endet sofort, sobald eine Seite keine einsatzfähigen Tokens mehr besitzt.
@@ -142,7 +200,7 @@ Jeder Token erhält pro Zug **2 Aktionspunkte (AP)**.
 
 ---
 
-## 9. Beispiele
+## 11. Beispiele
 
 ### Beispiel 1: Nahkampf
 
@@ -173,7 +231,7 @@ Jeder Token erhält pro Zug **2 Aktionspunkte (AP)**.
 
 ---
 
-## 10. Zusammenfassung der wichtigsten Regeln (Kurzreferenz)
+## 12. Zusammenfassung der wichtigsten Regeln (Kurzreferenz)
 
 | Situation                                   | Ergebnis                                                |
 |---------------------------------------------|---------------------------------------------------------|

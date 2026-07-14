@@ -330,6 +330,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fallenLabel => 'Fallen';
 
   @override
+  String get statusReady => 'Ready';
+
+  @override
+  String get statusReeling => 'Reeling';
+
+  @override
+  String get statusHurt => 'Hurt';
+
+  @override
+  String get statusAfraid => 'Afraid';
+
+  @override
+  String get statusInjured => 'Injured';
+
+  @override
+  String get statusDying => 'Dying';
+
+  @override
+  String get statusDead => 'Dead';
+
+  @override
+  String get statusOverkilled => 'Overkilled';
+
+  @override
   String get medicAssignTooltip => 'Assign team medic';
 
   @override

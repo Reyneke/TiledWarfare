@@ -332,6 +332,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get fallenLabel => 'Ausgefallen';
 
   @override
+  String get statusReady => 'Bereit';
+
+  @override
+  String get statusReeling => 'Benommen';
+
+  @override
+  String get statusHurt => 'Verletzt';
+
+  @override
+  String get statusAfraid => 'Verängstigt';
+
+  @override
+  String get statusInjured => 'Schwer verletzt';
+
+  @override
+  String get statusDying => 'Sterbend';
+
+  @override
+  String get statusDead => 'Tot';
+
+  @override
+  String get statusOverkilled => 'Zerfetzt';
+
+  @override
   String get medicAssignTooltip => 'Teamarzt einsetzen';
 
   @override

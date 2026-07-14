@@ -268,6 +268,50 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     );
   }
 
+  /// Gibt eine Farbe basierend auf dem Verletzungsstatus zurück.
+  /// Stellt 5 visuelle Stufen dar (statt vorher nur 3), damit der Spieler
+  /// ohne Detailansicht den Gesundheitszustand erkennen kann.
+  Color _statusAvatarColor(CharacterStatus status) {
+    switch (status) {
+      case CharacterStatus.ready:
+        return Colors.green;
+      case CharacterStatus.reeling:
+        return Colors.lightGreenAccent;
+      case CharacterStatus.hurt:
+        return Colors.orange;
+      case CharacterStatus.afraid:
+      case CharacterStatus.injured:
+        return Colors.deepOrange;
+      case CharacterStatus.dying:
+        return Colors.red;
+      case CharacterStatus.dead:
+      case CharacterStatus.overkilled:
+        return Colors.grey;
+    }
+  }
+
+  /// Gibt den lokalisierten Text für einen [CharacterStatus] zurück.
+  String _statusText(AppLocalizations l10n, CharacterStatus status) {
+    switch (status) {
+      case CharacterStatus.ready:
+        return l10n.statusReady;
+      case CharacterStatus.reeling:
+        return l10n.statusReeling;
+      case CharacterStatus.hurt:
+        return l10n.statusHurt;
+      case CharacterStatus.afraid:
+        return l10n.statusAfraid;
+      case CharacterStatus.injured:
+        return l10n.statusInjured;
+      case CharacterStatus.dying:
+        return l10n.statusDying;
+      case CharacterStatus.dead:
+        return l10n.statusDead;
+      case CharacterStatus.overkilled:
+        return l10n.statusOverkilled;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -432,16 +476,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                         );
                       },
                       leading: CircleAvatar(
-                        backgroundColor: canFight
-                            ? (isReady
-                                ? Colors.green
-                                : theme.colorScheme.surfaceContainerHighest)
-                            : theme.colorScheme.error,
+                        backgroundColor: _statusAvatarColor(character.status),
                         child: Icon(
                           character is ObjectLineCook
                               ? Icons.restaurant
                               : Icons.school,
-                          color: canFight ? null : Colors.white,
+                          color: character.status == CharacterStatus.dying
+                              ? Colors.white
+                              : null,
                         ),
                       ),
                       title: Text(
@@ -450,12 +492,12 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                       subtitle: Text(
                         [
                           '❤️ ${character.woundValue}',
+                          _statusText(l10n, character.status),
                           '⚔️ ${character.attackValue}',
                           '🛡️ ${character.defenseValue}',
                           '🏃 ${character.movementValue}',
                           if (character is ObjectLineCook)
                             '🎯 ${character.rangeValue}',
-                          if (!canFight) '💀 ${l10n.fallenLabel}',
                         ].join(' · '),
                       ),
                       trailing: Row(
@@ -472,6 +514,21 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                                 if (medic.treatCharacter(character)) {
                                   setState(() {});
                                   _saveState();
+                                  ScaffoldMessenger.of(context)
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.treatmentSuccess(character.name)),
+                                      ),
+                                    );
+                                } else {
+                                  ScaffoldMessenger.of(context)
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.treatmentFailed),
+                                      ),
+                                    );
                                 }
                               },
                             ),
@@ -488,6 +545,21 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                                 if (medic.emergencyShot(character)) {
                                   setState(() {});
                                   _saveState();
+                                  ScaffoldMessenger.of(context)
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.emergencyShotSuccess(character.name)),
+                                      ),
+                                    );
+                                } else {
+                                  ScaffoldMessenger.of(context)
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(l10n.emergencyShotFailed),
+                                      ),
+                                    );
                                 }
                               },
                             ),

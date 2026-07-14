@@ -450,6 +450,39 @@
     "description": "Label for fallen characters"
   },
 
+  "statusReady": "Ready",
+  "@statusReady": {
+    "description": "Status: character is ready (no injury)"
+  },
+  "statusReeling": "Reeling",
+  "@statusReeling": {
+    "description": "Status: character is reeling"
+  },
+  "statusHurt": "Hurt",
+  "@statusHurt": {
+    "description": "Status: character is hurt"
+  },
+  "statusAfraid": "Afraid",
+  "@statusAfraid": {
+    "description": "Status: character is afraid"
+  },
+  "statusInjured": "Injured",
+  "@statusInjured": {
+    "description": "Status: character is injured"
+  },
+  "statusDying": "Dying",
+  "@statusDying": {
+    "description": "Status: character is dying"
+  },
+  "statusDead": "Dead",
+  "@statusDead": {
+    "description": "Status: character is dead"
+  },
+  "statusOverkilled": "Overkilled",
+  "@statusOverkilled": {
+    "description": "Status: character was overkilled (excessive damage)"
+  },
+
   "medicAssignTooltip": "Assign team medic",
   "@medicAssignTooltip": {
     "description": "Tooltip for the team medic button"

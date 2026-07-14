@@ -122,6 +122,8 @@ class ObjectPlayer {
     if (unit.rangeValue > 0) {
       actions.add(CombatAction.ranged);
     }
+    // FocusFire ist verfügbar, solange die Einheit noch nicht gehandelt hat
+    actions.add(CombatAction.focusFire);
     return actions;
   }
 

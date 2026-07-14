@@ -450,6 +450,39 @@
     "description": "Label für gefallene Charaktere"
   },
 
+  "statusReady": "Bereit",
+  "@statusReady": {
+    "description": "Status: Charakter ist bereit (keine Verletzung)"
+  },
+  "statusReeling": "Benommen",
+  "@statusReeling": {
+    "description": "Status: Charakter ist benommen"
+  },
+  "statusHurt": "Verletzt",
+  "@statusHurt": {
+    "description": "Status: Charakter ist verletzt"
+  },
+  "statusAfraid": "Verängstigt",
+  "@statusAfraid": {
+    "description": "Status: Charakter ist verängstigt"
+  },
+  "statusInjured": "Schwer verletzt",
+  "@statusInjured": {
+    "description": "Status: Charakter ist schwer verletzt"
+  },
+  "statusDying": "Sterbend",
+  "@statusDying": {
+    "description": "Status: Charakter liegt im Sterben"
+  },
+  "statusDead": "Tot",
+  "@statusDead": {
+    "description": "Status: Charakter ist tot"
+  },
+  "statusOverkilled": "Zerfetzt",
+  "@statusOverkilled": {
+    "description": "Status: Charakter wurde zerfetzt (übermäßiger Schaden)"
+  },
+
   "medicAssignTooltip": "Teamarzt einsetzen",
   "@medicAssignTooltip": {
     "description": "Tooltip für den Teamarzt-Button"
