@@ -1,5 +1,3 @@
-import 'package:tiled_warfare/models/match_record.dart';
-import 'package:tiled_warfare/objects/object_host.dart';
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
 ///

@@ -361,7 +361,7 @@ class ScreenCharacterDetail extends StatelessWidget {
   String _formatKdRatio(ObjectApprentice c) {
     final totalKills = c.matchHistory.fold(0, (sum, m) => sum + m.kills);
     final totalDeaths = c.matchHistory.fold(0, (sum, m) => sum + m.deaths);
-    if (totalDeaths == 0) return '${totalKills}.0';
+    if (totalDeaths == 0) return '$totalKills.0';
     return (totalKills / totalDeaths).toStringAsFixed(1);
   }
 

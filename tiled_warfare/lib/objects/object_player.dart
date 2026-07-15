@@ -114,16 +114,22 @@ class ObjectPlayer {
   /// Gibt die Liste der verfügbaren [CombatAction]s für eine Einheit zurück.
   ///
   /// Die Verfügbarkeit hängt von den Eigenschaften der Einheit ab:
-  /// - "Nahkampf" (melee) ist immer verfügbar.
+  /// - "Nahkampf" (melee) ist immer verfügbar (solange die Einheit noch nicht gehandelt hat).
   /// - "Fernkampf" (ranged) ist nur verfügbar, wenn `rangeValue > 0`.
   /// - "FocusFire" (focusFire) ist nur verfügbar, wenn noch keine Aktion ausgeführt wurde.
+  ///
+  /// Einheiten, die bereits gehandelt haben (hasActed == true), erhalten keine Kampfaktionen.
   List<CombatAction> getAvailableActions(ObjectApprentice unit) {
-    final actions = <CombatAction>[CombatAction.melee];
-    if (unit.rangeValue > 0) {
-      actions.add(CombatAction.ranged);
+    final actions = <CombatAction>[];
+    // Nur Aktionen anbieten, wenn die Einheit noch nicht gehandelt hat
+    if (!unit.hasActed) {
+      actions.add(CombatAction.melee);
+      if (unit.rangeValue > 0) {
+        actions.add(CombatAction.ranged);
+      }
+      // FocusFire ist verfügbar, solange die Einheit noch nicht gehandelt hat
+      actions.add(CombatAction.focusFire);
     }
-    // FocusFire ist verfügbar, solange die Einheit noch nicht gehandelt hat
-    actions.add(CombatAction.focusFire);
     return actions;
   }
 
@@ -357,6 +363,14 @@ class ObjectPlayer {
   /// Jeder Angreifer muss in Reichweite sein und darf in dieser Runde noch nicht
   /// gehandelt haben.
   ///
+  /// Jeder Angreifer wählt automatisch die beste verfügbare Aktion:
+  /// - Nahkampf (melee), wenn der Gegner benachbart ist (distance <= 1)
+  /// - Fernkampf (ranged), wenn der Gegner in Fernkampf-Reichweite liegt
+  /// - Der Angreifer wird übersprungen, wenn keine Reichweite gegeben ist
+  ///
+  /// Der Parameter [action] dient nur als Fallback und wird pro Angreifer
+  /// durch die beste Aktion ersetzt.
+  ///
   /// Gibt ein [FocusFireResult] mit den Ergebnissen aller Einzelangriffe zurück.
   FocusFireResult performFocusFire({
     required List<ObjectToken> attackers,
@@ -376,13 +390,21 @@ class ObjectPlayer {
 
       final distance = getDistance(attacker);
 
-      // Reichweiten-Prüfung: Für Nahkampf brauchen wir benachbarte Felder (distance <= 1),
-      // für Fernkampf muss die Reichweite passen
-      if (action == CombatAction.melee && distance > 1) continue;
-      if (action == CombatAction.ranged && distance > attacker.rangeValue) continue;
+      // Beste Aktion für diesen Angreifer wählen:
+      // - Nahkampf (melee), wenn das Ziel benachbart ist (distance <= 1)
+      // - Fernkampf (ranged), wenn das Ziel in Fernkampf-Reichweite liegt
+      // - Sonst: Angreifer überspringen
+      CombatAction bestAction;
+      if (distance <= 1) {
+        bestAction = CombatAction.melee;
+      } else if (attacker.rangeValue > 0 && distance <= attacker.rangeValue) {
+        bestAction = CombatAction.ranged;
+      } else {
+        continue; // Angreifer ist außer Reichweite
+      }
 
       final result = performAction(
-        action: action,
+        action: bestAction,
         attacker: attacker,
         defender: defender,
         distance: distance,

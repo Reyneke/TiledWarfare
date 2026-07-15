@@ -4,7 +4,6 @@ import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/models/match_record.dart';
-import 'package:tiled_warfare/services/crash_logger.dart';
 
 /// Ergebnis-Bildschirm nach einem Kampf.
 ///
@@ -55,7 +54,7 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
       }
 
       final leveledUp = unit.levelValue > oldLevel;
-      final isAlive = unit.woundValue < 100;
+      final isAlive = unit.woundValue > 0;
 
       results.add(_CharacterResult(
         name: unit.name,

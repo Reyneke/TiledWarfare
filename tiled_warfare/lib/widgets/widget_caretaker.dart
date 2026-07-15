@@ -1280,6 +1280,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Führt eine FocusFire-Aktion für den Spieler aus.
   /// Alle verfügbaren Spieler-Einheiten greifen das gewählte Ziel an,
   /// sofern sie in Reichweite sind.
+  ///
+  /// Jeder Angreifer wählt automatisch die beste Aktion:
+  /// - Nahkampf (melee), wenn das Ziel benachbart ist (distance <= 1)
+  /// - Fernkampf (ranged), wenn das Ziel in Fernkampf-Reichweite liegt
+  /// - Überspringt den Angreifer, wenn keine Reichweite gegeben ist
   void _executeFocusFireOnTarget(ObjectToken target) {
     if (_selectedToken == null) return;
 
@@ -1296,11 +1301,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       return;
     }
 
-    // FocusFire ausführen
+    // FocusFire ausführen – jeder Angreifer wählt automatisch die beste
+    // verfügbare Aktion (Nahkampf wenn benachbart, sonst Fernkampf)
     final result = _player.performFocusFire(
       attackers: availableAttackers,
       defender: target,
-      action: CombatAction.melee,
+      action: CombatAction.melee, // Wird pro Angreifer überschrieben
       getDistance: (attacker) => _HexUtils.distance(
         x1: _getTokenHex(attacker).x,
         y1: _getTokenHex(attacker).y,
@@ -1342,38 +1348,53 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   }
 
   /// Versetzt das Spiel in den FocusFire-Targeting-Modus.
-  /// Zeigt alle Gegner als mögliche Ziele an (jeder Gegner, der von mindestens
-  /// einer Einheit erreicht werden kann).
+  /// Zeigt nur Gegner als Ziele an, die von mindestens einer verfügbaren
+  /// Einheit erreicht werden können (Nahkampf ODER Fernkampf).
   /// Ein Klick auf einen Gegner startet den Massenangriff.
   void _enterFocusFireTargetingMode() {
     if (!_isPlayerTurn || _isGameOver) return;
 
-    // Prüfen, ob es überhaupt Einheiten gibt, die noch nicht gehandelt haben
-    bool hasAvailableUnits = false;
+    // Verfügbare Einheiten sammeln (noch nicht gehandelt)
+    final availableUnits = <ObjectApprentice>[];
     for (final unit in _player.unitList) {
       if (unit.woundValue <= 0) continue;
       if (!unit.hasActed) {
-        hasAvailableUnits = true;
-        break;
+        availableUnits.add(unit);
       }
     }
 
-    if (!hasAvailableUnits) {
+    if (availableUnits.isEmpty) {
       _showMessage('Keine Einheiten verfügbar für FocusFire!');
       return;
     }
 
-    // Alle Gegner als mögliche Ziele markieren
+    // Nur Gegner als Ziele markieren, die von mindestens einer verfügbaren
+    // Einheit erreicht werden können (Nahkampf ODER Fernkampf).
     final targets = <ObjectToken>{};
     for (final renderInfo in _allTokens) {
       if (renderInfo.isPlayerUnit) continue;
       final enemy = renderInfo.token;
       if (enemy.woundValue <= 0) continue;
-      targets.add(enemy);
+
+      // Prüfen, ob mindestens ein verfügbarer Angreifer diesen Gegner
+      // im Nahkampf (distance <= 1) ODER Fernkampf (distance <= rangeValue)
+      // erreichen kann
+      final enemyHex = _getTokenHex(enemy);
+      for (final unit in availableUnits) {
+        final unitHex = _getTokenHex(unit);
+        final distance = _HexUtils.distance(
+          x1: unitHex.x, y1: unitHex.y,
+          x2: enemyHex.x, y2: enemyHex.y,
+        );
+        if (distance <= 1 || (unit.rangeValue > 0 && distance <= unit.rangeValue)) {
+          targets.add(enemy);
+          break; // Ein Angreifer reicht, um das Ziel anzuzeigen
+        }
+      }
     }
 
     if (targets.isEmpty) {
-      _showMessage('Keine Ziele für FocusFire!');
+      _showMessage('Kein Gegner in Nahkampf- oder Fernkampf-Reichweite für FocusFire!');
       return;
     }
 
@@ -1398,10 +1419,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     return message;
   }
 
-  /// Entfernt alle Tokens mit woundValue <= 0 und räumt den Cache auf.
+  /// Entfernt alle toten Tokens (woundValue <= 0) und räumt den Cache auf.
+  ///
+  /// **Wichtig:** Tote Spieler-Einheiten werden NICHT aus _player.unitList
+  /// entfernt, damit der Battle Result Screen sie beim _computeResults()
+  /// noch auslesen kann (Anzeige der Gefallenen, XP-Verteilung etc.).
+  /// Sie werden lediglich über _buildAllTokens() (woundValue <= 0-Check
+  /// im Rendering) ausgeblendet.
   void _removeDeadTokens() {
-    // Tote Spieler-Einheiten entfernen
-    _player.unitList.removeWhere((cook) => cook.woundValue <= 0);
+    // Tote Spieler-Einheiten werden NICHT aus unitList entfernt,
+    // damit der Battle Result Screen sie auslesen kann.
+    // Das Rendering filtert sie bereits über _buildAllTokens().
 
     // Tote Zombies aus allen Dumpstern entfernen
     for (final dumpster in _host.doughDumpsterList) {
@@ -1434,13 +1462,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Kehrt zum Restaurant-Bildschirm zurück und aktualisiert das Profil.
   void _returnToRestaurant() {
     _updateProfileAfterBattle();
-    // Benachrichtige ScreenMain über das Spiel-Ende (Callback)
-    widget.onGameOver?.call(!_player.unitList.isEmpty);
-    if (context.mounted) {
-      // Nur eine Route zurückspringen (zu ScreenRestaurant),
-      // nicht bis zum Startbildschirm
-      Navigator.of(context).pop();
-    }
+    // Benachrichtige ScreenMain über das Spiel-Ende (Callback).
+    // ScreenMain führt dann ein Navigator.pushReplacement zum
+    // ScreenBattleResult durch, daher KEIN zusätzliches .pop() hier.
+    widget.onGameOver?.call(_player.unitList.isNotEmpty);
   }
 
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.
@@ -2051,6 +2076,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         ),
       );
     }
+
+    // FocusFire-Button ist immer verfügbar (solange noch nicht gehandelt),
+    // da er alle Einheiten gleichzeitig angreifen lässt
+    buttons.add(const SizedBox(height: 4));
+    buttons.add(
+      ElevatedButton.icon(
+        onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
+            ? () => _enterFocusFireTargetingMode()
+            : null,
+        icon: const Icon(Icons.group_work, size: 16),
+        label: const Text('FocusFire'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    );
 
     return buttons;
   }

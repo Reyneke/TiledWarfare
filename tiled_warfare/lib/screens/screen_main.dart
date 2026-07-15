@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:tiled_warfare/models/match_record.dart';
-import 'package:tiled_warfare/objects/object_player.dart';
-import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/widgets/widget_caretaker.dart';
@@ -48,6 +45,11 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// Die geparsten Spawnpunkte aus der Map.
   List<({String name, double x, double y})> _spawnPoints = [];
 
+  /// Flag, ob die Karte bereits einmal zentriert wurde.
+  /// Verhindert, dass _centerMap() bei jedem Build erneut aufgerufen wird
+  /// (was die Benutzer-Interaktion mit der Karte stören würde).
+  bool _mapCentered = false;
+
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
   /// Navigiert zum Ergebnis-Bildschirm, der XP verteilt und speichert.
   void _onGameOver(bool playerWon) {
@@ -76,6 +78,9 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
       _tileHeight = tileHeight;
       _mapWidth = mapWidth;
       _mapHeight = mapHeight;
+      // Karten-Dimensionen haben sich geändert → Zentrierung beim nächsten
+      // PostFrameCallback neu ausführen
+      _mapCentered = true;
     });
   }
 
@@ -233,10 +238,16 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Zentriere die Karte nach dem ersten Build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _centerMap();
-    });
+    // Zentriere die Karte NUR beim ersten Build oder wenn sich die
+    // Karten-Dimensionen geändert haben. Das _mapCentered-Flag verhindert,
+    // dass _centerMap() bei jedem setState() erneut aufgerufen wird,
+    // was die Benutzer-Interaktion (Scrollen/Zoomen) stören würde.
+    if (!_mapCentered) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _centerMap();
+        _mapCentered = true;
+      });
+    }
 
     return PopScope(
       canPop: false,

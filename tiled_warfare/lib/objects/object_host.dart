@@ -408,7 +408,7 @@ class ObjectHost {
 
     if (availableZombies.isEmpty) return logMessages;
 
-    logMessages.add('${displayName} befiehlt FocusFire auf ${target.name}! (${availableZombies.length} Zombies)');
+    logMessages.add('$displayName befiehlt FocusFire auf ${target.name}! (${availableZombies.length} Zombies)');
 
     // Puffer für zu entfernende Zombies (wenn sie sterben)
     final zombiesToRemove = <ObjectDoughZombie>[];

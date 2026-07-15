@@ -39,7 +39,7 @@ class CrashLogger {
         .split('.')
         .first;
     _logFile = File('$logDir/crash_$timestamp.log');
-    _logSink = await _logFile!.openWrite(mode: FileMode.append);
+    _logSink = _logFile!.openWrite(mode: FileMode.append);
 
     // Flutter-Fehler abfangen
     FlutterError.onError = (FlutterErrorDetails details) {

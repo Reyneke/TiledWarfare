@@ -1,7 +1,7 @@
 {
   "id": 3507838291,
   "name": "Reyneke",
-  "creationDate": "2026-07-14T13:05:27.962992",
+  "creationDate": "2026-07-16T00:03:18.363325",
   "budget": 8600,
   "profileImagePath": "profiles/3507838291/profile_1783334585943.png",
   "staff": [
@@ -10,7 +10,7 @@
       "imagePath": "assets/images/token/token_cook_basic.png",
       "type": "apprentice",
       "levelValue": 1,
-      "currentXPValue": 0,
+      "currentXPValue": 10,
       "woundValue": 1,
       "attackValue": 40,
       "defenseValue": 20,
@@ -19,7 +19,7 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "reeling",
+      "status": "injured",
       "matchHistory": [
         {
           "date": "2026-07-14T12:23:39.223589",
@@ -34,6 +34,20 @@
           "result": "loss",
           "kills": 0,
           "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
         }
       ]
     },
@@ -42,7 +56,7 @@
       "imagePath": "assets/images/token/token_cook_basic.png",
       "type": "apprentice",
       "levelValue": 1,
-      "currentXPValue": 0,
+      "currentXPValue": 10,
       "woundValue": 1,
       "attackValue": 40,
       "defenseValue": 20,
@@ -51,7 +65,7 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "hurt",
+      "status": "injured",
       "matchHistory": [
         {
           "date": "2026-07-14T12:23:39.224581",
@@ -62,6 +76,20 @@
         },
         {
           "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
           "opponentName": "Street Battle",
           "result": "loss",
           "kills": 0,
@@ -74,8 +102,8 @@
       "imagePath": "assets/images/token/token_cook_basic.png",
       "type": "apprentice",
       "levelValue": 1,
-      "currentXPValue": 0,
-      "woundValue": 3,
+      "currentXPValue": 10,
+      "woundValue": 1,
       "attackValue": 40,
       "defenseValue": 20,
       "movementValue": 6,
@@ -83,7 +111,7 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "ready",
+      "status": "injured",
       "matchHistory": [
         {
           "date": "2026-07-14T12:23:39.224581",
@@ -94,6 +122,20 @@
         },
         {
           "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
           "opponentName": "Street Battle",
           "result": "loss",
           "kills": 0,
@@ -115,7 +157,7 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "ready",
+      "status": "injured",
       "matchHistory": [
         {
           "date": "2026-07-14T12:23:39.224581",
@@ -126,6 +168,20 @@
         },
         {
           "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
           "opponentName": "Street Battle",
           "result": "loss",
           "kills": 0,
@@ -162,6 +218,20 @@
           "result": "loss",
           "kills": 0,
           "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
         }
       ]
     },
@@ -179,7 +249,7 @@
       "rangeValue": 3,
       "moneyValue": 100,
       "xpValue": 25,
-      "status": "injured",
+      "status": "reeling",
       "matchHistory": [
         {
           "date": "2026-07-14T12:23:39.224581",
@@ -190,6 +260,20 @@
         },
         {
           "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
           "opponentName": "Street Battle",
           "result": "loss",
           "kills": 0,
@@ -226,6 +310,20 @@
           "result": "loss",
           "kills": 0,
           "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
         }
       ]
     },
@@ -258,6 +356,20 @@
           "result": "loss",
           "kills": 0,
           "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
         }
       ]
     },
@@ -286,6 +398,20 @@
         },
         {
           "date": "2026-07-14T13:05:08.673209",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-15T22:33:18.454285",
+          "opponentName": "Street Battle",
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0
+        },
+        {
+          "date": "2026-07-16T00:02:58.974443",
           "opponentName": "Street Battle",
           "result": "loss",
           "kills": 0,
