@@ -236,116 +236,20 @@ class ObjectPlayer {
     final bool defenseCritical = defenseRoll <= 5;
 
     // Ergebnisbestimmung gemäß combat_rules.md
-    final CombatResult result;
-    if (attackFumble) {
-      // Patzer Angreifer: Angreifer erleidet automatisch Schaden
-      final selfDamage = (defender.damageValue / 2).ceil();
-      attacker.woundValue -= selfDamage;
-      result = CombatResult(
-        hit: false,
-        damage: 0,
-        attackerFumbled: true,
-        defenderFumbled: defenseFumble,
-        attackerCritical: false,
-        defenderCritical: defenseCritical,
-      );
-    } else if (defenseCritical) {
-      // Kritischer Erfolg Verteidiger: kein Schaden, Angreifer erleidet halben Schaden
-      final counterDamage = (defender.damageValue / 2).ceil();
-      attacker.woundValue -= counterDamage;
-      result = CombatResult(
-        hit: false,
-        damage: 0,
-        attackerFumbled: false,
-        defenderFumbled: defenseFumble,
-        attackerCritical: attackCritical,
-        defenderCritical: true,
-      );
-    } else if (attackCritical) {
-      // Kritischer Erfolg Angreifer: doppelter Schaden
-      final doubleDamage = attacker.damageValue * 2;
-      defender.woundValue -= doubleDamage;
-      result = CombatResult(
-        hit: true,
-        damage: doubleDamage,
-        attackerFumbled: false,
-        defenderFumbled: defenseFumble,
-        attackerCritical: true,
-        defenderCritical: false,
-      );
-    } else if (defenseFumble) {
-      // Patzer Verteidiger: doppelter Schaden
-      final doubleDamage = attacker.damageValue * 2;
-      defender.woundValue -= doubleDamage;
-      result = CombatResult(
-        hit: true,
-        damage: doubleDamage,
-        attackerFumbled: false,
-        defenderFumbled: true,
-        attackerCritical: false,
-        defenderCritical: false,
-      );
-    } else if (!attackSuccess) {
-      // Angreifer verfehlt
-      result = CombatResult(
-        hit: false,
-        damage: 0,
-        attackerFumbled: false,
-        defenderFumbled: defenseFumble,
-        attackerCritical: false,
-        defenderCritical: false,
-      );
-    } else {
-      // Beide haben gewürfelt – Vergleichswert berechnen
-      final int attackerComparison = effectiveAttackValue - attackRoll;
-      final int defenderComparison = effectiveDefenseValue - defenseRoll;
-
-      if (!defenseSuccess || attackerComparison > defenderComparison) {
-        // Angreifer trifft
-        defender.woundValue -= attacker.damageValue;
-        result = CombatResult(
-          hit: true,
-          damage: attacker.damageValue,
-          attackerFumbled: false,
-          defenderFumbled: defenseFumble,
-          attackerCritical: false,
-          defenderCritical: false,
-        );
-      } else if (attackerComparison == defenderComparison) {
-        // Gleichstand → Münzwurf (W100 > 51 → Angreifer gewinnt)
-        final coinToss = _rollD100();
-        if (coinToss > 51) {
-          defender.woundValue -= attacker.damageValue;
-          result = CombatResult(
-            hit: true,
-            damage: attacker.damageValue,
-            attackerFumbled: false,
-            defenderFumbled: defenseFumble,
-            attackerCritical: false,
-            defenderCritical: false,
-          );
-        } else {
-          result = CombatResult(
-            hit: false,
-            damage: 0,
-            attackerFumbled: false,
-            defenderFumbled: defenseFumble,
-            attackerCritical: false,
-            defenderCritical: false,
-          );
-        }
-      } else {
-        // Verteidiger verteidigt erfolgreich
-        result = CombatResult(
-          hit: false,
-          damage: 0,
-          attackerFumbled: false,
-          defenderFumbled: defenseFumble,
-          attackerCritical: false,
-          defenderCritical: false,
-        );
-      }
-    }
+    final CombatResult result = _resolveCombat(
+      attacker: attacker,
+      defender: defender,
+      effectiveAttackValue: effectiveAttackValue,
+      effectiveDefenseValue: effectiveDefenseValue,
+      attackRoll: attackRoll,
+      attackSuccess: attackSuccess,
+      attackFumble: attackFumble,
+      attackCritical: attackCritical,
+      defenseRoll: defenseRoll,
+      defenseSuccess: defenseSuccess,
+      defenseFumble: defenseFumble,
+      defenseCritical: defenseCritical,
+    );
 
     // Kumulativen Malus-Zähler für den Verteidiger erhöhen.
     // Dies geschieht NACH der Kampfberechnung, sodass der aktuelle Angriff
@@ -354,6 +258,177 @@ class ObjectPlayer {
     defender.timesAttackedThisTurn++;
 
     return result;
+  }
+
+  /// Kern der Kampfberechnung: Bestimmt das [CombatResult] anhand der
+  /// Würfelergebnisse und der geltenden Regeln (Patzer, Kritische Erfolge,
+  /// Vergleichswert-System).
+  ///
+  /// Ausgelagert aus [performAction] zur besseren Lesbarkeit und Testbarkeit.
+  CombatResult _resolveCombat({
+    required ObjectToken attacker,
+    required ObjectToken defender,
+    required int effectiveAttackValue,
+    required int effectiveDefenseValue,
+    required int attackRoll,
+    required bool attackSuccess,
+    required bool attackFumble,
+    required bool attackCritical,
+    required int defenseRoll,
+    required bool defenseSuccess,
+    required bool defenseFumble,
+    required bool defenseCritical,
+  }) {
+    // 1. Spezialfälle vor der normalen Kampfberechnung prüfen
+    // (Patzer des Angreifers, kritische Erfolge)
+    if (attackFumble) {
+      return _handleAttackerFumble(attacker, defender, defenseFumble, defenseCritical);
+    }
+    if (defenseCritical) {
+      return _handleDefenderCritical(attacker, defender, attackCritical, defenseFumble);
+    }
+    if (attackCritical) {
+      return _handleAttackerCritical(attacker, defender, defenseFumble);
+    }
+    if (defenseFumble) {
+      return _handleDefenderFumble(attacker, defender);
+    }
+    if (!attackSuccess) {
+      return _handleMiss(defenseFumble);
+    }
+
+    // 2. Normaler Kampf: Beide haben bestanden – Vergleichswert entscheidet
+    return _resolveNormalCombat(
+      attacker: attacker,
+      defender: defender,
+      effectiveAttackValue: effectiveAttackValue,
+      effectiveDefenseValue: effectiveDefenseValue,
+      attackRoll: attackRoll,
+      defenseRoll: defenseRoll,
+      defenseSuccess: defenseSuccess,
+      defenseFumble: defenseFumble,
+    );
+  }
+
+  /// Patzer des Angreifers (Wurf > 90): Angreifer erleidet selbst Schaden.
+  CombatResult _handleAttackerFumble(
+    ObjectToken attacker,
+    ObjectToken defender,
+    bool defenseFumble,
+    bool defenseCritical,
+  ) {
+    final selfDamage = (defender.damageValue / 2).ceil();
+    attacker.woundValue -= selfDamage;
+    return CombatResult(
+      hit: false,
+      damage: 0,
+      attackerFumbled: true,
+      defenderFumbled: defenseFumble,
+      defenderCritical: defenseCritical,
+    );
+  }
+
+  /// Kritischer Erfolg des Verteidigers (Wurf ≤ 5):
+  /// Angriff abgewehrt, Angreifer erleidet halben Schaden.
+  CombatResult _handleDefenderCritical(
+    ObjectToken attacker,
+    ObjectToken defender,
+    bool attackCritical,
+    bool defenseFumble,
+  ) {
+    final counterDamage = (defender.damageValue / 2).ceil();
+    attacker.woundValue -= counterDamage;
+    return CombatResult(
+      hit: false,
+      damage: 0,
+      attackerCritical: attackCritical,
+      defenderCritical: true,
+      defenderFumbled: defenseFumble,
+    );
+  }
+
+  /// Kritischer Erfolg des Angreifers (Wurf ≤ 5):
+  /// Automatischer Treffer mit doppeltem Schaden.
+  CombatResult _handleAttackerCritical(
+    ObjectToken attacker,
+    ObjectToken defender,
+    bool defenseFumble,
+  ) {
+    final doubleDamage = attacker.damageValue * 2;
+    defender.woundValue -= doubleDamage;
+    return CombatResult(
+      hit: true,
+      damage: doubleDamage,
+      attackerCritical: true,
+      defenderFumbled: defenseFumble,
+    );
+  }
+
+  /// Patzer des Verteidigers (Wurf > 90):
+  /// Automatischer Treffer mit doppeltem Schaden.
+  CombatResult _handleDefenderFumble(ObjectToken attacker, ObjectToken defender) {
+    final doubleDamage = attacker.damageValue * 2;
+    defender.woundValue -= doubleDamage;
+    return CombatResult(
+      hit: true,
+      damage: doubleDamage,
+      defenderFumbled: true,
+    );
+  }
+
+  /// Angreifer verfehlt (Wurf über effektivem Angriffswert).
+  CombatResult _handleMiss(bool defenseFumble) {
+    return CombatResult(
+      hit: false,
+      damage: 0,
+      defenderFumbled: defenseFumble,
+    );
+  }
+
+  /// Normaler Kampf: Beide haben ihre Würfe bestanden.
+  /// Der Vergleichswert (effektiver Wert − Wurf) entscheidet, wer gewinnt.
+  CombatResult _resolveNormalCombat({
+    required ObjectToken attacker,
+    required ObjectToken defender,
+    required int effectiveAttackValue,
+    required int effectiveDefenseValue,
+    required int attackRoll,
+    required int defenseRoll,
+    required bool defenseSuccess,
+    required bool defenseFumble,
+  }) {
+    final int attackerComparison = effectiveAttackValue - attackRoll;
+    final int defenderComparison = effectiveDefenseValue - defenseRoll;
+
+    if (!defenseSuccess || attackerComparison > defenderComparison) {
+      // Angreifer trifft
+      defender.woundValue -= attacker.damageValue;
+      return CombatResult(
+        hit: true,
+        damage: attacker.damageValue,
+        defenderFumbled: defenseFumble,
+      );
+    }
+
+    if (attackerComparison == defenderComparison) {
+      // Gleichstand → Münzwurf (W100 > 51 → Angreifer gewinnt)
+      final coinToss = _rollD100();
+      if (coinToss > 51) {
+        defender.woundValue -= attacker.damageValue;
+        return CombatResult(
+          hit: true,
+          damage: attacker.damageValue,
+          defenderFumbled: defenseFumble,
+        );
+      }
+    }
+
+    // Verteidiger verteidigt erfolgreich
+    return CombatResult(
+      hit: false,
+      damage: 0,
+      defenderFumbled: defenseFumble,
+    );
   }
 
   /// Führt eine FocusFire-Aktion aus: Alle verfügbaren Angreifer greifen

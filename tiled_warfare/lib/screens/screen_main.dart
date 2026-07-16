@@ -50,6 +50,11 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// (was die Benutzer-Interaktion mit der Karte stören würde).
   bool _mapCentered = false;
 
+  /// Aktueller Kamera-Fokus-AnimationController, der bei jedem
+  /// Aufruf von [_focusCameraOn] neu erstellt wird. Muss disposet
+  /// werden, um Memory Leaks zu vermeiden.
+  AnimationController? _focusAnimationController;
+
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
   /// Navigiert zum Ergebnis-Bildschirm, der XP verteilt und speichert.
   void _onGameOver(bool playerWon) {
@@ -80,7 +85,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
       _mapHeight = mapHeight;
       // Karten-Dimensionen haben sich geändert → Zentrierung beim nächsten
       // PostFrameCallback neu ausführen
-      _mapCentered = true;
+      _mapCentered = false;
     });
   }
 
@@ -146,6 +151,9 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
   /// Fokussiert die Kamera auf eine bestimmte Karten-Position (sanftes Scrollen).
   /// Zentriert die übergebene Karten-Position in der Mitte des Bildschirms.
+  ///
+  /// Vorherige Animation-Controller werden korrekt disposet, um Memory Leaks
+  /// zu vermeiden.
   void _focusCameraOn(Offset mapPosition) {
     final controller = _mapTransformationController;
     if (controller == null) return;
@@ -175,10 +183,15 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
       // Nur animieren, wenn die Entfernung signifikant ist (> 50 Pixel)
       if ((currentTranslation - targetTranslation).distance > 50) {
+        // Vorherigen AnimationController disposten, um Memory Leaks zu vermeiden
+        _focusAnimationController?.dispose();
+
         final animationController = AnimationController(
           vsync: this,
           duration: const Duration(milliseconds: 300),
         );
+        _focusAnimationController = animationController;
+
         final animation = Tween<Offset>(
           begin: currentTranslation,
           end: targetTranslation,
@@ -193,6 +206,15 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
             ..translate(value.dx, value.dy)
             ..scale(currentScale);
           controller.value = matrix;
+        });
+
+        animation.addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            animationController.dispose();
+            if (_focusAnimationController == animationController) {
+              _focusAnimationController = null;
+            }
+          }
         });
 
         animationController.forward();

@@ -6,7 +6,6 @@ import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
-import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
@@ -208,6 +207,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Animation-Controller für sanfte Token-Bewegungen (Host Tokens gleiten).
   AnimationController? _tokenAnimationController;
 
+  /// Merkt sich die Startpositionen aller Tokens, die gerade animiert werden.
+  /// Wird benötigt, da ObjectToken kein _animationStart-Feld hat.
+  final Map<ObjectToken, Offset> _tokenAnimationStarts = {};
+
   @override
   void initState() {
     super.initState();
@@ -235,32 +238,36 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     super.dispose();
   }
 
-  /// Animiert alle Tokens mit gesetztem targetPosition in einem Frame.
-  /// Gleitet sie sanft von ihrer aktuellen Position zur Zielposition.
+  /// Animiert alle Tokens mit gesetztem targetPosition über die
+  /// Animationsdauer des [_tokenAnimationController] (300ms).
+  ///
+  /// Verwendet den normierten Fortschritt [0..1] des AnimationControllers
+  /// statt einer frame-rate-abhängigen Interpolation, sodass die Animation
+  /// auf 60 Hz und 120 Hz Displays gleich schnell läuft.
   void _animateTokens() {
     bool needsUpdate = false;
+    final progress = _tokenAnimationController?.value ?? 0.0;
+    // Ease-Out für sanftes Abbremsen
+    final t = 1.0 - (1.0 - progress) * (1.0 - progress);
     
-    // Alle Tokens mit targetPosition animieren
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
       if (token.targetPosition == null) continue;
       
-      // Linear interpolieren
-      final currentPos = token.position;
-      final target = token.targetPosition!;
-      final diff = (target - currentPos);
+      if (!_tokenAnimationStarts.containsKey(token)) {
+        _tokenAnimationStarts[token] = token.position;
+      }
       
-      // Schritt pro Frame: 20% der verbleibenden Distanz
-      // Dadurch entsteht ein sanftes "Easing-Out" Gefühl
-      token.position = Offset(
-        currentPos.dx + diff.dx * 0.25,
-        currentPos.dy + diff.dy * 0.25,
-      );
+      token.position = Offset.lerp(
+        _tokenAnimationStarts[token]!,
+        token.targetPosition!,
+        t,
+      )!;
       
-      // Prüfen, ob wir nah genug am Ziel sind
-      if (diff.distance < 2.0) {
-        token.position = target;
+      if (progress >= 1.0) {
+        token.position = token.targetPosition!;
         token.targetPosition = null;
+        _tokenAnimationStarts.remove(token);
       }
       needsUpdate = true;
     }
@@ -613,8 +620,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Führt die Bewegung aller Host-Zombies aus.
   void _executeHostMovement() {
     _host.moveAllZombiesTowardsTargets(_player.unitList);
-    // Token-Animation starten, damit Zombies sanft gleiten
-    _tokenAnimationController?.repeat();
+    // Token-Animation starten, damit Zombies sanft gleiten.
+    // reset() + forward() statt repeat(), damit die Animation nach
+    // einmaligem Durchlauf endet und die Tokens an ihrer Zielposition
+    // stoppen. reset() ist nötig, da forward() auf einem bereits
+    // abgeschlossenen Controller sofort fertig wäre.
+    _tokenAnimationController?.reset();
+    _tokenAnimationController?.forward();
   }
 
   /// Führt die Angriffe aller Host-Zombies aus.
@@ -1060,6 +1072,23 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     return null;
   }
 
+  /// Prüft Spielende nach einer Kampfaktion und leitet ggf. den
+  /// automatischen Zug-Ende ein.
+  ///
+  /// Extrahiert aus [_executeActionOnTarget] und [_executeFocusFireOnTarget],
+  /// da beide dieselbe Logik nach einem Angriff durchführen.
+  /// Gibt `true` zurück, wenn das Spiel beendet ist (Host besiegt).
+  bool _handlePostCombatState() {
+    if (_host.isDefeated) {
+      _isGameOver = true;
+      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
+      setState(() {});
+      return true;
+    }
+    _checkAutoEndPlayerTurn();
+    return false;
+  }
+
   /// Behandelt einen Tap im Targeting-Modus.
   void _handleTapInTargetingMode(ObjectToken tappedToken) {
     if (_targetableEnemies.contains(tappedToken)) {
@@ -1265,16 +1294,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // Tote Einheiten entfernen
     _removeDeadTokens();
 
-    // Prüfen, ob der Host besiegt wurde
-    if (_host.isDefeated) {
-      _isGameOver = true;
-      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
-      setState(() {});
-      return;
-    }
-
-    // Prüfen, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben
-    _checkAutoEndPlayerTurn();
+    // Prüfen, ob der Host besiegt wurde und ggf. Zug automatisch beenden
+    if (_handlePostCombatState()) return;
   }
 
   /// Führt eine FocusFire-Aktion für den Spieler aus.
@@ -1335,16 +1356,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // Tote Einheiten entfernen
     _removeDeadTokens();
 
-    // Prüfen, ob der Host besiegt wurde
-    if (_host.isDefeated) {
-      _isGameOver = true;
-      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
-      setState(() {});
-      return;
-    }
-
-    // Prüfen, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben
-    _checkAutoEndPlayerTurn();
+    // Prüfen, ob der Host besiegt wurde und ggf. Zug automatisch beenden
+    if (_handlePostCombatState()) return;
   }
 
   /// Versetzt das Spiel in den FocusFire-Targeting-Modus.
@@ -1451,21 +1464,24 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     _invalidateCache();
   }
 
-  /// Aktualisiert das Profil mit den Überlebenden des Gefechts,
-  /// entfernt Tote aus dem Personal und speichert.
-  void _updateProfileAfterBattle() {
-    final profile = ObjectProfile();
-    profile.syncUnitsAfterBattle(_player.unitList);
-    profile.saveToStorage();
-  }
-
   /// Kehrt zum Restaurant-Bildschirm zurück und aktualisiert das Profil.
   void _returnToRestaurant() {
-    _updateProfileAfterBattle();
+    // Prüfen, ob der Spieler tatsächlich gewonnen hat (mindestens eine
+    // Einheit mit woundValue > 0). _player.unitList.isEmpty allein reicht
+    // nicht, da tote Einheiten nicht aus unitList entfernt werden (sie
+    // werden vom Battle Result Screen für die Anzeige der Gefallenen
+    // benötigt).
+    final hasAliveUnits = _player.unitList.any((u) => u.woundValue > 0);
     // Benachrichtige ScreenMain über das Spiel-Ende (Callback).
     // ScreenMain führt dann ein Navigator.pushReplacement zum
     // ScreenBattleResult durch, daher KEIN zusätzliches .pop() hier.
-    widget.onGameOver?.call(_player.unitList.isNotEmpty);
+    // Wichtig: KEIN _updateProfileAfterBattle() hier aufrufen!
+    // ScreenBattleResult._computeResults() führt den Profil-Sync (inkl.
+    // Rettungswürfe + Speichern) selbst durch. Ein vorheriger Sync würde
+    // die woundValues toter Einheiten durch Rettungswürfe verändern, bevor
+    // _computeResults() sie für die Überlebenden-/Gefallenen-Anzeige
+    // auslesen kann.
+    widget.onGameOver?.call(hasAliveUnits);
   }
 
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.

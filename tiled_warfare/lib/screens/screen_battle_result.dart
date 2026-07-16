@@ -43,6 +43,9 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   void _computeResults() {
     final units = _player.unitList;
     final results = <_CharacterResult>[];
+    _survivors = 0;
+    _fallen = 0;
+    _totalXpGained = 0;
 
     for (final unit in units) {
       final xpGained = widget.playerWon ? _calculateXp(unit) : _calculateXpLoss(unit);
@@ -64,7 +67,6 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
         newLevel: unit.levelValue,
         xpGained: xpGained,
         leveledUp: leveledUp,
-        statusBefore: unit.status,
       ));
 
       if (isAlive) {
@@ -89,14 +91,13 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   }
 
   /// XP-Berechnung bei Sieg: Basis 50 + 10 pro Level + Bonus für Überlebende.
-  int _calculateXp(ObjectApprentice unit) {
-    return 50 + (unit.levelValue * 10);
-  }
+  int _calculateXp(ObjectApprentice unit) => _xpForLevel(unit.levelValue);
 
   /// XP-Berechnung bei Niederlage: nur 10 XP.
-  int _calculateXpLoss(ObjectApprentice unit) {
-    return 10;
-  }
+  int _calculateXpLoss(ObjectApprentice _) => 10;
+
+  /// Reine XP-Funktion ohne Objektabhängigkeit — leichter testbar.
+  static int _xpForLevel(int level) => 50 + (level * 10);
 
   @override
   Widget build(BuildContext context) {
@@ -166,8 +167,10 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
                 icon: const Icon(Icons.arrow_back),
                 label: const Text('Zurück zum Restaurant'),
                 onPressed: () {
-                  // Bis zur Restaurant-Screen zurück navigieren
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  // Eine Ebene zurück zur Restaurant-Screen navigieren.
+                  // Der Stack ist: ScreenStart → ScreenRestaurant → ScreenBattleResult
+                  // pop() geht zurück zu ScreenRestaurant.
+                  Navigator.of(context).pop();
                 },
               ),
             ],
@@ -240,7 +243,6 @@ class _CharacterResult {
   final int newLevel;
   final int xpGained;
   final bool leveledUp;
-  final CharacterStatus statusBefore;
 
   const _CharacterResult({
     required this.name,
@@ -250,6 +252,5 @@ class _CharacterResult {
     required this.newLevel,
     required this.xpGained,
     required this.leveledUp,
-    required this.statusBefore,
   });
 }
