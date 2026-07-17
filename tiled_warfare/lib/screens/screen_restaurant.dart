@@ -241,7 +241,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                             mapEntry.previewPath!,
                             width: 80,
                             height: 80,
-                            fit: BoxFit.cover
+                            fit: BoxFit.cover,
                             errorBuilder: (_, _, _) => _buildPlaceholder(theme),
                           )
                         : _buildPlaceholder(theme),
