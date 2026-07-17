@@ -68,8 +68,14 @@ class ObjectPlayer {
 
   ObjectPlayer._internal();
 
-  /// Liste aller vom Spieler kontrollierten Einheiten.
+  /// Liste aller vom Spieler kontrollierten Einheiten (nur Überlebende).
   List<ObjectApprentice> unitList = [];
+
+  /// Vollständige Liste aller Einheiten, die in die aktuelle Schlacht
+  /// mitgenommen wurden (inkl. gefallener). Wird beim Aufruf von
+  /// [ObjectProfile.selectTeamForBattle] befüllt und dient dem
+  /// Ergebnis-Bildschirm zur korrekten Auflistung aller Teilnehmer.
+  List<ObjectApprentice> battleRoster = [];
 
   /// Zufallsgenerator für Kampfwürfe.
   final Random _random = Random();

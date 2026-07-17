@@ -37,20 +37,22 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   @override
   void initState() {
     super.initState();
-    _computeResults();
+    _computeAndApplyResults();
   }
 
-  void _computeResults() {
-    final units = _player.unitList;
+  void _computeAndApplyResults() {
+    // battleRoster enthält alle Einheiten, die in die Schlacht gezogen sind
+    // (inkl. gefallener). unitList enthält nur die Überlebenden.
+    final allUnits = _player.battleRoster;
+    final survivors = _player.unitList;
     final results = <_CharacterResult>[];
-    _survivors = 0;
-    _fallen = 0;
-    _totalXpGained = 0;
+    int survivorCount = 0;
+    int fallenCount = 0;
+    int totalXpGained = 0;
 
-    for (final unit in units) {
-      final xpGained = widget.playerWon ? _calculateXp(unit) : _calculateXpLoss(unit);
+    for (final unit in allUnits) {
+      final xpGained = widget.playerWon ? _xpForWin(unit.levelValue) : _xpForLoss;
       final oldLevel = unit.levelValue;
-      final oldXp = unit.currentXPValue;
 
       if (xpGained > 0) {
         unit.earnXP(xpGained);
@@ -61,7 +63,7 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
 
       results.add(_CharacterResult(
         name: unit.name,
-        characterType: unit is ObjectTeamMedic ? 'Medic' : unit.runtimeType.toString().split('.').last.replaceAll('Object', ''),
+        characterType: _characterDisplayType(unit),
         wasAlive: isAlive,
         oldLevel: oldLevel,
         newLevel: unit.levelValue,
@@ -70,10 +72,10 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
       ));
 
       if (isAlive) {
-        _survivors++;
-        _totalXpGained += xpGained;
+        survivorCount++;
+        totalXpGained += xpGained;
       } else {
-        _fallen++;
+        fallenCount++;
       }
     }
 
@@ -83,21 +85,41 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
       result: widget.playerWon ? MatchResult.win : MatchResult.loss,
     );
 
-    // Sync units + save
-    _profile.syncUnitsAfterBattle(units);
-    _profile.saveToStorage();
+    // Sync units + save (fire-and-forget with error handling)
+    // Nur die Überlebenden (unitList) an syncUnitsAfterBattle übergeben,
+    // da ObjectProfile._performSurvivalRolls() die Gefallenen aus _personal
+    // selbst ermittelt und Rettungswürfe durchführt.
+    _profile.syncUnitsAfterBattle(survivors);
+    _profile.saveToStorage().catchError((Object error) {
+      debugPrint('Failed to save profile after battle: $error');
+      return false;
+    });
 
     _characterResults = results;
+    _survivors = survivorCount;
+    _fallen = fallenCount;
+    _totalXpGained = totalXpGained;
   }
 
   /// XP-Berechnung bei Sieg: Basis 50 + 10 pro Level + Bonus für Überlebende.
-  int _calculateXp(ObjectApprentice unit) => _xpForLevel(unit.levelValue);
+  static int _xpForWin(int level) => 50 + (level * 10);
 
   /// XP-Berechnung bei Niederlage: nur 10 XP.
-  int _calculateXpLoss(ObjectApprentice _) => 10;
+  static const int _xpForLoss = 10;
 
-  /// Reine XP-Funktion ohne Objektabhängigkeit — leichter testbar.
-  static int _xpForLevel(int level) => 50 + (level * 10);
+  /// Liefert einen lesbaren Anzeigenamen für den Charakter-Typ.
+  static String _characterDisplayType(ObjectApprentice unit) {
+    if (unit is ObjectTeamMedic) return 'Medic';
+    // Extrahiert den Klassennamen ohne 'Object'-Präfix.
+    // z. B. ObjectLineCook → LineCook, ObjectApprentice → Apprentice
+    final fullType = unit.runtimeType.toString();
+    final simpleName = fullType.contains('.')
+        ? fullType.split('.').last
+        : fullType;
+    return simpleName.startsWith('Object')
+        ? simpleName.substring('Object'.length)
+        : simpleName;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +257,7 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   }
 }
 
+/// Ergebnis-Datensatz für einen einzelnen Charakter nach dem Kampf.
 class _CharacterResult {
   final String name;
   final String characterType;

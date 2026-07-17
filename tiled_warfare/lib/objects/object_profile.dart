@@ -148,6 +148,10 @@ class ObjectProfile {
   /// Gibt eine Liste der ausgewählten Charaktere zurück.
   /// Charaktere im Status `CharacterStatus.dying` werden automatisch
   /// ausgeschlossen.
+  ///
+  /// Speichert außerdem die vollständige Auswahl in
+  /// [ObjectPlayer.battleRoster], damit der Ergebnis-Bildschirm auch
+  /// gefallene Einheiten korrekt auflisten kann.
   List<ObjectApprentice> selectTeamForBattle(List<ObjectApprentice> selected) {
     // Nur einsatzbereite Charaktere erlauben
     final validSelection =
@@ -158,6 +162,10 @@ class ObjectProfile {
     for (final character in validSelection) {
       _player.unitList.add(character);
     }
+
+    // Vollständigen Schlachtzug (inkl. später gefallener) sichern
+    _player.battleRoster = List<ObjectApprentice>.from(validSelection);
+
     return validSelection;
   }
 

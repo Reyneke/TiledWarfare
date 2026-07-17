@@ -4,12 +4,19 @@ import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
-
-class ScreenCharacterDetail extends StatelessWidget {
+class ScreenCharacterDetail extends StatefulWidget {
   final ObjectApprentice character;
+
+  const ScreenCharacterDetail({super.key, required this.character});
+
+  @override
+  State<ScreenCharacterDetail> createState() => _ScreenCharacterDetailState();
+}
+
+class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
   late final ObjectProfile _profile = ObjectProfile();
 
-  ScreenCharacterDetail({super.key, required this.character});
+  ObjectApprentice get character => widget.character;
 
   @override
   Widget build(BuildContext context) {
@@ -173,20 +180,22 @@ class ScreenCharacterDetail extends StatelessWidget {
                 icon: const Icon(Icons.healing, size: 18),
                 label: Text(l10n.treat),
                 onPressed: () {
-                  final medic = _profile.hiredMedics.first;
-                  if (medic.treatCharacter(character)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.treatmentSuccess(character.name)),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.treatmentFailed),
-                      ),
-                    );
-                  }
+                  setState(() {
+                    final medic = _profile.hiredMedics.first;
+                    if (medic.treatCharacter(character)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.treatmentSuccess(character.name)),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.treatmentFailed),
+                        ),
+                      );
+                    }
+                  });
                 },
               ),
             if (needsTreat && needsEmergency) const SizedBox(width: 8),
@@ -197,20 +206,22 @@ class ScreenCharacterDetail extends StatelessWidget {
                 label: Text(l10n.emergencyShot,
                     style: TextStyle(color: Colors.red[700])),
                 onPressed: () {
-                  final medic = _profile.hiredMedics.first;
-                  if (medic.emergencyShot(character)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.emergencyShotSuccess(character.name)),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.emergencyShotFailed),
-                      ),
-                    );
-                  }
+                  setState(() {
+                    final medic = _profile.hiredMedics.first;
+                    if (medic.emergencyShot(character)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.emergencyShotSuccess(character.name)),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.emergencyShotFailed),
+                        ),
+                      );
+                    }
+                  });
                 },
               ),
           ],

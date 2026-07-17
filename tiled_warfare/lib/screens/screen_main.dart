@@ -51,9 +51,15 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   bool _mapCentered = false;
 
   /// Aktueller Kamera-Fokus-AnimationController, der bei jedem
-  /// Aufruf von [_focusCameraOn] neu erstellt wird. Muss disposet
+  /// Aufruf von [_focusCameraOn] neu erstellt wird. Muss disposed
   /// werden, um Memory Leaks zu vermeiden.
   AnimationController? _focusAnimationController;
+
+  @override
+  void dispose() {
+    _focusAnimationController?.dispose();
+    super.dispose();
+  }
 
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
   /// Navigiert zum Ergebnis-Bildschirm, der XP verteilt und speichert.
@@ -105,7 +111,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
   /// Zeigt einen Bestätigungsdialog, bevor das Spiel vorzeitig beendet wird.
   /// Bei Bestätigung wird es als Sieg für den Host (Niederlage für den Spieler) gewertet.
-  Future<bool> _confirmExit(BuildContext context) async {
+  Future<bool> _confirmExit() async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -132,27 +138,25 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
   /// Behandelt das vorzeitige Verlassen des Spiels (Back-Button).
   /// Zeigt einen Bestätigungsdialog und wertet es als Niederlage für den Spieler.
-  void _handleExitGame(BuildContext context) async {
-    final confirmed = await _confirmExit(context);
-    if (!confirmed || !context.mounted) return;
-    
-    if (context.mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ScreenBattleResult(
-            playerWon: false,
-            opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
-          ),
+  Future<void> _handleExitGame() async {
+    final confirmed = await _confirmExit();
+    if (!confirmed || !mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScreenBattleResult(
+          playerWon: false,
+          opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
         ),
-      );
-    }
+      ),
+    );
   }
 
   /// Fokussiert die Kamera auf eine bestimmte Karten-Position (sanftes Scrollen).
   /// Zentriert die übergebene Karten-Position in der Mitte des Bildschirms.
   ///
-  /// Vorherige Animation-Controller werden korrekt disposet, um Memory Leaks
+  /// Vorherige Animation-Controller werden korrekt disposed, um Memory Leaks
   /// zu vermeiden.
   void _focusCameraOn(Offset mapPosition) {
     final controller = _mapTransformationController;
@@ -203,7 +207,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
         animation.addListener(() {
           final value = animation.value;
           final matrix = Matrix4.identity()
-            ..translate(value.dx, value.dy)
+            ..setTranslationRaw(value.dx, value.dy, 0)
             ..scale(currentScale);
           controller.value = matrix;
         });
@@ -219,8 +223,9 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
         animationController.forward();
       }
-    } catch (_) {
+    } catch (e) {
       // Bei Fehlern ignorieren (z. B. wenn der Controller noch nicht bereit ist)
+      debugPrint('_focusCameraOn error: $e');
     }
   }
 
@@ -250,11 +255,12 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
       final translateY = availableHeight / 2 - mapCenterY * scale;
 
       final matrix = Matrix4.identity()
-        ..translate(translateX, translateY)
+        ..setTranslationRaw(translateX, translateY, 0)
         ..scale(scale);
       controller.value = matrix;
-    } catch (_) {
+    } catch (e) {
       // Bei Fehlern ignorieren
+      debugPrint('_centerMap error: $e');
     }
   }
 
@@ -265,17 +271,15 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
     // dass _centerMap() bei jedem setState() erneut aufgerufen wird,
     // was die Benutzer-Interaktion (Scrollen/Zoomen) stören würde.
     if (!_mapCentered) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _centerMap();
-        _mapCentered = true;
-      });
+      _mapCentered = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _centerMap());
     }
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _handleExitGame(context);
+        _handleExitGame();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -283,7 +287,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             tooltip: 'Spiel beenden',
-            onPressed: () => _handleExitGame(context),
+            onPressed: _handleExitGame,
           ),
           actions: [
             ValueListenableBuilder<ThemeMode>(
@@ -322,18 +326,15 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
             // Token-Overlay im Vordergrund
             if (_mapTransformationController != null)
               Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: false,
-                  child: WidgetCaretaker(
-                    tileWidth: _tileWidth,
-                    tileHeight: _tileHeight,
-                    mapWidth: _mapWidth,
-                    mapHeight: _mapHeight,
-                    transformationController: _mapTransformationController!,
-                    spawnPoints: _spawnPoints,
-                    onGameOver: _onGameOver,
-                    onRequestCameraFocus: _focusCameraOn,
-                  ),
+                child: WidgetCaretaker(
+                  tileWidth: _tileWidth,
+                  tileHeight: _tileHeight,
+                  mapWidth: _mapWidth,
+                  mapHeight: _mapHeight,
+                  transformationController: _mapTransformationController!,
+                  spawnPoints: _spawnPoints,
+                  onGameOver: _onGameOver,
+                  onRequestCameraFocus: _focusCameraOn,
                 ),
               ),
           ],

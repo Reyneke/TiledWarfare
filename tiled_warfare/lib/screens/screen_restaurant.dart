@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
@@ -64,19 +66,29 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     setState(() {});
   }
 
+  /// Lädt die Karten-Konfiguration aus assets/maps/maps.json.
   Future<void> _discoverMaps() async {
-    final maps = <MapPreviewEntry>[
-      MapPreviewEntry(
-        mapPath: 'assets/maps/map0',
-        title: 'Street Battle',
-        previewPath: null,
-        tmxPath: 'assets/maps/map0/street_battle.tmx',
-      ),
-    ];
-    setState(() {
-      _mapEntries = maps;
-      _isLoadingMaps = false;
-    });
+    try {
+      final jsonString = await rootBundle.loadString('assets/maps/maps.json');
+      final List<dynamic> jsonList = jsonDecode(jsonString);
+      final maps = jsonList.map((map) => MapPreviewEntry(
+        mapPath: map['mapPath'] as String,
+        title: map['title'] as String,
+        previewPath: map['previewPath'] as String?,
+        tmxPath: map['tmxPath'] as String,
+      )).toList();
+      if (!mounted) return;
+      setState(() {
+        _mapEntries = maps;
+        _isLoadingMaps = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _mapLoadingError = e.toString();
+        _isLoadingMaps = false;
+      });
+    }
   }
 
   void _toggleTheme() {
@@ -148,7 +160,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     setState(() {});
   }
 
-  void _pickImage() async {
+  Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
@@ -183,9 +195,9 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
           _hasCustomImage = true;
           _profile.restaurantLogoPath = destPath;
         });
-        _saveState();
+        await _saveState();
       } catch (e) {
-        debugPrint('Fehler beim Bild-Picking: $e');
+        debugPrint('Image pick error: $e');
         if (!mounted) return;
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,17 +211,16 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     final isSelected = _selectedMapIndex == index;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
           setState(() {
             _selectedMapIndex = isSelected ? null : index;
           });
         },
-        borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: isSelected
               ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: theme.colorScheme.primary,
                     width: 2,
@@ -230,7 +241,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                             mapEntry.previewPath!,
                             width: 80,
                             height: 80,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.cover
                             errorBuilder: (_, _, _) => _buildPlaceholder(theme),
                           )
                         : _buildPlaceholder(theme),
@@ -265,6 +276,17 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
         size: 40,
         color: theme.colorScheme.onSurfaceVariant,
       ),
+    );
+  }
+
+  /// Erzeugt ein einheitliches Fehler-Widget für defekte Bilder.
+  Widget _buildImageErrorWidget(BuildContext context, Object error, StackTrace? stackTrace) {
+    final theme = Theme.of(context);
+    return Container(
+      width: 200,
+      height: 200,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: const Icon(Icons.broken_image, size: 64),
     );
   }
 
@@ -312,6 +334,187 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     }
   }
 
+  /// Baut die sortierte Personal-Liste auf.
+  /// Sortierung: Schwerstverletzte zuerst (höchster [CharacterStatus.severity]).
+  Widget _buildSortedPersonnelList(ThemeData theme, AppLocalizations l10n) {
+    final sortedPersonal = List<ObjectApprentice>.from(_profile.personal)
+      ..sort((a, b) => b.status.severity.compareTo(a.status.severity));
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sortedPersonal.length,
+      itemBuilder: (context, index) {
+        final character = sortedPersonal[index];
+        final isReady = _battleReadyCharacters.contains(character);
+        final bool canFight =
+            character.status != CharacterStatus.dying;
+        final hasMedic = _profile.hiredMedics.isNotEmpty;
+        final needsTreat = character.status != CharacterStatus.ready;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ScreenCharacterDetail(
+                      character: character),
+                ),
+              );
+              setState(() {});
+            },
+            leading: CircleAvatar(
+              backgroundColor: _statusAvatarColor(character.status),
+              child: Icon(
+                character is ObjectLineCook
+                    ? Icons.restaurant
+                    : Icons.school,
+                color: character.status == CharacterStatus.dying
+                    ? Colors.white
+                    : null,
+              ),
+            ),
+            title: Text(
+              '${character.name} (${l10n.level(character.levelValue)})',
+            ),
+            subtitle: Text(
+              [
+                '❤️ ${character.woundValue}',
+                _statusText(l10n, character.status),
+                '⚔️ ${character.attackValue}',
+                '🛡️ ${character.defenseValue}',
+                '🏃 ${character.movementValue}',
+                if (character is ObjectLineCook)
+                  '🎯 ${character.rangeValue}',
+              ].join(' · '),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasMedic && needsTreat)
+                  IconButton(
+                    icon: const Icon(Icons.healing,
+                        color: Colors.green),
+                    tooltip: l10n.medicAssignTooltip,
+                    onPressed: () async {
+                      final medic =
+                          _profile.hiredMedics.first;
+                      if (medic.treatCharacter(character)) {
+                        setState(() {});
+                        await _saveState();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.treatmentSuccess(character.name)),
+                            ),
+                          );
+                      } else {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.treatmentFailed),
+                            ),
+                          );
+                      }
+                    },
+                  ),
+                if (hasMedic &&
+                    (character.woundValue <= 0 ||
+                     character.status == CharacterStatus.dying))
+                  IconButton(
+                    icon: const Icon(Icons.emergency,
+                        color: Colors.red),
+                    tooltip: l10n.emergencyShot,
+                    onPressed: () async {
+                      final medic =
+                          _profile.hiredMedics.first;
+                      if (medic.emergencyShot(character)) {
+                        setState(() {});
+                        await _saveState();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.emergencyShotSuccess(character.name)),
+                            ),
+                          );
+                      } else {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.emergencyShotFailed),
+                            ),
+                          );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.person_remove,
+                        color: Colors.red),
+                    tooltip: l10n.fire,
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(l10n.fire),
+                          content: Text(
+                            '${character.name} ${l10n.fire}?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(l10n.cancel),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: Text(l10n.fire),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        setState(() {
+                          _profile.fireCharacter(character);
+                          _battleReadyCharacters.remove(character);
+                        });
+                        await _saveState();
+                      }
+                    },
+                  ),
+                Checkbox(
+                  value: isReady,
+                  onChanged: canFight
+                      ? (value) {
+                          setState(() {
+                            if (value == true) {
+                              _battleReadyCharacters
+                                  .add(character);
+                            } else {
+                              _battleReadyCharacters
+                                  .remove(character);
+                            }
+                          });
+                        }
+                      : null,
+                ),
+              ],
+            ),
+            isThreeLine: true,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -357,24 +560,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              width: 200,
-                              height: 200,
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              child: const Icon(Icons.broken_image, size: 64),
-                            ),
+                            errorBuilder: _buildImageErrorWidget,
                           )
                         : Image.asset(
                             _profileImagePath,
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              width: 200,
-                              height: 200,
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              child: const Icon(Icons.broken_image, size: 64),
-                            ),
+                            errorBuilder: _buildImageErrorWidget,
                           ),
                   ),
                   Positioned(
@@ -451,146 +644,12 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                 ),
               )
             else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _profile.personal.length,
-                itemBuilder: (context, index) {
-                  final character = _profile.personal[index];
-                  final isReady = _battleReadyCharacters.contains(character);
-                  final bool canFight =
-                      character.status != CharacterStatus.dying;
-                  final hasMedic = _profile.hiredMedics.isNotEmpty;
-                  final needsTreat = character.status != CharacterStatus.ready;
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ScreenCharacterDetail(
-                                character: character),
-                          ),
-                        );
-                      },
-                      leading: CircleAvatar(
-                        backgroundColor: _statusAvatarColor(character.status),
-                        child: Icon(
-                          character is ObjectLineCook
-                              ? Icons.restaurant
-                              : Icons.school,
-                          color: character.status == CharacterStatus.dying
-                              ? Colors.white
-                              : null,
-                        ),
-                      ),
-                      title: Text(
-                        '${character.name} (${l10n.level(character.levelValue)})',
-                      ),
-                      subtitle: Text(
-                        [
-                          '❤️ ${character.woundValue}',
-                          _statusText(l10n, character.status),
-                          '⚔️ ${character.attackValue}',
-                          '🛡️ ${character.defenseValue}',
-                          '🏃 ${character.movementValue}',
-                          if (character is ObjectLineCook)
-                            '🎯 ${character.rangeValue}',
-                        ].join(' · '),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (hasMedic && needsTreat)
-                            IconButton(
-                              icon: const Icon(Icons.healing,
-                                  color: Colors.green),
-                              tooltip: l10n.medicAssignTooltip,
-                              onPressed: () {
-                                final medic =
-                                    _profile.hiredMedics.first;
-                                if (medic.treatCharacter(character)) {
-                                  setState(() {});
-                                  _saveState();
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      SnackBar(
-                                        content: Text(l10n.treatmentSuccess(character.name)),
-                                      ),
-                                    );
-                                } else {
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      SnackBar(
-                                        content: Text(l10n.treatmentFailed),
-                                      ),
-                                    );
-                                }
-                              },
-                            ),
-                          if (hasMedic &&
-                              (character.woundValue <= 0 ||
-                               character.status == CharacterStatus.dying))
-                            IconButton(
-                              icon: const Icon(Icons.emergency,
-                                  color: Colors.red),
-                              tooltip: l10n.emergencyShot,
-                              onPressed: () {
-                                final medic =
-                                    _profile.hiredMedics.first;
-                                if (medic.emergencyShot(character)) {
-                                  setState(() {});
-                                  _saveState();
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      SnackBar(
-                                        content: Text(l10n.emergencyShotSuccess(character.name)),
-                                      ),
-                                    );
-                                } else {
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      SnackBar(
-                                        content: Text(l10n.emergencyShotFailed),
-                                      ),
-                                    );
-                                }
-                              },
-                            ),
-                          Checkbox(
-                            value: isReady,
-                            onChanged: canFight
-                                ? (value) {
-                                    setState(() {
-                                      if (value == true) {
-                                        _battleReadyCharacters
-                                            .add(character);
-                                      } else {
-                                        _battleReadyCharacters
-                                            .remove(character);
-                                      }
-                                    });
-                                  }
-                                : null,
-                          ),
-                        ],
-                      ),
-                      isThreeLine: true,
-                    ),
-                  );
-                },
-              ),
+              _buildSortedPersonnelList(theme, l10n),
             const SizedBox(height: 16),
             FilledButton.icon(
               icon: const Icon(Icons.person_add),
               label: Text(l10n.hireNewPersonnel),
-              onPressed: () {
+              onPressed: () async {
                 final success = _profile.hireApprentice();
                 if (!success) {
                   final l10n = AppLocalizations.of(context)!;
@@ -599,7 +658,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                   );
                 }
                 setState(() {});
-                _saveState();
+                await _saveState();
               },
             ),
             const SizedBox(height: 8),

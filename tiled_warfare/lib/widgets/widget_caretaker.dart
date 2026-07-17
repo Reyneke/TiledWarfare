@@ -555,7 +555,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
       return true;
     }
-    if (_player.unitList.isEmpty) {
+    if (_player.unitList.every((u) => u.woundValue <= 0)) {
       _isGameOver = true;
       _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
       return true;
