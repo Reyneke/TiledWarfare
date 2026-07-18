@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// Manifold provides degree of membership for fuzzy variables based on numerical
 /// values.

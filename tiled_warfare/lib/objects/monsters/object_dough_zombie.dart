@@ -10,5 +10,7 @@ class ObjectDoughZombie extends ObjectToken {
     movementValue: 1,
     damageValue: 1,
     rangeValue: 0,
+    moneyValue: 100,
+    xpValue: 25,
   );
 }

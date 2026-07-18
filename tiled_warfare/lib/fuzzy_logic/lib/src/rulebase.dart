@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// [FuzzyRuleBase] is the set of all rules pertaining to a particular fuzzy
 /// control system. Normally, it is initialized once and then it's [resolve]
@@ -50,6 +50,8 @@ class FuzzyRuleBase {
       }
     }
 
-    rules.forEach((rule) => rule.resolve(inputs, outputs));
+    for (var rule in rules) {
+      rule.resolve(inputs, outputs);
+    }
   }
 }

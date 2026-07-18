@@ -1,0 +1,144 @@
+# ──────────────────────────────────────────────────────────────
+# Nightly Build
+# ──────────────────────────────────────────────────────────────
+# Runs automatically every night (00:00 UTC) and can be triggered
+# manually via workflow_dispatch or on pushes to non-main branches.
+#
+# Environment variables (set in GitHub repo settings > Actions > Variables):
+#   FLUTTER_VERSION  – e.g. "3.44.6"
+#   FLUTTER_CHANNEL  – e.g. "stable"
+# ──────────────────────────────────────────────────────────────
+
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'                 # Every day at 00:00 UTC
+  workflow_dispatch:                     # Allow manual trigger
+  push:
+    branches-ignore:
+      - main
+
+env:
+  FLUTTER_VERSION: '3.44.6'
+  FLUTTER_CHANNEL: 'stable'
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # Shared setup
+  # ================================================================
+  # Extractable into a composite/reusable action if the project
+  # grows – kept inline here for clarity.
+  # ================================================================
+
+  # ── Windows x64 ──────────────────────────────────────────────
+  build-windows:
+    name: Nightly Windows (x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Cache Flutter dependencies (pub)
+        uses: actions/cache@v4
+        with:
+          path: |
+            %APPDATA%\Pub\Cache
+            .dart_tool
+          key: pub-windows-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-windows-
+
+      - run: flutter pub get
+
+      - run: flutter build windows --release
+
+      - name: Upload Nightly Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-windows
+          path: build/windows/x64/runner/Release/tiled_warfare.exe
+          compression-level: 0               # .exe is already compressed
+
+  # ── Linux ────────────────────────────────────────────────────
+  build-linux:
+    name: Nightly Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Cache Flutter dependencies (pub)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-linux-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-linux-
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev
+
+      - run: flutter pub get
+
+      - run: flutter build linux --release
+
+      - name: Upload Nightly Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-linux
+          path: build/linux/x64/release/bundle/
+          compression-level: 6               # directory → good default
+
+  # ── Android APK ──────────────────────────────────────────────
+  build-android:
+    name: Nightly Android (APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - name: Cache Flutter dependencies (pub)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-android-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-android-
+
+      - run: flutter pub get
+
+      # --android-skip-build-dependency-validation is used because
+      # the nightly target API level may not align with the installed
+      # Android SDK platforms. Remove after CI SDK is synced.
+      - run: flutter build apk --release --android-skip-build-dependency-validation
+
+      - name: Upload Nightly Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+          compression-level: 0               # .apk is already zipped

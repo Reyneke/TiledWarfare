@@ -2,12 +2,13 @@ import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:tiled_warfare/objects/object_dough_dumpster.dart';
-import 'package:tiled_warfare/objects/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
+import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
-import 'package:tiled_warfare/objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 
 /// Das WidgetCaretaker-Widget ist für das Erstellen und Verwalten von Objekten
 /// auf der Karte zuständig. Es enthält die Logik für das Platzieren von
@@ -48,10 +49,18 @@ class WidgetCaretaker extends StatefulWidget {
   /// um die Token-Positionen mit dem Zoom/Scroll der Karte zu synchronisieren.
   final TransformationController transformationController;
 
+  /// Callback, um die Kamera auf eine bestimmte Karten-Position zu zentrieren
+  /// (wird an [ScreenMain] weitergereicht, das den [InteractiveViewer] steuert).
+  final void Function(Offset mapPosition)? onRequestCameraFocus;
+
   /// Die geparsten Spawnpunkte aus der Map.
   /// Jeder Spawnpunkt hat einen Namen (z. B. "spawn_player1", "spawn_monster")
   /// und Pixel-Koordinaten (x, y) aus der TMX-Datei.
   final List<({String name, double x, double y})> spawnPoints;
+
+  /// Callback, der aufgerufen wird, wenn das Spiel vorbei ist (Sieg oder Niederlage).
+  /// Der übergebene Boolean ist `true` bei Sieg, `false` bei Niederlage.
+  final void Function(bool playerWon)? onGameOver;
 
   const WidgetCaretaker({
     super.key,
@@ -61,8 +70,9 @@ class WidgetCaretaker extends StatefulWidget {
     required this.mapHeight,
     required this.transformationController,
     this.spawnPoints = const [],
+    this.onGameOver,
+    this.onRequestCameraFocus,
   });
-
 
   @override
   State<WidgetCaretaker> createState() => _WidgetCaretakerState();
@@ -127,7 +137,7 @@ class _HexUtils {
   }
 }
 
-class _WidgetCaretakerState extends State<WidgetCaretaker> {
+class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderStateMixin {
   /// Der Spieler (Singleton).
   final ObjectPlayer _player = ObjectPlayer();
 
@@ -194,6 +204,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Der nächste Snackbar-Schlüssel, um das Stapeln von Snackbars zu vermeiden.
   int _snackBarKey = 0;
 
+  /// Animation-Controller für sanfte Token-Bewegungen (Host Tokens gleiten).
+  AnimationController? _tokenAnimationController;
+
+  /// Merkt sich die Startpositionen aller Tokens, die gerade animiert werden.
+  /// Wird benötigt, da ObjectToken kein _animationStart-Feld hat.
+  final Map<ObjectToken, Offset> _tokenAnimationStarts = {};
+
   @override
   void initState() {
     super.initState();
@@ -201,6 +218,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Auf Änderungen der Transformation (Zoom/Scroll) lauschen,
     // um die Token-Positionen zu aktualisieren
     widget.transformationController.addListener(_onTransformationChanged);
+
+    // Animation-Controller für Token-Animationen (Host gleiten)
+    _tokenAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    )..addListener(_animateTokens);
 
     // Nach der Initialisierung die erste Runde starten
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -211,7 +234,50 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   @override
   void dispose() {
     widget.transformationController.removeListener(_onTransformationChanged);
+    _tokenAnimationController?.dispose();
     super.dispose();
+  }
+
+  /// Animiert alle Tokens mit gesetztem targetPosition über die
+  /// Animationsdauer des [_tokenAnimationController] (300ms).
+  ///
+  /// Verwendet den normierten Fortschritt [0..1] des AnimationControllers
+  /// statt einer frame-rate-abhängigen Interpolation, sodass die Animation
+  /// auf 60 Hz und 120 Hz Displays gleich schnell läuft.
+  void _animateTokens() {
+    bool needsUpdate = false;
+    final progress = _tokenAnimationController?.value ?? 0.0;
+    // Ease-Out für sanftes Abbremsen
+    final t = 1.0 - (1.0 - progress) * (1.0 - progress);
+    
+    for (final renderInfo in _allTokens) {
+      final token = renderInfo.token;
+      if (token.targetPosition == null) continue;
+      
+      if (!_tokenAnimationStarts.containsKey(token)) {
+        _tokenAnimationStarts[token] = token.position;
+      }
+      
+      token.position = Offset.lerp(
+        _tokenAnimationStarts[token]!,
+        token.targetPosition!,
+        t,
+      )!;
+      
+      if (progress >= 1.0) {
+        token.position = token.targetPosition!;
+        token.targetPosition = null;
+        _tokenAnimationStarts.remove(token);
+      }
+      needsUpdate = true;
+    }
+    
+    if (needsUpdate) {
+      _invalidateCache();
+      setState(() {});
+    } else {
+      _tokenAnimationController?.stop();
+    }
   }
 
   @override
@@ -257,26 +323,36 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   }
 
   /// Initialisiert die Spielobjekte: platziert Start-Einheiten auf der Karte.
-  /// Verwendet die Spawnpunkte aus der Map-Datei, falls vorhanden.
-  /// Andernfalls werden die bisherigen Standard-Positionen verwendet.
+  ///
+  /// Nutzt die vom Spieler via [ScreenRestaurant] ausgewählten Einheiten aus
+  /// [ObjectPlayer.unitList] und positioniert sie auf den Spawnpunkten der Map.
+  /// Falls [ObjectPlayer.unitList] noch leer ist (z. B. beim ersten Start ohne
+  /// Restaurant-Verwaltung), werden 3 Standard-Line-Cooks erzeugt.
+  /// Falls keine Spawnpunkte in der Map definiert sind, werden Fallback-
+  /// Positionen verwendet.
   void _initializeGameObjects() {
     // Mit hochauflösendem Zeitstempel seeden, damit jeder Spielstart
     // eine andere Zufallsauswahl ergibt (auch bei schnellen Neustarts)
     final random = Random(DateTime.now().microsecondsSinceEpoch);
-    // Vorherige Spielobjekte entfernen, falls diese Methode erneut aufgerufen wird
-    _player.lineCookList.clear();
+    // Vorherige Host-Objekte entfernen, falls diese Methode erneut aufgerufen wird
     _host.doughDumpsterList.clear();
     _baseMovementValues.clear();
+
+    // ── Spieler-Einheiten initialisieren ──────────────────────────────
+    // Die unitList wurde bereits von ScreenRestaurant via selectTeamForBattle()
+    // befüllt. Falls sie noch leer ist (z. B. Direktstart ohne Restaurant),
+    // legen wir 3 Standard-Line-Cooks an.
+    if (_player.unitList.isEmpty) {
+      for (int i = 0; i < 3; i++) {
+        _player.spawnLineCook();
+      }
+    }
+
     // Spieler-Spawnpunkte (mit "spawn_player" im Namen) finden
     final playerSpawns = widget.spawnPoints
         .where((sp) => sp.name.startsWith('spawn_player'))
         .toList();
-    // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
-    final monsterSpawns = widget.spawnPoints
-        .where((sp) => sp.name.startsWith('spawn_monster'))
-        .toList();
 
-    // Einen zufälligen Spawnpunkt für die Spieler-Gruppe auswählen
     Offset playerSpawnPosition;
     if (playerSpawns.isNotEmpty) {
       final chosenSpawn = playerSpawns[random.nextInt(playerSpawns.length)];
@@ -286,15 +362,25 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       playerSpawnPosition = _hexToPixel(x: 2, y: 5);
     }
 
-    // Alle 3 Spieler-Einheiten gruppiert um den gewählten Spawnpunkt positionieren
-    for (int i = 0; i < 3; i++) {
-      final cook = _player.spawnLineCook();
+    // Vorhandene Spieler-Einheiten um den gewählten Spawnpunkt positionieren
+    final playerUnits = _player.unitList;
+    for (int i = 0; i < playerUnits.length; i++) {
+      final unit = playerUnits[i];
+      // Für Apprentice und Line Cook gleichermaßen positionieren
       // Leichter Versatz, damit die Tokens nicht exakt übereinander liegen
-      cook.position = Offset(
-        playerSpawnPosition.dx + (i - 1) * widget.tileWidth * 0.5,
-        playerSpawnPosition.dy + (i - 1) * widget.tileHeight * 0.5,
+      final roughPosition = Offset(
+        playerSpawnPosition.dx + (i - (playerUnits.length - 1) / 2) * widget.tileWidth * 0.5,
+        playerSpawnPosition.dy + (i - (playerUnits.length - 1) / 2) * widget.tileHeight * 0.5,
       );
+      // Auf das nächstgelegene freie Hex-Feld snappen, damit Tokens nicht
+      // zwischen Hex-Feldern schweben (Bugfix: "Tokens schweben im Nichts")
+      unit.position = _snapToNearestFreeHex(roughPosition, excludeToken: unit);
     }
+
+    // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
+    final monsterSpawns = widget.spawnPoints
+        .where((sp) => sp.name.startsWith('spawn_monster'))
+        .toList();
 
     // Gegnerische Dough Dumpster am Monster-Spawnpunkt platzieren
     final dumpster = ObjectDoughDumpster();
@@ -354,7 +440,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// hasActed-Flag aller Einheiten für eine neue Runde.
   void _resetRoundState() {
     // Spieler-Einheiten
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       _resetTokenRoundState(cook);
     }
     // Gegnerische Dough Dumpster und deren Zombies
@@ -362,6 +448,23 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       _resetTokenRoundState(dumpster);
       for (final zombie in dumpster.zombieList) {
         _resetTokenRoundState(zombie);
+      }
+    }
+  }
+
+  /// Setzt den [timesAttackedThisTurn]-Zähler für alle Tokens zurück.
+  /// Wird zu Beginn jedes neuen Zuges der kontrollierenden Seite aufgerufen,
+  /// um den kumulativen Malus für mehrfach angegriffene Tokens zu löschen.
+  void _resetAllAttackCounters() {
+    // Spieler-Einheiten
+    for (final cook in _player.unitList) {
+      cook.timesAttackedThisTurn = 0;
+    }
+    // Gegnerische Dough Dumpster und deren Zombies
+    for (final dumpster in _host.doughDumpsterList) {
+      dumpster.timesAttackedThisTurn = 0;
+      for (final zombie in dumpster.zombieList) {
+        zombie.timesAttackedThisTurn = 0;
       }
     }
   }
@@ -412,6 +515,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _initiativeMessage = message;
     _statusMessage = _isPlayerTurn ? 'Spieler ist am Zug' : 'Host ist am Zug';
 
+    // Attack-Zähler für die neue Runde zurücksetzen (Malus-System)
+    _resetAllAttackCounters();
+
     _invalidateCache();
 
     // Wenn der Host die Initiative hat, führt er sofort seinen Zug aus
@@ -452,7 +558,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
       return true;
     }
-    if (_player.lineCookList.isEmpty) {
+    if (_player.unitList.every((u) => u.woundValue <= 0)) {
       _isGameOver = true;
       _statusMessage = 'Host hat gewonnen! Alle Spieler-Einheiten besiegt.';
       return true;
@@ -505,7 +611,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Nur in geraden Runden spawnen (alle 2 Runden)
     if (_currentRound % 2 != 0) return;
     
-    final spawnLogs = _host.performAllDumpsterSpawning();
+    // playerUnits übergeben, damit Zombies nicht auf Spieler-Tokens spawnen (Bugfix)
+    final spawnLogs = _host.performAllDumpsterSpawning(
+      playerUnits: _player.unitList,
+    );
     for (final log in spawnLogs) {
       _showMessage(log);
     }
@@ -513,12 +622,59 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Führt die Bewegung aller Host-Zombies aus.
   void _executeHostMovement() {
-    _host.moveAllZombiesTowardsLineCooks(_player.lineCookList);
+    _host.moveAllZombiesTowardsTargets(_player.unitList);
+    // Token-Animation starten, damit Zombies sanft gleiten.
+    // reset() + forward() statt repeat(), damit die Animation nach
+    // einmaligem Durchlauf endet und die Tokens an ihrer Zielposition
+    // stoppen. reset() ist nötig, da forward() auf einem bereits
+    // abgeschlossenen Controller sofort fertig wäre.
+    _tokenAnimationController?.reset();
+    _tokenAnimationController?.forward();
   }
 
   /// Führt die Angriffe aller Host-Zombies aus.
+  ///
+  /// Der Host entscheidet taktisch, ob er FocusFire einsetzt oder
+  /// jeden Zombie einzeln angreifen lässt. FocusFire wird bevorzugt,
+  /// wenn eine Spieler-Einheit bereits verwundbar ist (woundValue < 50%
+  /// des Maximalwerts) oder mehrere Zombies in Reichweite sind.
+  ///
+  /// Siehe auch: [ObjectHost.performHostFocusFire], [ObjectHost.performAllZombieAttacks].
   void _executeHostAttacks() {
-    final combatLogs = _host.performAllZombieAttacks(_player);
+    // Zähle verfügbare Zombies (lebend, in Reichweite zu irgendeinem Ziel)
+    int zombiesInRange = 0;
+    for (final dumpster in _host.doughDumpsterList) {
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0 || zombie.hasActed) continue;
+        for (final playerUnit in _player.unitList) {
+          if (playerUnit.woundValue <= 0) continue;
+          final zombieHex = _pixelToHex(zombie.position);
+          final cookHex = _pixelToHex(playerUnit.position);
+          final hexDistance = (zombieHex.x - cookHex.x).abs() + (zombieHex.y - cookHex.y).abs();
+          if (hexDistance <= zombie.rangeValue + 1) {
+            zombiesInRange++;
+            break;
+          }
+        }
+      }
+    }
+
+    // FocusFire einsetzen, wenn mindestens 3 Zombies ein Ziel erreichen können
+    // oder eine Spieler-Einheit bereits angeschlagen ist (woundValue <= 5)
+    final bool hasDamagedTarget = _player.unitList.any((u) => u.woundValue > 0 && u.woundValue <= 5);
+    final bool useFocusFire = zombiesInRange >= 3 || (zombiesInRange >= 2 && hasDamagedTarget);
+
+    List<String> combatLogs;
+    if (useFocusFire) {
+      combatLogs = _host.performHostFocusFire(_player);
+      if (combatLogs.isEmpty) {
+        // Fallback: Falls FocusFire kein Ziel fand, normale Angriffe ausführen
+        combatLogs = _host.performAllZombieAttacks(_player);
+      }
+    } else {
+      combatLogs = _host.performAllZombieAttacks(_player);
+    }
+
     for (final log in combatLogs) {
       _showMessage(log);
     }
@@ -840,7 +996,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     final tokens = <_TokenRenderInfo>[];
 
     // Spieler-Einheiten (nur lebende)
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       if (cook.woundValue <= 0) continue;
       tokens.add(_TokenRenderInfo(
         token: cook,
@@ -887,6 +1043,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       } else if (tappedToken != null) {
         // Normalmodus: Token auswählen
         _selectedToken = tappedToken;
+        // Kamera auf den ausgewählten Token fokussieren
+        widget.onRequestCameraFocus?.call(tappedToken.position);
       } else {
         // Nichts getroffen – Deselektieren
         _selectedToken = null;
@@ -917,6 +1075,23 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return null;
   }
 
+  /// Prüft Spielende nach einer Kampfaktion und leitet ggf. den
+  /// automatischen Zug-Ende ein.
+  ///
+  /// Extrahiert aus [_executeActionOnTarget] und [_executeFocusFireOnTarget],
+  /// da beide dieselbe Logik nach einem Angriff durchführen.
+  /// Gibt `true` zurück, wenn das Spiel beendet ist (Host besiegt).
+  bool _handlePostCombatState() {
+    if (_host.isDefeated) {
+      _isGameOver = true;
+      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
+      setState(() {});
+      return true;
+    }
+    _checkAutoEndPlayerTurn();
+    return false;
+  }
+
   /// Behandelt einen Tap im Targeting-Modus.
   void _handleTapInTargetingMode(ObjectToken tappedToken) {
     if (_targetableEnemies.contains(tappedToken)) {
@@ -924,7 +1099,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       final action = _pendingAction!;
       _pendingAction = null;
       _targetableEnemies = {};
-      _executeActionOnTarget(action, tappedToken);
+
+      if (action == CombatAction.focusFire) {
+        _executeFocusFireOnTarget(tappedToken);
+      } else {
+        _executeActionOnTarget(action, tappedToken);
+      }
     } else if (tappedToken == _selectedToken) {
       // Klick auf den eigenen Angreifer bricht ab
       _pendingAction = null;
@@ -1038,10 +1218,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Erst ein Klick auf einen Gegner führt die Aktion aus.
   void _enterTargetingMode(CombatAction action) {
     if (_selectedToken == null) return;
-    if (_selectedToken is! ObjectLineCook) return;
+    if (_selectedToken is! ObjectApprentice) return;
     if (!_isPlayerTurn || _isGameOver) return;
 
-    final attacker = _selectedToken as ObjectLineCook;
+    final attacker = _selectedToken as ObjectApprentice;
 
     // Prüfen, ob der Token in dieser Runde bereits gehandelt hat
     if (attacker.hasActed) {
@@ -1084,8 +1264,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
 
   /// Führt die ausstehende Kampfaktion gegen das per Tap gewählte Ziel aus.
   void _executeActionOnTarget(CombatAction action, ObjectToken target) {
-    if (_selectedToken == null || _selectedToken is! ObjectLineCook) return;
-    final attacker = _selectedToken as ObjectLineCook;
+    if (_selectedToken == null || _selectedToken is! ObjectApprentice) return;
+    final attacker = _selectedToken as ObjectApprentice;
 
     // Entfernung in Hex-Feldern ermitteln
     final distanceInHex = _HexUtils.distance(
@@ -1107,6 +1287,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Token hat in dieser Runde seine eine Kampfaktion verbraucht
     attacker.hasActed = true;
 
+    // Der Attack-Zähler des Verteidigers wird automatisch von
+    // performAction() erhöht (Malus-System).
+
     // Ergebnis anzeigen
     final message = _buildCombatResultMessage(target, result);
     _showMessage(message);
@@ -1114,16 +1297,127 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     // Tote Einheiten entfernen
     _removeDeadTokens();
 
-    // Prüfen, ob der Host besiegt wurde
-    if (_host.isDefeated) {
-      _isGameOver = true;
-      _statusMessage = 'Spieler hat gewonnen! Alle Gegner besiegt.';
-      setState(() {});
+    // Prüfen, ob der Host besiegt wurde und ggf. Zug automatisch beenden
+    if (_handlePostCombatState()) return;
+  }
+
+  /// Führt eine FocusFire-Aktion für den Spieler aus.
+  /// Alle verfügbaren Spieler-Einheiten greifen das gewählte Ziel an,
+  /// sofern sie in Reichweite sind.
+  ///
+  /// Jeder Angreifer wählt automatisch die beste Aktion:
+  /// - Nahkampf (melee), wenn das Ziel benachbart ist (distance <= 1)
+  /// - Fernkampf (ranged), wenn das Ziel in Fernkampf-Reichweite liegt
+  /// - Überspringt den Angreifer, wenn keine Reichweite gegeben ist
+  void _executeFocusFireOnTarget(ObjectToken target) {
+    if (_selectedToken == null) return;
+
+    // Alle Spieler-Einheiten sammeln, die noch nicht gehandelt haben
+    final availableAttackers = <ObjectToken>[];
+    for (final unit in _player.unitList) {
+      if (unit.woundValue <= 0) continue;
+      if (unit.hasActed) continue;
+      availableAttackers.add(unit);
+    }
+
+    if (availableAttackers.isEmpty) {
+      _showMessage('Keine verfügbaren Einheiten für FocusFire!');
       return;
     }
 
-    // Prüfen, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben
-    _checkAutoEndPlayerTurn();
+    // FocusFire ausführen – jeder Angreifer wählt automatisch die beste
+    // verfügbare Aktion (Nahkampf wenn benachbart, sonst Fernkampf)
+    final result = _player.performFocusFire(
+      attackers: availableAttackers,
+      defender: target,
+      action: CombatAction.melee, // Wird pro Angreifer überschrieben
+      getDistance: (attacker) => _HexUtils.distance(
+        x1: _getTokenHex(attacker).x,
+        y1: _getTokenHex(attacker).y,
+        x2: _getTokenHex(target).x,
+        y2: _getTokenHex(target).y,
+      ),
+    );
+
+    // Der Attack-Zähler des Verteidigers wird automatisch für jeden
+    // einzelnen Angriff von performAction() erhöht (Malus-System).
+
+    // Ergebnisse anzeigen
+    final messageBuffer = StringBuffer('FocusFire auf ${target.name}: ');
+    if (result.attacks.isNotEmpty) {
+      messageBuffer.writeln('${result.attacks.length} Angriffe, ${result.totalDamage} Gesamtschaden.');
+      for (final attack in result.attacks) {
+        messageBuffer.writeln(
+          '- ${attack.attacker.name}: ${attack.result.hit ? "Treffer (${attack.result.damage} Schaden)" : "Verfehlt"}',
+        );
+      }
+    } else {
+      messageBuffer.write('Keine Angriffe möglich.');
+    }
+    _showMessage(messageBuffer.toString());
+
+    // Tote Einheiten entfernen
+    _removeDeadTokens();
+
+    // Prüfen, ob der Host besiegt wurde und ggf. Zug automatisch beenden
+    if (_handlePostCombatState()) return;
+  }
+
+  /// Versetzt das Spiel in den FocusFire-Targeting-Modus.
+  /// Zeigt nur Gegner als Ziele an, die von mindestens einer verfügbaren
+  /// Einheit erreicht werden können (Nahkampf ODER Fernkampf).
+  /// Ein Klick auf einen Gegner startet den Massenangriff.
+  void _enterFocusFireTargetingMode() {
+    if (!_isPlayerTurn || _isGameOver) return;
+
+    // Verfügbare Einheiten sammeln (noch nicht gehandelt)
+    final availableUnits = <ObjectApprentice>[];
+    for (final unit in _player.unitList) {
+      if (unit.woundValue <= 0) continue;
+      if (!unit.hasActed) {
+        availableUnits.add(unit);
+      }
+    }
+
+    if (availableUnits.isEmpty) {
+      _showMessage('Keine Einheiten verfügbar für FocusFire!');
+      return;
+    }
+
+    // Nur Gegner als Ziele markieren, die von mindestens einer verfügbaren
+    // Einheit erreicht werden können (Nahkampf ODER Fernkampf).
+    final targets = <ObjectToken>{};
+    for (final renderInfo in _allTokens) {
+      if (renderInfo.isPlayerUnit) continue;
+      final enemy = renderInfo.token;
+      if (enemy.woundValue <= 0) continue;
+
+      // Prüfen, ob mindestens ein verfügbarer Angreifer diesen Gegner
+      // im Nahkampf (distance <= 1) ODER Fernkampf (distance <= rangeValue)
+      // erreichen kann
+      final enemyHex = _getTokenHex(enemy);
+      for (final unit in availableUnits) {
+        final unitHex = _getTokenHex(unit);
+        final distance = _HexUtils.distance(
+          x1: unitHex.x, y1: unitHex.y,
+          x2: enemyHex.x, y2: enemyHex.y,
+        );
+        if (distance <= 1 || (unit.rangeValue > 0 && distance <= unit.rangeValue)) {
+          targets.add(enemy);
+          break; // Ein Angreifer reicht, um das Ziel anzuzeigen
+        }
+      }
+    }
+
+    if (targets.isEmpty) {
+      _showMessage('Kein Gegner in Nahkampf- oder Fernkampf-Reichweite für FocusFire!');
+      return;
+    }
+
+    setState(() {
+      _pendingAction = CombatAction.focusFire;
+      _targetableEnemies = targets;
+    });
   }
 
   /// Baut eine lesbare Kampf-Nachricht aus dem Kampfergebnis.
@@ -1141,10 +1435,17 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     return message;
   }
 
-  /// Entfernt alle Tokens mit woundValue <= 0 und räumt den Cache auf.
+  /// Entfernt alle toten Tokens (woundValue <= 0) und räumt den Cache auf.
+  ///
+  /// **Wichtig:** Tote Spieler-Einheiten werden NICHT aus _player.unitList
+  /// entfernt, damit der Battle Result Screen sie beim _computeResults()
+  /// noch auslesen kann (Anzeige der Gefallenen, XP-Verteilung etc.).
+  /// Sie werden lediglich über _buildAllTokens() (woundValue <= 0-Check
+  /// im Rendering) ausgeblendet.
   void _removeDeadTokens() {
-    // Tote Spieler-Einheiten entfernen
-    _player.lineCookList.removeWhere((cook) => cook.woundValue <= 0);
+    // Tote Spieler-Einheiten werden NICHT aus unitList entfernt,
+    // damit der Battle Result Screen sie auslesen kann.
+    // Das Rendering filtert sie bereits über _buildAllTokens().
 
     // Tote Zombies aus allen Dumpstern entfernen
     for (final dumpster in _host.doughDumpsterList) {
@@ -1166,13 +1467,33 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
     _invalidateCache();
   }
 
+  /// Kehrt zum Restaurant-Bildschirm zurück und aktualisiert das Profil.
+  void _returnToRestaurant() {
+    // Prüfen, ob der Spieler tatsächlich gewonnen hat (mindestens eine
+    // Einheit mit woundValue > 0). _player.unitList.isEmpty allein reicht
+    // nicht, da tote Einheiten nicht aus unitList entfernt werden (sie
+    // werden vom Battle Result Screen für die Anzeige der Gefallenen
+    // benötigt).
+    final hasAliveUnits = _player.unitList.any((u) => u.woundValue > 0);
+    // Benachrichtige ScreenMain über das Spiel-Ende (Callback).
+    // ScreenMain führt dann ein Navigator.pushReplacement zum
+    // ScreenBattleResult durch, daher KEIN zusätzliches .pop() hier.
+    // Wichtig: KEIN _updateProfileAfterBattle() hier aufrufen!
+    // ScreenBattleResult._computeResults() führt den Profil-Sync (inkl.
+    // Rettungswürfe + Speichern) selbst durch. Ein vorheriger Sync würde
+    // die woundValues toter Einheiten durch Rettungswürfe verändern, bevor
+    // _computeResults() sie für die Überlebenden-/Gefallenen-Anzeige
+    // auslesen kann.
+    widget.onGameOver?.call(hasAliveUnits);
+  }
+
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.
   /// Ist dies der Fall, wird der Spielerzug automatisch beendet.
   void _checkAutoEndPlayerTurn() {
     if (!_isPlayerTurn || _isGameOver) return;
-    if (_player.lineCookList.isEmpty) return;
+    if (_player.unitList.isEmpty) return;
 
-    for (final cook in _player.lineCookList) {
+    for (final cook in _player.unitList) {
       // Ein Token hat noch Aktionen oder Bewegungspunkte übrig
       if (!cook.hasActed || cook.movementValue > 0) return;
     }
@@ -1200,11 +1521,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Zeigt ein Kontextmenü für den ausgewählten Token an.
   void _showContextMenu(BuildContext context, Offset position) {
     if (_selectedToken == null) return;
-    if (_selectedToken is! ObjectLineCook) return;
+    if (_selectedToken is! ObjectApprentice) return;
     // Nur im Spieler-Zug darf das Kontextmenü geöffnet werden
     if (!_isPlayerTurn || _isGameOver) return;
 
-    final cook = _selectedToken as ObjectLineCook;
+    final cook = _selectedToken as ObjectApprentice;
     final actions = _player.getAvailableActions(cook);
 
     showMenu<String>(
@@ -1232,7 +1553,12 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         for (final action in actions)
           PopupMenuItem(
             value: action.name,
-            child: Text(action == CombatAction.melee ? 'Nahkampf' : 'Fernkampf'),
+            child: Text(
+              action == CombatAction.melee ? 'Nahkampf' :
+              action == CombatAction.ranged ? 'Fernkampf' :
+              action == CombatAction.focusFire ? 'FocusFire' :
+              action.name,
+            ),
           ),
       ],
     ).then((value) {
@@ -1250,6 +1576,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         _enterTargetingMode(CombatAction.melee);
       } else if (value == CombatAction.ranged.name) {
         _enterTargetingMode(CombatAction.ranged);
+      } else if (value == CombatAction.focusFire.name) {
+        _enterFocusFireTargetingMode();
       }
     });
   }
@@ -1298,17 +1626,34 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
       },
       child: Stack(
         children: [
+          // SizedBox.expand() als nicht-positioniertes Child, das den Stack
+          // auf die volle verfügbare Größe (Bildschirm) zwingt.
+          // Dadurch positionieren sich Positioned(right: 8) etc. korrekt
+          // am Bildschirmrand, nicht am Kartenrand.
+          // (Bugfix: "Rundenzähler und Kartenrand sind schmaler als WidgetCaretaker")
+          const SizedBox.expand(),
           // Tokens mit der gleichen Transformation wie die Karte zeichnen.
-          // Dieses nicht-positionierte Child gibt dem Stack seine Größe.
-          Transform(
-            transform: matrix,
-            child: SizedBox(
-              width: widget.mapWidth * widget.tileWidth +
-                  widget.tileWidth / 2,
-              height: (widget.mapHeight * widget.tileHeight * 3 / 4) +
-                  widget.tileHeight / 4,
-              child: Stack(
-                children: _buildTokenWidgets(),
+          // Positioned, damit es die Stack-Größe nicht beeinflusst.
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Transform(
+              transform: matrix,
+              child: SizedBox(
+                width: widget.mapWidth * widget.tileWidth +
+                    widget.tileWidth / 2,
+                height: (widget.mapHeight * widget.tileHeight * 3 / 4) +
+                    widget.tileHeight / 4,
+                child: Stack(
+                  children: [
+                    ..._buildTokenWidgets(),
+                    // DEBUG: Karten-Bounding-Box visualisieren, um zu prüfen,
+                    // ob die Map im WidgetMapLoader die gleiche Größe hat
+                    // wie die Token-Ebene im WidgetCaretaker.
+                    // Entfernen für Release-Builds.
+                    ..._buildDebugOverlay(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1324,119 +1669,283 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
               ),
             ),
           // Runden- und Status-Anzeige (oben rechts)
+          // Explizite Breite, damit SizedBox(width: double.infinity) nicht
+          // zu BoxConstraints(w=Infinity) führt (Bugfix: App crasht)
           Positioned(
             right: 8,
             top: 8,
-            child: _buildStatusPanel(),
+            child: SizedBox(
+              width: 220,
+              child: _buildStatusPanel(),
+            ),
           ),
         ],
       ),
     );
   }
 
+  /// DEBUG: Zeichnet ein rotes Rechteck um die Karten-Bounding-Box
+  /// sowie grüne Punkte an den Hex-Zentren der Kartenecken.
+  /// Damit kann visuell überprüft werden, ob das Token-Overlay und die
+  /// Karte im WidgetMapLoader das identische Koordinatensystem verwenden.
+  ///
+  /// Entfernen für Release-Builds.
+  List<Widget> _buildDebugOverlay() {
+    final mapPixelWidth = widget.mapWidth * widget.tileWidth +
+        widget.tileWidth / 2;
+    final mapPixelHeight = (widget.mapHeight * widget.tileHeight * 3 / 4) +
+        widget.tileHeight / 4;
+
+    return [
+      // Rote Bounding-Box der Karte
+      Positioned(
+        left: 0,
+        top: 0,
+        child: IgnorePointer(
+          child: Container(
+            width: mapPixelWidth,
+            height: mapPixelHeight,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.5),
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+      // Grüne Punkte an den Hex-Zentren der Kartenecken
+      // (0,0), (mapWidth-1, 0), (0, mapHeight-1), (mapWidth-1, mapHeight-1)
+      ..._buildDebugHexCenter(x: 0, y: 0),
+      ..._buildDebugHexCenter(
+        x: widget.mapWidth - 1, y: 0,
+      ),
+      ..._buildDebugHexCenter(
+        x: 0, y: widget.mapHeight - 1,
+      ),
+      ..._buildDebugHexCenter(
+        x: widget.mapWidth - 1,
+        y: widget.mapHeight - 1,
+      ),
+    ];
+  }
+
+  /// DEBUG: Zeichnet einen grünen Punkt am Zentrum eines Hex-Feldes (x, y).
+  List<Widget> _buildDebugHexCenter({required int x, required int y}) {
+    final pixel = _hexToPixel(x: x, y: y);
+    return [
+      Positioned(
+        left: pixel.dx - 3,
+        top: pixel.dy - 3,
+        child: IgnorePointer(
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        left: pixel.dx + 6,
+        top: pixel.dy - 5,
+        child: IgnorePointer(
+          child: Text(
+            '($x,$y)',
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              backgroundColor: Color(0x88000000),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
   /// Baut das Status-Panel mit Runden-, Initiativ- und Spielstandsanzeige.
+  /// Verwendet ein ins Spiel-Design integriertes Layout mit abgerundeten
+  /// Ecken, dezenten Farben und sinnvollen Abständen.
   Widget _buildStatusPanel() {
+    final Color accentColor;
+    final Color panelColor;
+    final Color textColor;
+    final String statusText;
+    final IconData statusIcon;
+
+    if (_isGameOver) {
+      accentColor = Colors.orange;
+      panelColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      statusText = 'Spiel beendet';
+      statusIcon = Icons.flag;
+    } else if (_isPlayerTurn) {
+      accentColor = Colors.green;
+      panelColor = Colors.green.shade50;
+      textColor = Colors.green.shade800;
+      statusText = 'Spieler am Zug';
+      statusIcon = Icons.person;
+    } else {
+      accentColor = Colors.red;
+      panelColor = Colors.red.shade50;
+      textColor = Colors.red.shade800;
+      statusText = 'Host am Zug';
+      statusIcon = Icons.computer;
+    }
+
     return Card(
-      elevation: 4,
-      color: _isGameOver
-          ? Colors.amber.shade100
-          : _isPlayerTurn
-              ? Colors.green.shade50
-              : Colors.red.shade50,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: accentColor.withValues(alpha: 0.3), width: 1),
+      ),
+      color: panelColor,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Rundenanzeige
-            Text(
-              'Runde $_currentRound',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Status (wessen Zug)
+            // Überschrift-Zeile: Runde + Status-Icon
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isGameOver
-                        ? Colors.orange
-                        : _isPlayerTurn
-                            ? Colors.green
-                            : Colors.red,
-                  ),
-                ),
+                Icon(statusIcon, size: 18, color: accentColor),
                 const SizedBox(width: 6),
                 Text(
-                  _isGameOver
-                      ? 'Spiel beendet'
-                      : _isPlayerTurn
-                          ? 'Spieler am Zug'
-                          : 'Host am Zug',
+                  'Runde $_currentRound',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _isGameOver
-                        ? Colors.orange.shade800
-                        : _isPlayerTurn
-                            ? Colors.green.shade800
-                            : Colors.red.shade800,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: textColor,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            // Status-Badge (wessen Zug)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             // Initiativnachricht
             if (_initiativeMessage != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 _initiativeMessage!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey,
+                  color: textColor.withValues(alpha: 0.6),
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],
-            // Spielstand
+            // Spielstand (Trennlinie)
             const SizedBox(height: 8),
-            Text(
-              'Line Cooks: ${_player.lineCookCount}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            Text(
-              'Gegner: ${_host.activeUnitCount}',
-              style: const TextStyle(fontSize: 12),
+            Container(height: 1, color: accentColor.withValues(alpha: 0.2)),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.people, size: 14, color: Colors.green.shade700),
+                const SizedBox(width: 4),
+                Text(
+                  '${_player.unitCount}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.dangerous, size: 14, color: Colors.red.shade700),
+                const SizedBox(width: 4),
+                Text(
+                  '${_host.activeUnitCount}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+              ],
             ),
             // "Zug beenden"-Button (nur im Spieler-Zug)
             if (_isPlayerTurn && !_isGameOver) ...[
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: _endPlayerTurn,
-                icon: const Icon(Icons.skip_next, size: 16),
-                label: const Text('Zug beenden'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  backgroundColor: Colors.green.shade100,
-                  foregroundColor: Colors.green.shade900,
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _endPlayerTurn,
+                  icon: const Icon(Icons.skip_next, size: 18),
+                  label: const Text('Zug beenden', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
                 ),
               ),
             ],
-            // Spielende-Nachricht
+            // Spielende-Nachricht + Zurück-Button
             if (_isGameOver) ...[
               const SizedBox(height: 8),
               Text(
                 _statusMessage ?? '',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _returnToRestaurant,
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Zurück', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    backgroundColor: Colors.amber.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
                 ),
               ),
             ],
@@ -1686,7 +2195,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
   /// Baut den Inhalt des Info-Panels für den ausgewählten Token.
   Widget _buildInfoPanelContent() {
     final token = _selectedToken!;
-    final isPlayerUnit = _player.lineCookList.contains(token);
+    final isPlayerUnit = _player.unitList.contains(token);
 
     return Card(
       elevation: 4,
@@ -1756,6 +2265,22 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> {
         ),
       );
     }
+
+    // FocusFire-Button ist immer verfügbar (solange noch nicht gehandelt),
+    // da er alle Einheiten gleichzeitig angreifen lässt
+    buttons.add(const SizedBox(height: 4));
+    buttons.add(
+      ElevatedButton.icon(
+        onPressed: (_isPlayerTurn && !_isGameOver && !token.hasActed)
+            ? () => _enterFocusFireTargetingMode()
+            : null,
+        icon: const Icon(Icons.group_work, size: 16),
+        label: const Text('FocusFire'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    );
 
     return buttons;
   }
@@ -1838,6 +2363,8 @@ class _TokenWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokenSize = (tileWidth * 0.7).clamp(20.0, 48.0);
+    final hasCharacterImage = token.characterImagePath != null &&
+        token.characterImagePath!.isNotEmpty;
 
     return Opacity(
       opacity: isDragging ? 0.8 : 1.0,
@@ -1868,6 +2395,19 @@ class _TokenWidget extends StatelessWidget {
                 ],
               ),
             ),
+            // Charakterbild (falls vorhanden) als Overlay im Token
+            if (hasCharacterImage)
+              Positioned.fill(
+                child: ClipOval(
+                  child: Image.asset(
+                    token.characterImagePath!,
+                    width: tokenSize * 0.6,
+                    height: tokenSize * 0.6,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
             // Token-Label
             Text(
               _getTokenLabel(),

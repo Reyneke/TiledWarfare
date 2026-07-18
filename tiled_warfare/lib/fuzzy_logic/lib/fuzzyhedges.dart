@@ -4,11 +4,11 @@
 /// This means you can do:
 ///
 ///     (fairly(joke.funny) & very(situation.tense)) >> (laughter.loud)
-library fuzzyhedges;
+library;
 
 import 'dart:math';
 
-import 'fuzzylogic.dart';
+import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 
 class _FuzzyHedge extends FuzzyTerm {
   _FuzzyHedge(FuzzyNode a, this.hedgeFunction, this.name) {

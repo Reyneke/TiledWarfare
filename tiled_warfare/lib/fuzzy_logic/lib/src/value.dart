@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// FuzzyValue is a FuzzyVariable that was initialized with a value (normally
 /// by calling [FuzzyVariable.assign()] just before resolving the [RuleBase]).
@@ -6,7 +6,9 @@ class FuzzyValue<T extends num> {
   FuzzyValue(this.variable, [T? crispValue]) {
     //assert(variable != null);
     degreesOfTruth = <FuzzySet<T>, num>{};
-    variable.sets.forEach((set) => degreesOfTruth[set] = 0.0);
+    for (var set in variable.sets) {
+      degreesOfTruth[set] = 0.0;
+    }
 
     if (crispValue/*< 0 || crispValue > 0 */ != null) {
       this.crispValue = crispValue;
@@ -16,7 +18,7 @@ class FuzzyValue<T extends num> {
   FuzzyVariable<T> variable;
   Map<FuzzySet<T>, num> degreesOfTruth =
       {}; // TODO get - throw if uninitialized
-  late T? _crispValue = null; // TODO get, set
+  T? _crispValue; // TODO get, set
   num _crispValueConfidence = 0;
 
   T? get crispValue {
@@ -41,8 +43,9 @@ class FuzzyValue<T extends num> {
 
   /// Sets degrees of truth of a variable which has been assigned a crisp value.
   void _setDegreesOfTruthFromCrispValue() {
-    variable.sets.forEach((set) =>
-        set.setDegreeOfTruth(set.getDegreeOfMembership(_crispValue), [this]));
+    for (var set in variable.sets) {
+      set.setDegreeOfTruth(set.getDegreeOfMembership(_crispValue), [this]);
+    }
   }
 
   /// Compute the crisp value using the Average of Maxima method.

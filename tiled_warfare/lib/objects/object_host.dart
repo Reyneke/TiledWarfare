@@ -2,9 +2,10 @@ import 'dart:math';
 import 'dart:ui' show Offset;
 
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
-import 'package:tiled_warfare/objects/object_dough_dumpster.dart';
-import 'package:tiled_warfare/objects/object_dough_zombie.dart';
-import 'package:tiled_warfare/objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
+import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:random_name_generator/random_name_generator.dart';
@@ -237,7 +238,7 @@ class ObjectHost {
   /// Simuliert die gradlinige Bewegung der Dough Zombies auf Objekte vom
   /// Typ [ObjectLineCook]. Diese Methode sollte pro Spielzug aufgerufen
   /// werden.
-  void moveAllZombiesTowardsLineCooks(List<ObjectLineCook> targets) {
+  void moveAllZombiesTowardsTargets(List<ObjectApprentice> targets) {
     for (final dumpster in doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
         _moveZombieTowardsTarget(zombie, targets);
@@ -277,11 +278,11 @@ class ObjectHost {
   /// Hex-Feld in Richtung des Ziels vor und rastet auf dem Hex-Zentrum ein.
   /// Überspringt belegte Hex-Felder, um Stapelung zu vermeiden.
   void _moveZombieTowardsTarget(
-      ObjectDoughZombie zombie, List<ObjectLineCook> targets) {
+      ObjectDoughZombie zombie, List<ObjectApprentice> targets) {
     if (targets.isEmpty) return;
 
     // Nächstgelegenes Ziel finden
-    ObjectLineCook? nearestTarget;
+    ObjectApprentice? nearestTarget;
     double nearestDistance = double.infinity;
 
     for (final target in targets) {
@@ -306,8 +307,8 @@ class ObjectHost {
     if (dx == 0 && dy == 0) return;
 
     // Alle aktuell belegten Hex-Felder ermitteln (außer dem Zombie selbst),
-    // damit wir nicht auf besetzte Felder laufen
-    final occupied = _buildOccupiedHostHexes();
+    // inklusive der Spieler-Einheiten, damit Zombies nicht auf ihnen stacken
+    final occupied = _buildOccupiedHostHexes(playerUnits: targets);
     // Entferne den Zombie selbst aus der belegten-Menge, damit er sich
     // von seinem eigenen Feld wegbewegen kann
     occupied.remove(zombieHex.y * 100 + zombieHex.x);
@@ -358,8 +359,137 @@ class ObjectHost {
       newHexY += bestNeighbor.dy;
     }
 
-    // Auf Hex-Zentrum setzen
-    zombie.position = _hexToPixel(x: newHexX, y: newHexY);
+    // Auf Hex-Zentrum setzen – nutze targetPosition für sanfte Animation
+    final targetPixel = _hexToPixel(x: newHexX, y: newHexY);
+    zombie.targetPosition = targetPixel;
+  }
+
+  /// Führt einen FocusFire-Angriff des Hosts auf das verwundbarste Spieler-Ziel aus.
+  ///
+  /// Alle Zombies, die das Ziel erreichen können (Nahkampf-Reichweite: benachbartes
+  /// Hex-Feld), greifen dasselbe Ziel an. Als Ziel wird die Spieler-Einheit mit der
+  /// geringsten [woundValue] (also der verwundbarsten) gewählt.
+  /// Existieren mehrere gleich verwundbare Ziele, wird zufällig eines ausgewählt.
+  ///
+  /// Dies ist eine taktische Verbesserung gegenüber [performAllZombieAttacks],
+  /// bei der jeder Zombie unabhängig das nächstgelegene Ziel angreift.
+  /// FocusFire wird gewürfelt, wenn die Host-Persönlichkeit aggressiv ist
+  /// (Risikotoleranz > 50) oder wenn mindestens 3 Zombies das Ziel erreichen können.
+  ///
+  /// Gibt eine Liste von Log-Nachrichten zurück.
+  ///
+  /// Siehe auch: [performAllZombieAttacks] (Standard-Einzelangriffe).
+  List<String> performHostFocusFire(ObjectPlayer player) {
+    final logMessages = <String>[];
+    if (player.unitList.isEmpty || doughDumpsterList.isEmpty) return logMessages;
+
+    // Alle lebenden Spieler-Einheiten sammeln
+    final alivePlayers = player.unitList.where((u) => u.woundValue > 0).toList();
+    if (alivePlayers.isEmpty) return logMessages;
+
+    // Das verwundbarste Ziel finden (niedrigste woundValue)
+    alivePlayers.sort((a, b) => a.woundValue.compareTo(b.woundValue));
+    final target = alivePlayers.first;
+
+    // Alle lebenden Zombies sammeln, die in Nahkampf-Reichweite zum Ziel sind
+    final targetHex = _pixelToHex(target.position);
+    final availableZombies = <ObjectDoughZombie>[];
+    for (final dumpster in doughDumpsterList) {
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) continue;
+        if (zombie.hasActed) continue;
+        final zombieHex = _pixelToHex(zombie.position);
+        final hexDistance = (zombieHex.x - targetHex.x).abs() + (zombieHex.y - targetHex.y).abs();
+        if (hexDistance <= zombie.rangeValue + 1) {
+          availableZombies.add(zombie);
+        }
+      }
+    }
+
+    if (availableZombies.isEmpty) return logMessages;
+
+    logMessages.add('$displayName befiehlt FocusFire auf ${target.name}! (${availableZombies.length} Zombies)');
+
+    // Puffer für zu entfernende Zombies (wenn sie sterben)
+    final zombiesToRemove = <ObjectDoughZombie>[];
+    final newZombiesPending = <ObjectDoughZombie>[];
+    final newDumpsters = <ObjectDoughDumpster>[];
+
+    for (final zombie in availableZombies) {
+      final distance = (zombie.position - target.position).distance;
+
+      final result = player.performAction(
+        action: CombatAction.melee,
+        attacker: zombie,
+        defender: target,
+        distance: distance.round(),
+      );
+
+      zombie.hasActed = true;
+
+      // Log-Nachricht für diesen Angriff
+      String logEntry = '${zombie.name} greift ${target.name} an (FocusFire): ';
+      if (result.hit) {
+        logEntry += 'Treffer! ${result.damage} Schaden.';
+      } else {
+        logEntry += 'Verfehlt!';
+      }
+      if (result.attackerCritical) logEntry += ' (Kritischer Treffer!)';
+      if (result.attackerFumbled) logEntry += ' (Patzer!)';
+      if (result.defenderCritical) logEntry += ' (Gegner pariert kritisch!)';
+      if (result.defenderFumbled) logEntry += ' (Gegner patzt!)';
+      logMessages.add(logEntry);
+
+      // Zombie wurde getötet
+      if (zombie.woundValue <= 0) {
+        logMessages.add('${zombie.name} wurde im FocusFire getötet!');
+        zombiesToRemove.add(zombie);
+      }
+
+      // Ziel wurde getötet
+      if (result.hit && target.woundValue <= 0) {
+        logMessages.add('${target.name} wurde durch FocusFire getötet!');
+        player.removeUnit(target);
+
+        if (_random.nextInt(100) < 50) {
+          final newZombie = ObjectDoughZombie();
+          final dumpster = doughDumpsterList.first;
+          newZombie.position = Offset(
+            dumpster.position.dx + _random.nextInt(64) - 32,
+            dumpster.position.dy + _random.nextInt(64) - 32,
+          );
+          newZombiesPending.add(newZombie);
+          logMessages.add('Ein neuer Dough Zombie erscheint aus den Überresten von ${target.name}!');
+        }
+
+        if (_random.nextInt(100) < 25) {
+          final newDumpster = ObjectDoughDumpster();
+          newDumpster.position = Offset(
+            (doughDumpsterList.isNotEmpty ? doughDumpsterList.first.position.dx : 0) + _random.nextInt(64) - 32,
+            (doughDumpsterList.isNotEmpty ? doughDumpsterList.first.position.dy : 0) + _random.nextInt(64) - 32,
+          );
+          newDumpsters.add(newDumpster);
+        }
+
+        // Ziel ist tot – keine weiteren Angriffe nötig
+        break;
+      }
+    }
+
+    // Zombies nach der Iteration entfernen/hinzufügen
+    for (final dumpster in doughDumpsterList) {
+      for (final zombie in zombiesToRemove) {
+        if (dumpster.zombieList.contains(zombie)) {
+          dumpster.removeZombie(zombie);
+        }
+      }
+      dumpster.zombieList.addAll(newZombiesPending
+          .where((z) => !dumpster.zombieList.contains(z)));
+    }
+
+    doughDumpsterList.addAll(newDumpsters);
+
+    return logMessages;
   }
 
   /// Führt Angriffe aller Zombies auf Line Cooks in Reichweite aus.
@@ -385,20 +515,25 @@ class ObjectHost {
       for (final zombie in dumpster.zombieList) {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
         // Einträge entfernen müssen
-        for (final cook in player.lineCookList.toList()) {
-          final distance = (zombie.position - cook.position).distance;
+        for (final cook in player.unitList.toList()) {
+          // Hex-Entfernung zwischen Zombie und Ziel ermitteln
+          final zombieHex = _pixelToHex(zombie.position);
+          final cookHex = _pixelToHex(cook.position);
+          final hexDistance = (zombieHex.x - cookHex.x).abs() + (zombieHex.y - cookHex.y).abs();
 
-          // Prüfen, ob der Line Cook in Reichweite ist
-          if (distance <= zombie.rangeValue + 1) {
-            final result = player.performAction(
-              action: CombatAction.melee,
-              attacker: zombie,
-              defender: cook,
-              distance: distance.round(),
-            );
+          // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
+          if (hexDistance <= zombie.rangeValue + 1) {
+              final distance = (zombie.position - cook.position).distance;
 
-            // Log-Nachricht für diesen Angriff erstellen
-            String logEntry = '${zombie.name} greift ${cook.name} an: ';
+              final result = player.performAction(
+                action: CombatAction.melee,
+                attacker: zombie,
+                defender: cook,
+                distance: distance.round(),
+              );
+
+              // Log-Nachricht für diesen Angriff erstellen
+              String logEntry = '${zombie.name} greift ${cook.name} an: ';
             if (result.hit) {
               logEntry += 'Treffer! ${result.damage} Schaden.';
             } else {
@@ -421,7 +556,7 @@ class ObjectHost {
             // Cook (Verteidiger) wurde getroffen und stirbt
             if (result.hit && cook.woundValue <= 0) {
               logMessages.add('${cook.name} wurde getötet!');
-              player.removeLineCook(cook);
+              player.removeUnit(cook);
 
               // Wenn ein Zombie einen Token des Spielers tötet, besteht eine 50% Chance,
               // dass anstelle des Tokens ein weiterer Dough Zombie erscheint.
@@ -469,7 +604,10 @@ class ObjectHost {
 
   /// Baut eine Menge aller aktuell belegten Hex-Felder des Hosts auf.
   /// Wird verwendet, um Kollisionen beim Spawning und Bewegen zu vermeiden.
-  Set<int> _buildOccupiedHostHexes() {
+  /// Optional können Spieler-Einheiten übergeben werden, deren Hex-Felder
+  /// dann ebenfalls als belegt gelten (verhindert, dass Zombies auf
+  /// Spieler-Token laufen/stapeln).
+  Set<int> _buildOccupiedHostHexes({List<ObjectApprentice>? playerUnits}) {
     final occupied = <int>{};
     for (final dumpster in doughDumpsterList) {
       final dh = _pixelToHex(dumpster.position);
@@ -479,6 +617,15 @@ class ObjectHost {
         if (zombie.woundValue <= 0) continue;
         final zh = _pixelToHex(zombie.position);
         occupied.add(zh.y * 100 + zh.x);
+      }
+    }
+    // Auch Spieler-Einheiten als belegt markieren,
+    // damit Zombies nicht auf ihnen stacken
+    if (playerUnits != null) {
+      for (final unit in playerUnits) {
+        if (unit.woundValue <= 0) continue;
+        final uh = _pixelToHex(unit.position);
+        occupied.add(uh.y * 100 + uh.x);
       }
     }
     return occupied;
@@ -541,7 +688,10 @@ class ObjectHost {
 
   /// Lässt alle Dough Dumpster neue Zombies spawnen (für jede neue Runde).
   /// Gibt Log-Nachrichten zurück.
-  List<String> performAllDumpsterSpawning() {
+  ///
+  /// [playerUnits] werden als belegte Hex-Felder markiert, damit Zombies
+  /// nicht auf Spieler-Tokens spawnen (Kollisionsvermeidung).
+  List<String> performAllDumpsterSpawning({List<ObjectApprentice>? playerUnits}) {
     final logMessages = <String>[];
     // Über eine Kopie iterieren, da während des Spawnens keine neuen
     // Dumpster zur Liste hinzugefügt werden sollen (ConcurrentModification vermeiden)
@@ -552,7 +702,8 @@ class ObjectHost {
         
         // Alle aktuell belegten Hex-Felder ermitteln, inkl. der bereits
         // in diesem Spawning-Durchgang platzierten Zombies
-        final occupied = _buildOccupiedHostHexes();
+        // Wichtig: playerUnits übergeben, damit Zombies nicht auf Spieler-Tokens spawnen
+        final occupied = _buildOccupiedHostHexes(playerUnits: playerUnits);
         final dumpsterHex = _pixelToHex(dumpster.position);
 
         // Zombies spiralförmig um den Dumpster herum auf freien Feldern platzieren

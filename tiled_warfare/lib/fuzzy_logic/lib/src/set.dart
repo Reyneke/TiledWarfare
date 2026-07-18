@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 /// FuzzySet is a set whose values have degrees of membership.
 ///
@@ -14,8 +14,7 @@ class FuzzySet<T extends num> extends FuzzyNode {
     var fuzzyValue =
         inputs.singleWhere((FuzzyValue value) => value.variable == variable);
 
-    logger.fine('- getting degree of membership for ' +
-        _nameOrUnnamed(variable.name, 'FuzzyVariable'));
+    logger.fine('- getting degree of membership for ${_nameOrUnnamed(variable.name, 'FuzzyVariable')}');
 
     // TODO: for non-crisp values
     return getDegreeOfMembership(fuzzyValue.crispValue as T);
@@ -24,9 +23,7 @@ class FuzzySet<T extends num> extends FuzzyNode {
   /// Finds the degree of membership of a given crisp value in the set.
   num getDegreeOfMembership(T? crispValue) {
     var dom = membershipFunction.getDegreeOfMembership(crispValue);
-    logger.fine('- degree of membership for ' +
-        _nameOrUnnamed(name, 'set') +
-        ' (repr=$representativeValue) is ${(dom * 100).round()}');
+    logger.fine('- degree of membership for ${_nameOrUnnamed(name, 'set')} (repr=$representativeValue) is ${(dom * 100).round()}');
     return dom;
   }
 

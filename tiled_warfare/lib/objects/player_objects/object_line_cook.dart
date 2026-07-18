@@ -1,8 +1,8 @@
 
 import 'package:random_name_generator/random_name_generator.dart';
-import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 
-class ObjectLineCook extends ObjectToken {
+class ObjectLineCook extends ObjectApprentice {
   ObjectLineCook() : super(
     name: "Line Cook: ${RandomNames(Zone.italy).fullName()}",
     imagePath: "assets/images/token/token_cook_basic.png",
@@ -11,5 +11,7 @@ class ObjectLineCook extends ObjectToken {
     movementValue: 3,
     damageValue: 2,
     rangeValue: 3,
+    moneyValue: 1000,
+    xpValue: 100
   );
 }

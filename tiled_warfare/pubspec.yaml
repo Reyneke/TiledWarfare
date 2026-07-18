@@ -1,5 +1,5 @@
 name: tiled_warfare
-description: "A new Flutter project."
+description: "Tiled Warfare - A turn-based tactical game"
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -9,21 +9,39 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
   google_fonts: ^8.1.0
   random_name_generator: ^1.5.0
   xml: ^7.0.1
   logging: ^1.2.0
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   test: ^1.25.0
+  msix: ^3.18.0
+
+msix_config:
+  display_name: "Tiled Warfare"
+  publisher_display_name: "TiledWare Studios"
+  identity_name: "TiledWareStudios.TiledWarfare"
+  logo_path: "windows\\runner\\resources\\app_icon.ico"
+  start_menu_icon_path: "windows\\runner\\resources\\app_icon.ico"
+  tile_icon_path: "windows\\runner\\resources\\app_icon.ico"
+  icons_background_color: "transparent"
+  architecture: "x64"
+  capabilities: "internetClient"
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     - assets/images/
     - assets/images/token/
     - assets/maps/
+    - assets/maps/map0/
     

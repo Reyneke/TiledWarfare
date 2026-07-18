@@ -9,7 +9,7 @@
 ///
 /// 1. Artificial intelligence in Web-based games.
 /// 2. Intelligent user experience in websites.
-library fuzzylogic;
+library;
 
 import 'dart:math';
 

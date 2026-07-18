@@ -1,4 +1,4 @@
-part of fuzzylogic;
+part of '../fuzzylogic.dart';
 
 final Logger logger = Logger('fuzzylogic');
 
