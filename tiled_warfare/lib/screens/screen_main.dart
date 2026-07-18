@@ -50,6 +50,11 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// (was die Benutzer-Interaktion mit der Karte stören würde).
   bool _mapCentered = false;
 
+  /// Flag, ob die Karte tatsächlich geladen wurde (Daten von WidgetMapLoader
+  /// empfangen). Verhindert, dass _centerMap() vor dem ersten Map-Load mit
+  /// den Default-Werten (30×30, 32×32) läuft.
+  bool _mapDataReady = false;
+
   /// Aktueller Kamera-Fokus-AnimationController, der bei jedem
   /// Aufruf von [_focusCameraOn] neu erstellt wird. Muss disposed
   /// werden, um Memory Leaks zu vermeiden.
@@ -89,10 +94,17 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
       _tileHeight = tileHeight;
       _mapWidth = mapWidth;
       _mapHeight = mapHeight;
-      // Karten-Dimensionen haben sich geändert → Zentrierung beim nächsten
-      // PostFrameCallback neu ausführen
-      _mapCentered = false;
+      // Karten-Daten sind jetzt bereit
+      _mapDataReady = true;
+      // Zentriere die Karte im ersten Frame (nicht erst NACH dem ersten
+      // Frame). Der alte Ansatz mit addPostFrameCallback in build() erzeugte
+      // einen sichtbaren Frame, in dem die Karte unzentriert am linken Rand
+      // klebte (Bugfix: "Inhalt drängt sich an den linken Rand").
+      // _mapCentered wird hier bereits auf true gesetzt, damit build()
+      // keinen weiteren PostFrameCallback hinzufügt.
+      _mapCentered = true;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _centerMap());
   }
 
   /// Wird vom [WidgetMapLoader] aufgerufen, sobald der
@@ -162,71 +174,64 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
     final controller = _mapTransformationController;
     if (controller == null) return;
 
-    try {
-      final screenSize = MediaQuery.of(context).size;
-      // AppBar-Höhe abziehen
-      final appBarHeight = kToolbarHeight;
-      final availableHeight = screenSize.height - appBarHeight;
+    final screenSize = MediaQuery.of(context).size;
+    final appBarHeight = kToolbarHeight;
+    final availableHeight = screenSize.height - appBarHeight;
 
-      // Aktuelle Zoom-Stufe ermitteln
-      final currentScale = controller.value.getMaxScaleOnAxis();
-      if (currentScale <= 0) return;
+    final currentScale = controller.value.getMaxScaleOnAxis();
+    if (currentScale <= 0) return;
 
-      // Ziel-Position in Bildschirm-Koordinaten umrechnen:
-      // Bildschirmmitte = (screenSize.width / 2, availableHeight / 2)
-      // Wir müssen die Matrix so setzen, dass mapPosition auf die Bildschirmmitte fällt
-      final targetDx = screenSize.width / 2 - mapPosition.dx * currentScale;
-      final targetDy = availableHeight / 2 - mapPosition.dy * currentScale;
+    // Ziel-Position in Bildschirm-Koordinaten umrechnen:
+    // Bildschirmmitte = (screenSize.width / 2, availableHeight / 2)
+    // Wir müssen die Matrix so setzen, dass mapPosition auf die Bildschirmmitte fällt
+    final targetDx = screenSize.width / 2 - mapPosition.dx * currentScale;
+    final targetDy = availableHeight / 2 - mapPosition.dy * currentScale;
 
-      // Sanfte Animation zur Ziel-Position
-      final currentTranslation = Offset(
-        controller.value.getTranslation().x,
-        controller.value.getTranslation().y,
-      );
-      final targetTranslation = Offset(targetDx, targetDy);
+    // Sanfte Animation zur Ziel-Position
+    final currentTranslation = Offset(
+      controller.value.getTranslation().x,
+      controller.value.getTranslation().y,
+    );
+    final targetTranslation = Offset(targetDx, targetDy);
 
-      // Nur animieren, wenn die Entfernung signifikant ist (> 50 Pixel)
-      if ((currentTranslation - targetTranslation).distance > 50) {
-        // Vorherigen AnimationController disposten, um Memory Leaks zu vermeiden
-        _focusAnimationController?.dispose();
+    // Nur animieren, wenn die Entfernung signifikant ist (> 50 Pixel)
+    if ((currentTranslation - targetTranslation).distance <= 50) return;
 
-        final animationController = AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 300),
-        );
-        _focusAnimationController = animationController;
+    // Vorherigen AnimationController disposten, um Memory Leaks zu vermeiden
+    _focusAnimationController?.dispose();
 
-        final animation = Tween<Offset>(
-          begin: currentTranslation,
-          end: targetTranslation,
-        ).animate(CurvedAnimation(
-          parent: animationController,
-          curve: Curves.easeInOut,
-        ));
+    final animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _focusAnimationController = animationController;
 
-        animation.addListener(() {
-          final value = animation.value;
-          final matrix = Matrix4.identity()
-            ..setTranslationRaw(value.dx, value.dy, 0)
-            ..scale(currentScale);
-          controller.value = matrix;
-        });
+    final animation = Tween<Offset>(
+      begin: currentTranslation,
+      end: targetTranslation,
+    ).animate(CurvedAnimation(
+      parent: animationController,
+      curve: Curves.easeInOut,
+    ));
 
-        animation.addStatusListener((status) {
-          if (status == AnimationStatus.completed) {
-            animationController.dispose();
-            if (_focusAnimationController == animationController) {
-              _focusAnimationController = null;
-            }
-          }
-        });
+    animation.addListener(() {
+      final value = animation.value;
+      final matrix = Matrix4.identity()
+        ..setTranslationRaw(value.dx, value.dy, 0)
+        ..scale(currentScale);
+      controller.value = matrix;
+    });
 
-        animationController.forward();
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        animationController.dispose();
+        if (_focusAnimationController == animationController) {
+          _focusAnimationController = null;
+        }
       }
-    } catch (e) {
-      // Bei Fehlern ignorieren (z. B. wenn der Controller noch nicht bereit ist)
-      debugPrint('_focusCameraOn error: $e');
-    }
+    });
+
+    animationController.forward();
   }
 
   /// Zentriert die Karte nach dem Laden in der Bildschirmmitte.
@@ -234,43 +239,43 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
     final controller = _mapTransformationController;
     if (controller == null) return;
 
-    try {
-      final screenSize = MediaQuery.of(context).size;
-      final appBarHeight = kToolbarHeight;
-      final availableHeight = screenSize.height - appBarHeight;
+    final screenSize = MediaQuery.of(context).size;
+    final appBarHeight = kToolbarHeight;
+    final availableHeight = screenSize.height - appBarHeight;
 
-      // Karten-Mitte in Pixeln berechnen
-      final mapCenterX = (_mapWidth * _tileWidth + _tileWidth / 2) / 2;
-      final mapCenterY = (_mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4) / 2;
+    // Karten-Mitte in Pixeln berechnen
+    final mapCenterX = (_mapWidth * _tileWidth + _tileWidth / 2) / 2;
+    final mapCenterY = (_mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4) / 2;
 
-      // Passenden Zoom wählen, damit die gesamte Karte sichtbar ist
-      final mapWidthPx = _mapWidth * _tileWidth + _tileWidth / 2;
-      final mapHeightPx = _mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4;
-      final scaleX = screenSize.width / mapWidthPx;
-      final scaleY = availableHeight / mapHeightPx;
-      final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
+    // Passenden Zoom wählen, damit die gesamte Karte sichtbar ist
+    final mapWidthPx = _mapWidth * _tileWidth + _tileWidth / 2;
+    final mapHeightPx = _mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4;
+    final scaleX = screenSize.width / mapWidthPx;
+    final scaleY = availableHeight / mapHeightPx;
+    final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
 
-      // Matrix setzen: Kartenmitte zentrieren
-      final translateX = screenSize.width / 2 - mapCenterX * scale;
-      final translateY = availableHeight / 2 - mapCenterY * scale;
+    // Matrix setzen: Karte linksbündig ausrichten
+    // translateX = 0 → Karte beginnt am linken Bildschirmrand
+    // Vertikal bleibt die Karte zentriert
+    final translateX = 0.0;
+    final translateY = availableHeight / 2 - mapCenterY * scale;
 
-      final matrix = Matrix4.identity()
-        ..setTranslationRaw(translateX, translateY, 0)
-        ..scale(scale);
-      controller.value = matrix;
-    } catch (e) {
-      // Bei Fehlern ignorieren
-      debugPrint('_centerMap error: $e');
-    }
+    final matrix = Matrix4.identity()
+      ..setTranslationRaw(translateX, translateY, 0)
+      ..scale(scale);
+    controller.value = matrix;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Zentriere die Karte NUR beim ersten Build oder wenn sich die
-    // Karten-Dimensionen geändert haben. Das _mapCentered-Flag verhindert,
-    // dass _centerMap() bei jedem setState() erneut aufgerufen wird,
-    // was die Benutzer-Interaktion (Scrollen/Zoomen) stören würde.
-    if (!_mapCentered) {
+    // Zentriere die Karte NUR wenn die Karte geladen ist und noch nicht
+    // zentriert wurde. Das _mapCentered-Flag verhindert, dass _centerMap()
+    // bei jedem setState() erneut aufgerufen wird, was die Benutzer-
+    // Interaktion (Scrollen/Zoomen) stören würde.
+    // Wichtig: Warte auf _mapDataReady, damit _centerMap() nicht mit den
+    // Default-Dimensionen (30×30, 32×32) läuft, bevor die tatsächlichen
+    // Kartendaten vom WidgetMapLoader geladen wurden.
+    if (_mapDataReady && !_mapCentered) {
       _mapCentered = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _centerMap());
     }
@@ -313,33 +318,48 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
             ),
           ],
         ),
-        body: Stack(
-          children: [
-            // Karte im Hintergrund
-            WidgetMapLoader(
-              mapPath: widget.mapPath,
-              onMapLoaded: _onMapLoaded,
-              onTransformationControllerCreated:
-                  _onTransformationControllerCreated,
-              onSpawnPointsParsed: _onSpawnPointsParsed,
-            ),
-            // Token-Overlay im Vordergrund
-            if (_mapTransformationController != null)
+        body: LayoutBuilder(
+          builder: (context, constraints) => Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              // SizedBox.expand() als nicht-positioniertes Child, das den Stack
+              // auf die volle verfügbare Größe zwingt. Ohne dies sized sich der
+              // Stack auf die Kartenmaße (~976×728px), nicht auf die Fensterbreite,
+              // was einen Spalt zwischen Stack-rechts und Fensterrand verursacht.
+              // (Bugfix: "Spalt zwischen Stack und rechtem Fensterrand")
+              const SizedBox.expand(),
+              // Karte im Hintergrund – als Positioned.fill, damit der Stack
+              // nicht auf Kartenmaße geschrumpft wird (Bugfix: Spalt rechts)
               Positioned.fill(
-                child: WidgetCaretaker(
-                  tileWidth: _tileWidth,
-                  tileHeight: _tileHeight,
-                  mapWidth: _mapWidth,
-                  mapHeight: _mapHeight,
-                  transformationController: _mapTransformationController!,
-                  spawnPoints: _spawnPoints,
-                  onGameOver: _onGameOver,
-                  onRequestCameraFocus: _focusCameraOn,
+                child: WidgetMapLoader(
+                  mapPath: widget.mapPath,
+                  onMapLoaded: _onMapLoaded,
+                  onTransformationControllerCreated:
+                      _onTransformationControllerCreated,
+                  onSpawnPointsParsed: _onSpawnPointsParsed,
                 ),
               ),
-          ],
+              // Token-Overlay im Vordergrund (erst anzeigen, wenn Karte geladen ist)
+              if (_mapTransformationController != null && _mapDataReady)
+                Positioned.fill(
+                  child: WidgetCaretaker(
+                    tileWidth: _tileWidth,
+                    tileHeight: _tileHeight,
+                    mapWidth: _mapWidth,
+                    mapHeight: _mapHeight,
+                    transformationController: _mapTransformationController!,
+                    spawnPoints: _spawnPoints,
+                    onGameOver: _onGameOver,
+                    onRequestCameraFocus: _focusCameraOn,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+/*Der Rundenzähler, der auch u.A. auch "Zug beenden" beeinhaltet, sowie der rechte Rand der Map ist von der sichtbaren 
+Breite her schmaler in der Ansicht, als der WidgetCaretaker. Siehe "2026-07-18 (5).png" Warum?*/

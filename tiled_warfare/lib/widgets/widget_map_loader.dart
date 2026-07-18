@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -224,9 +225,16 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     final mapPixelWidth = _mapWidth * _tileWidth + _tileWidth ~/ 2;
     final mapPixelHeight = (_mapHeight * _tileHeight * 3 ~/ 4) + _tileHeight ~/ 4;
 
+    // Der Rand muss groß genug sein, damit _centerMap() in ScreenMain
+    // die Karte mittig positionieren kann. Der minimale Offset für die
+    // Zentrierung ist mapPixelWidth/2 (linker Rand der Karte), also
+    // setzen wir die Grenze auf die gesamte Kartenbreite.
+    // (Bugfix: "Karte verliert Zentrierung nach Scrollen/Zoomen")
+    final boundary = max(mapPixelWidth, mapPixelHeight).toDouble();
+
     return InteractiveViewer(
       transformationController: _transformationController,
-      boundaryMargin: const EdgeInsets.all(double.infinity),
+      boundaryMargin: EdgeInsets.all(boundary),
       minScale: 0.25,
       maxScale: 4.0,
       child: SizedBox(

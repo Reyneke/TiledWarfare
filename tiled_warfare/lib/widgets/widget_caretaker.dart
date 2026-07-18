@@ -368,10 +368,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       final unit = playerUnits[i];
       // Für Apprentice und Line Cook gleichermaßen positionieren
       // Leichter Versatz, damit die Tokens nicht exakt übereinander liegen
-      unit.position = Offset(
+      final roughPosition = Offset(
         playerSpawnPosition.dx + (i - (playerUnits.length - 1) / 2) * widget.tileWidth * 0.5,
         playerSpawnPosition.dy + (i - (playerUnits.length - 1) / 2) * widget.tileHeight * 0.5,
       );
+      // Auf das nächstgelegene freie Hex-Feld snappen, damit Tokens nicht
+      // zwischen Hex-Feldern schweben (Bugfix: "Tokens schweben im Nichts")
+      unit.position = _snapToNearestFreeHex(roughPosition, excludeToken: unit);
     }
 
     // Monster-Spawnpunkte (mit "spawn_monster" im Namen) finden
@@ -1623,17 +1626,34 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       },
       child: Stack(
         children: [
+          // SizedBox.expand() als nicht-positioniertes Child, das den Stack
+          // auf die volle verfügbare Größe (Bildschirm) zwingt.
+          // Dadurch positionieren sich Positioned(right: 8) etc. korrekt
+          // am Bildschirmrand, nicht am Kartenrand.
+          // (Bugfix: "Rundenzähler und Kartenrand sind schmaler als WidgetCaretaker")
+          const SizedBox.expand(),
           // Tokens mit der gleichen Transformation wie die Karte zeichnen.
-          // Dieses nicht-positionierte Child gibt dem Stack seine Größe.
-          Transform(
-            transform: matrix,
-            child: SizedBox(
-              width: widget.mapWidth * widget.tileWidth +
-                  widget.tileWidth / 2,
-              height: (widget.mapHeight * widget.tileHeight * 3 / 4) +
-                  widget.tileHeight / 4,
-              child: Stack(
-                children: _buildTokenWidgets(),
+          // Positioned, damit es die Stack-Größe nicht beeinflusst.
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Transform(
+              transform: matrix,
+              child: SizedBox(
+                width: widget.mapWidth * widget.tileWidth +
+                    widget.tileWidth / 2,
+                height: (widget.mapHeight * widget.tileHeight * 3 / 4) +
+                    widget.tileHeight / 4,
+                child: Stack(
+                  children: [
+                    ..._buildTokenWidgets(),
+                    // DEBUG: Karten-Bounding-Box visualisieren, um zu prüfen,
+                    // ob die Map im WidgetMapLoader die gleiche Größe hat
+                    // wie die Token-Ebene im WidgetCaretaker.
+                    // Entfernen für Release-Builds.
+                    ..._buildDebugOverlay(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1649,107 +1669,253 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
               ),
             ),
           // Runden- und Status-Anzeige (oben rechts)
+          // Explizite Breite, damit SizedBox(width: double.infinity) nicht
+          // zu BoxConstraints(w=Infinity) führt (Bugfix: App crasht)
           Positioned(
             right: 8,
             top: 8,
-            child: _buildStatusPanel(),
+            child: SizedBox(
+              width: 220,
+              child: _buildStatusPanel(),
+            ),
           ),
         ],
       ),
     );
   }
 
+  /// DEBUG: Zeichnet ein rotes Rechteck um die Karten-Bounding-Box
+  /// sowie grüne Punkte an den Hex-Zentren der Kartenecken.
+  /// Damit kann visuell überprüft werden, ob das Token-Overlay und die
+  /// Karte im WidgetMapLoader das identische Koordinatensystem verwenden.
+  ///
+  /// Entfernen für Release-Builds.
+  List<Widget> _buildDebugOverlay() {
+    final mapPixelWidth = widget.mapWidth * widget.tileWidth +
+        widget.tileWidth / 2;
+    final mapPixelHeight = (widget.mapHeight * widget.tileHeight * 3 / 4) +
+        widget.tileHeight / 4;
+
+    return [
+      // Rote Bounding-Box der Karte
+      Positioned(
+        left: 0,
+        top: 0,
+        child: IgnorePointer(
+          child: Container(
+            width: mapPixelWidth,
+            height: mapPixelHeight,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.5),
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+      // Grüne Punkte an den Hex-Zentren der Kartenecken
+      // (0,0), (mapWidth-1, 0), (0, mapHeight-1), (mapWidth-1, mapHeight-1)
+      ..._buildDebugHexCenter(x: 0, y: 0),
+      ..._buildDebugHexCenter(
+        x: widget.mapWidth - 1, y: 0,
+      ),
+      ..._buildDebugHexCenter(
+        x: 0, y: widget.mapHeight - 1,
+      ),
+      ..._buildDebugHexCenter(
+        x: widget.mapWidth - 1,
+        y: widget.mapHeight - 1,
+      ),
+    ];
+  }
+
+  /// DEBUG: Zeichnet einen grünen Punkt am Zentrum eines Hex-Feldes (x, y).
+  List<Widget> _buildDebugHexCenter({required int x, required int y}) {
+    final pixel = _hexToPixel(x: x, y: y);
+    return [
+      Positioned(
+        left: pixel.dx - 3,
+        top: pixel.dy - 3,
+        child: IgnorePointer(
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        left: pixel.dx + 6,
+        top: pixel.dy - 5,
+        child: IgnorePointer(
+          child: Text(
+            '($x,$y)',
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              backgroundColor: Color(0x88000000),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
   /// Baut das Status-Panel mit Runden-, Initiativ- und Spielstandsanzeige.
+  /// Verwendet ein ins Spiel-Design integriertes Layout mit abgerundeten
+  /// Ecken, dezenten Farben und sinnvollen Abständen.
   Widget _buildStatusPanel() {
+    final Color accentColor;
+    final Color panelColor;
+    final Color textColor;
+    final String statusText;
+    final IconData statusIcon;
+
+    if (_isGameOver) {
+      accentColor = Colors.orange;
+      panelColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      statusText = 'Spiel beendet';
+      statusIcon = Icons.flag;
+    } else if (_isPlayerTurn) {
+      accentColor = Colors.green;
+      panelColor = Colors.green.shade50;
+      textColor = Colors.green.shade800;
+      statusText = 'Spieler am Zug';
+      statusIcon = Icons.person;
+    } else {
+      accentColor = Colors.red;
+      panelColor = Colors.red.shade50;
+      textColor = Colors.red.shade800;
+      statusText = 'Host am Zug';
+      statusIcon = Icons.computer;
+    }
+
     return Card(
-      elevation: 4,
-      color: _isGameOver
-          ? Colors.amber.shade100
-          : _isPlayerTurn
-              ? Colors.green.shade50
-              : Colors.red.shade50,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: accentColor.withValues(alpha: 0.3), width: 1),
+      ),
+      color: panelColor,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Rundenanzeige
-            Text(
-              'Runde $_currentRound',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Status (wessen Zug)
+            // Überschrift-Zeile: Runde + Status-Icon
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isGameOver
-                        ? Colors.orange
-                        : _isPlayerTurn
-                            ? Colors.green
-                            : Colors.red,
-                  ),
-                ),
+                Icon(statusIcon, size: 18, color: accentColor),
                 const SizedBox(width: 6),
                 Text(
-                  _isGameOver
-                      ? 'Spiel beendet'
-                      : _isPlayerTurn
-                          ? 'Spieler am Zug'
-                          : 'Host am Zug',
+                  'Runde $_currentRound',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _isGameOver
-                        ? Colors.orange.shade800
-                        : _isPlayerTurn
-                            ? Colors.green.shade800
-                            : Colors.red.shade800,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: textColor,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            // Status-Badge (wessen Zug)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             // Initiativnachricht
             if (_initiativeMessage != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 _initiativeMessage!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey,
+                  color: textColor.withValues(alpha: 0.6),
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],
-            // Spielstand
+            // Spielstand (Trennlinie)
             const SizedBox(height: 8),
-            Text(
-              'Line Cooks: ${_player.unitCount}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            Text(
-              'Gegner: ${_host.activeUnitCount}',
-              style: const TextStyle(fontSize: 12),
+            Container(height: 1, color: accentColor.withValues(alpha: 0.2)),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.people, size: 14, color: Colors.green.shade700),
+                const SizedBox(width: 4),
+                Text(
+                  '${_player.unitCount}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.dangerous, size: 14, color: Colors.red.shade700),
+                const SizedBox(width: 4),
+                Text(
+                  '${_host.activeUnitCount}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade800,
+                  ),
+                ),
+              ],
             ),
             // "Zug beenden"-Button (nur im Spieler-Zug)
             if (_isPlayerTurn && !_isGameOver) ...[
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: _endPlayerTurn,
-                icon: const Icon(Icons.skip_next, size: 16),
-                label: const Text('Zug beenden'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  backgroundColor: Colors.green.shade100,
-                  foregroundColor: Colors.green.shade900,
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _endPlayerTurn,
+                  icon: const Icon(Icons.skip_next, size: 18),
+                  label: const Text('Zug beenden', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
                 ),
               ),
             ],
@@ -1758,21 +1924,28 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
               const SizedBox(height: 8),
               Text(
                 _statusMessage ?? '',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                  color: textColor,
                 ),
               ),
               const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: _returnToRestaurant,
-                icon: const Icon(Icons.arrow_back, size: 16),
-                label: const Text('Zurück zum Restaurant'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  backgroundColor: Colors.amber.shade100,
-                  foregroundColor: Colors.amber.shade900,
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _returnToRestaurant,
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Zurück', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    backgroundColor: Colors.amber.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
                 ),
               ),
             ],
