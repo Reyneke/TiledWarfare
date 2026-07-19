@@ -4,6 +4,9 @@
 # Runs automatically every night (00:00 UTC) and can be triggered
 # manually via workflow_dispatch or on pushes to non-main branches.
 #
+# - Scheduled runs (nightly) → Release build
+# - Push to non-main branches → Debug build
+#
 # Environment variables (set in GitHub repo settings > Actions > Variables):
 #   FLUTTER_VERSION  – e.g. "3.44.6"
 #   FLUTTER_CHANNEL  – e.g. "stable"
@@ -22,6 +25,8 @@ on:
 env:
   FLUTTER_VERSION: '3.44.6'
   FLUTTER_CHANNEL: 'stable'
+  # Debug on push, Release on schedule/workflow_dispatch
+  BUILD_MODE: ${{ github.event_name == 'push' && 'debug' || 'release' }}
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -59,13 +64,13 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build windows --release
+      - run: flutter build windows --${{ env.BUILD_MODE }}
 
       - name: Upload Nightly Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-windows
-          path: build/windows/x64/runner/Release/tiled_warfare.exe
+          path: build/windows/x64/runner/${{ env.BUILD_MODE == 'release' && 'Release' || 'Debug' }}/tiled_warfare.exe
           compression-level: 0               # .exe is already compressed
 
   # ── Linux ────────────────────────────────────────────────────
@@ -98,13 +103,13 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build linux --release
+      - run: flutter build linux --${{ env.BUILD_MODE }}
 
       - name: Upload Nightly Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-linux
-          path: build/linux/x64/release/bundle/
+          path: build/linux/x64/${{ env.BUILD_MODE == 'release' && 'release' || 'debug' }}/bundle/
           compression-level: 6               # directory → good default
 
   # ── Android APK ──────────────────────────────────────────────
@@ -134,11 +139,11 @@ jobs:
       # --android-skip-build-dependency-validation is used because
       # the nightly target API level may not align with the installed
       # Android SDK platforms. Remove after CI SDK is synced.
-      - run: flutter build apk --release --android-skip-build-dependency-validation
+      - run: flutter build apk --${{ env.BUILD_MODE }} --android-skip-build-dependency-validation
 
       - name: Upload Nightly Android APK
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-android
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-${{ env.BUILD_MODE }}.apk
           compression-level: 0               # .apk is already zipped
