@@ -13,53 +13,68 @@ main_app.dart
 screen_main.dart
   ├─ app_theme.dart
   ├─ widget_caretaker.dart
-  └─ widget_map_loader.dart
+  ├─ widget_map_loader.dart
+  └─ utils/hex_grid.dart
 
 widget_map_loader.dart
   ├─ flutter/material.dart
   ├─ flutter/services.dart
   ├─ dart:ui
-  └─ xml/xml.dart
+  ├─ models/map_data.dart
+  ├─ services/map_parser.dart
+  └─ utils/hex_grid.dart
+
+map_parser.dart (services/)
+  ├─ dart:convert
+  ├─ dart:io (zlib)
+  ├─ dart:typed_data
+  ├─ flutter/services.dart
+  ├─ xml/xml.dart
+  └─ models/map_data.dart
+
+map_data.dart (models/)
+  ├─ dart:typed_data
+  └─ flutter/foundation.dart
 
 widget_caretaker.dart
   ├─ dart:collection
   ├─ dart:math
   ├─ flutter/material.dart
-  ├─ object_dough_dumpster.dart
-  ├─ object_dough_zombie.dart
-  ├─ object_host.dart
-  ├─ object_line_cook.dart
-  ├─ object_player.dart
-  └─ object_token.dart
+  ├─ objects/object_dough_dumpster.dart
+  ├─ objects/object_dough_zombie.dart
+  ├─ objects/object_host.dart
+  ├─ objects/object_line_cook.dart
+  ├─ objects/object_player.dart
+  └─ objects/object_token.dart
 
 object_player.dart
   ├─ dart:math
-  ├─ object_line_cook.dart
-  └─ object_token.dart
+  ├─ objects/object_line_cook.dart
+  └─ objects/object_token.dart
 
 object_host.dart
   ├─ dart:math
   ├─ dart:ui
   ├─ fuzzylogic.dart (fuzzy_logic/lib/)
-  ├─ object_dough_dumpster.dart
-  ├─ object_dough_zombie.dart
-  ├─ object_line_cook.dart
-  ├─ object_player.dart
-  ├─ object_token.dart
+  ├─ objects/object_dough_dumpster.dart
+  ├─ objects/object_dough_zombie.dart
+  ├─ objects/object_line_cook.dart
+  ├─ objects/object_player.dart
+  ├─ objects/object_token.dart
   └─ random_name_generator
 
 object_line_cook.dart
   ├─ random_name_generator
-  └─ object_token.dart
+  └─ objects/object_token.dart
 
 object_dough_zombie.dart
   ├─ random_name_generator
-  └─ object_token.dart
+  └─ objects/object_token.dart
 
 object_dough_dumpster.dart
   ├─ dart:math
-  ├─ object_dough_zombie.dart
-  └─ object_token.dart
+  ├─ objects/object_dough_zombie.dart
+  └─ objects/object_token.dart
 
 object_token.dart
   └─ dart:ui (nur Offset)
@@ -94,17 +109,29 @@ ObjectPlayer (Singleton)
         │
         └─→ CombatResult: Ergebnis eines Kampfes
 
+MapParser (Interface)
+  │
+  ├─→ TmxParser: XML-Parser für TMX-Dateien
+  └─→ TmjParser: JSON-Parser für TMJ-Dateien
+        │
+        └─→ MapData: Geparste Kartendaten (via parse())
+
 WidgetMapLoader
   │
+  ├─→ MapParser (Interface): Nutzt Parser-Instanz via forPath()
+  │     ├─→ TmxParser: .tmx-Dateien
+  │     └─→ TmjParser: .tmj-Dateien
+  ├─→ MapData: Verarbeitet geparste Kartendaten
+  ├─→ HexGrid: Nutzt Hex-Berechnungen für Painter
   ├─→ ScreenMain: Liefert Kartendaten via Callbacks
-  └─→ _HexMapPainter: Zeichnet die Karte
+  └─→ _HexMapPainter: Zeichnet die Karte (multi-layer, multi-tileset, Viewport-Culling)
 
 WidgetCaretaker (Zentrale Spiel-Logik)
   │
   ├─→ ScreenMain: Kind-Widget, erhält Parameter
   ├─→ ObjectPlayer: Steuert Spieler-Einheiten
   ├─→ ObjectHost: Steuert KI-Einheiten
-  ├─→ _HexUtils: Hex-Gitter-Berechnungen
+  ├─→ HexGrid: Hex-Gitter-Berechnungen (übergeben von ScreenMain)
   ├─→ _BfsVisitedSet: BFS-Optimierung
   ├─→ _TokenRenderInfo: Darstellungs-Metadaten
   └─→ _TokenWidget: Visuelle Darstellung
@@ -112,6 +139,7 @@ WidgetCaretaker (Zentrale Spiel-Logik)
 ScreenMain
   │
   ├─→ MainApp: Wird als home verwendet
+  ├─→ HexGrid: Erstellt aus Kartendaten, übergibt an Kinder
   └─→ AppTheme: Nutzt Theme für UI
 
 MainApp
@@ -121,12 +149,21 @@ MainApp
 ## Datenfluss (zur Laufzeit)
 
 ```
-TMX-Datei (assets/maps/street_battle.tmx)
+TMX-Datei / TMJ-Datei (assets/maps/...)
+  │
+  ▼
+MapParser.forPath(path) → TmxParser / TmjParser
+  │
+  ▼
+parser.loadFromAsset(path) → MapData
   │
   ▼
 WidgetMapLoader._loadMap()
   │
+  ├─→ _loadTilesetImages(MapData, basePath) → Tileset-Bilder (multi-tileset, indiziert nach firstGid)
+  ├─→ _extractSpawnPoints(MapData) → Spawnpunkte (konfigurierbar via MapLoadConfig)
   ├─→ Kartendimensionen → ScreenMain._onMapLoaded()
+  │     └─→ HexGrid erstellen → ObjectHost.setHexGrid()
   ├─→ TransformationController → ScreenMain._onTransformationControllerCreated()
   └─→ Spawnpunkte → ScreenMain._onSpawnPointsParsed()
                         │
@@ -167,3 +204,7 @@ WidgetMapLoader._loadMap()
 | ScreenMain → WidgetCaretaker | Komposition | ScreenMain enthält Caretaker |
 | ObjectHost → HostPersonality | Komposition | Host hat eine Fuzzy-Persönlichkeit |
 | HostPersonality → EnneagramProfile | Komposition | Persönlichkeit basiert auf Enneagramm |
+| WidgetMapLoader → MapParser | Nutzung | MapLoader nutzt Parser via Interface |
+| MapParser → MapData | Produktion | Parser erzeugt MapData-Instanzen |
+| WidgetMapLoader → MapData | Nutzung | MapLoader verwendet Kartendaten |
+| ScreenMain → HexGrid | Erzeugung | ScreenMain erstellt HexGrid aus Kartendaten |

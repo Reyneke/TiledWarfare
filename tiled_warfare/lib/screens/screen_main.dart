@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
+import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:tiled_warfare/widgets/widget_caretaker.dart';
 import 'package:tiled_warfare/widgets/widget_map_loader.dart';
 
@@ -26,17 +28,9 @@ class ScreenMain extends StatefulWidget {
 }
 
 class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
-  /// Die Pixel-Maße eines einzelnen Karten-Tiles (Breite).
-  int _tileWidth = 32;
-
-  /// Die Pixel-Maße eines einzelnen Karten-Tiles (Höhe).
-  int _tileHeight = 32;
-
-  /// Die Anzahl der Spalten der Karte.
-  int _mapWidth = 30;
-
-  /// Die Anzahl der Zeilen der Karte.
-  int _mapHeight = 30;
+  /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
+  /// Wird erstellt, sobald die Kartendaten geladen sind.
+  HexGrid? _hexGrid;
 
   /// Der [TransformationController] des [InteractiveViewer] der Karte,
   /// der vom [WidgetMapLoader] bereitgestellt wird.
@@ -89,11 +83,19 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
     required int mapWidth,
     required int mapHeight,
   }) {
+    // HexGrid-Instanz erstellen und an alle Konsumenten weitergeben
+    final hexGrid = HexGrid(
+      tileWidth: tileWidth,
+      tileHeight: tileHeight,
+      mapWidth: mapWidth,
+      mapHeight: mapHeight,
+    );
+    
+    // HexGrid an den ObjectHost-Singleton übergeben
+    ObjectHost().setHexGrid(hexGrid);
+    
     setState(() {
-      _tileWidth = tileWidth;
-      _tileHeight = tileHeight;
-      _mapWidth = mapWidth;
-      _mapHeight = mapHeight;
+      _hexGrid = hexGrid;
       // Karten-Daten sind jetzt bereit
       _mapDataReady = true;
       // Zentriere die Karte im ersten Frame (nicht erst NACH dem ersten
@@ -237,19 +239,19 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// Zentriert die Karte nach dem Laden in der Bildschirmmitte.
   void _centerMap() {
     final controller = _mapTransformationController;
-    if (controller == null) return;
+    final hexGrid = _hexGrid;
+    if (controller == null || hexGrid == null) return;
 
     final screenSize = MediaQuery.of(context).size;
     final appBarHeight = kToolbarHeight;
     final availableHeight = screenSize.height - appBarHeight;
 
-    // Karten-Mitte in Pixeln berechnen
-    final mapCenterX = (_mapWidth * _tileWidth + _tileWidth / 2) / 2;
-    final mapCenterY = (_mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4) / 2;
+    // Karten-Mitte in Pixeln berechnen (mittels HexGrid)
+    final mapCenterY = hexGrid.mapPixelHeight / 2;
 
     // Passenden Zoom wählen, damit die gesamte Karte sichtbar ist
-    final mapWidthPx = _mapWidth * _tileWidth + _tileWidth / 2;
-    final mapHeightPx = _mapHeight * _tileHeight * 3 / 4 + _tileHeight / 4;
+    final mapWidthPx = hexGrid.mapPixelWidth;
+    final mapHeightPx = hexGrid.mapPixelHeight;
     final scaleX = screenSize.width / mapWidthPx;
     final scaleY = availableHeight / mapHeightPx;
     final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
@@ -332,6 +334,12 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
               // nicht auf Kartenmaße geschrumpft wird (Bugfix: Spalt rechts)
               Positioned.fill(
                 child: WidgetMapLoader(
+                  hexGrid: _hexGrid ?? const HexGrid(
+                    tileWidth: 32,
+                    tileHeight: 32,
+                    mapWidth: 30,
+                    mapHeight: 30,
+                  ),
                   mapPath: widget.mapPath,
                   onMapLoaded: _onMapLoaded,
                   onTransformationControllerCreated:
@@ -340,13 +348,10 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
                 ),
               ),
               // Token-Overlay im Vordergrund (erst anzeigen, wenn Karte geladen ist)
-              if (_mapTransformationController != null && _mapDataReady)
+              if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
                 Positioned.fill(
                   child: WidgetCaretaker(
-                    tileWidth: _tileWidth,
-                    tileHeight: _tileHeight,
-                    mapWidth: _mapWidth,
-                    mapHeight: _mapHeight,
+                    hexGrid: _hexGrid!,
                     transformationController: _mapTransformationController!,
                     spawnPoints: _spawnPoints,
                     onGameOver: _onGameOver,

@@ -89,17 +89,68 @@
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
+│                        MapParser (Interface)                     │
+├─────────────────────────────────────────────────────────────────┤
+│  + parse(content, basePath) → MapData                           │
+│  + loadFromAsset(assetPath) → Future<MapData>                   │
+│  + basePath(assetPath) → String (static)                        │
+│  + forPath(path) → MapParser (static Factory)                   │
+└─────────────────────────────────────────────────────────────────┘
+          ▲                              ▲
+          │                              │
+┌─────────┴──────────────┐  ┌───────────┴──────────────┐
+│      TmxParser         │  │       TmjParser          │
+├────────────────────────┤  ├──────────────────────────┤
+│ - _parseLayers()       │  │ - _parseLayers()         │
+│ - _parseTilesets()     │  │ - _parseTilesets()       │
+│ - _parseObjectGroups() │  │ - _parseObjectGroups()   │
+│ - _parseCsv()          │  │ - _parsePropertyValue()  │
+│ - _parseBase64()       │  │                          │
+│ - _parseTilesetElement()│ │                          │
+│ - _parsePropertyValue() │ │                          │
+└────────────────────────┘  └──────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        MapData                                   │
+│  (@immutable – Geparste Kartendaten)                             │
+├─────────────────────────────────────────────────────────────────┤
+│  + width, height, tileWidth, tileHeight                          │
+│  + orientation: MapOrientation (enum)                            │
+│  + staggerAxis, staggerIndex                                     │
+│  + layers: List<TileLayer>                                       │
+│  + tilesets: List<TilesetInfo>                                   │
+│  + objectGroups: List<ObjectGroup>                               │
+│  + copyWith()                                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────┐
+│        TileLayer         │  │       TilesetInfo        │  │     ObjectGroup      │
+│  (@immutable)            │  │  (@immutable)            │  │  (@immutable)        │
+├──────────────────────────┤  ├──────────────────────────┤  ├──────────────────────┤
+│  + name                  │  │  + firstGid              │  │  + name              │
+│  + width, height         │  │  + source                │  │  + objects: List<    │
+│  + opacity, visible      │  │  + name, tileWidth       │  │      MapObject>      │
+│  + tileData: Uint32List  │  │  + tileCount, columns    │  └──────────────────────┘
+│  + tileAt(x, y) → int   │  │  + imageSource           │
+│  + toListOfLists()       │  │  + imageWidth/Height     │
+└──────────────────────────┘  └──────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
 │                        WidgetMapLoader                           │
 │  (StatefulWidget – Karten-Ladung & -Rendering)                  │
 ├─────────────────────────────────────────────────────────────────┤
+│  + hexGrid: HexGrid                                              │
 │  + onMapLoaded: Callback                                        │
 │  + onTransformationControllerCreated: Callback                  │
 │  + onSpawnPointsParsed: Callback                                │
+│  + config: MapLoadConfig                                        │
 ├─ Intern ────────────────────────────────────────────────────────┤
-│  - _tilesetImage: ui.Image?                                     │
-│  - _tileData: List<List<int>>?                                  │
+│  - _mapData: MapData?                                           │
+│  - _tilesetImages: Map<int, (Image, columns)>                   │
 │  - _loadMap(): Future<void>                                     │
-│  - _HexMapPainter (CustomPainter)                               │
+│  - _loadTilesetImages(MapData, basePath): Future<void>          │
+│  - _extractSpawnPoints(MapData): List<(name, x, y)>             │
+│  - _HexMapPainter (CustomPainter) – multi-tileset, multi-layer  │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -146,4 +197,10 @@
 | `_BfsVisitedSet`    | Optimiertes Set für BFS-Besuchsmarkierungen        |
 | `_TokenRenderInfo`  | Kapselt Token + Metadaten für Darstellung          |
 | `_TokenWidget`      | Widget zur Darstellung eines Tokens auf der Karte  |
-| `_HexMapPainter`    | CustomPainter für das Zeichnen der Hex-Karte       |
+| `_HexMapPainter`    | CustomPainter für das Zeichnen der Hex-Karte (multi-layer, multi-tileset, Viewport-Culling) |
+| `MapData`           | Datenmodell für geparste Karten (TMX/TMJ)         |
+| `TmxParser`         | Parser für TMX (XML)-Karten                       |
+| `TmjParser`         | Parser für TMJ (JSON)-Karten                      |
+| `MapParser`         | Interface + Factory für Karten-Parser             |
+| `MapLoadConfig`     | Konfiguration für Layer-/Gruppennamen beim Laden  |
+| `MapOrientation`    | Enum: orthogonal, isometric, hexagonal, staggered  |

@@ -30,9 +30,12 @@ Das Projekt folgt einer einfachen Struktur:
 lib/               → Quellcode
   main.dart        ← HIER STARTET DIE APP
   main_app.dart    ← Root-Widget
+  models/          ← Datenmodelle (MapData, TileLayer, TerrainType, etc.)
+  services/        ← Dienste (Parser, TerrainService, FogOfWarService, etc.)
   screens/         ← Bildschirme
   widgets/         ← Wieder-verwendbare UI-Komponenten
   objects/         ← Spiel-Logik (Modelle)
+  utils/           ← Hilfsfunktionen (HexGrid)
   theme/           ← Design-System
   fuzzy_logic/     ← KI-Logik (Beispiele + Tests)
 assets/            → Ressourcen (Bilder, Karten)
@@ -47,12 +50,16 @@ doc/               → Dokumentation
 | 2 | `doc/doc/04_cliffnotes.md` | Schnellüberblick |
 | 3 | `lib/main.dart` + `lib/main_app.dart` | Einstiegspunkt verstehen |
 | 4 | `lib/screens/screen_main.dart` | Hauptbildschirm |
-| 5 | `lib/widgets/widget_map_loader.dart` | Karte laden & rendern |
-| 6 | `lib/objects/object_token.dart` | Basis-Klasse Token |
-| 7 | `lib/widgets/widget_caretaker.dart` | **Spiel-Logik (größte Datei)** |
-| 8 | `lib/objects/object_player.dart` | Kampfsystem |
-| 9 | `lib/objects/object_host.dart` | KI-Verhalten |
-| 10 | `doc/rules/combat_rules.md` | Regelwerk |
+| 5 | `lib/models/map_data.dart` + `lib/services/map_parser.dart` | Karten-Datenmodell & Parser |
+| 6 | `lib/services/terrain_service.dart` | **Geländesystem** (TerrainService, BFS, parseTerrain) |
+| 7 | `lib/services/fog_of_war.dart` | **Fog of War** (Sichtbarkeitsberechnung) |
+| 8 | `lib/widgets/widget_map_loader.dart` | Karte laden & rendern (nutzt Parser) |
+| 9 | `lib/utils/hex_grid.dart` | Zentrale Hex-Gitter-Berechnungen |
+| 10 | `lib/objects/object_token.dart` | Basis-Klasse Token (mit fieldOfView) |
+| 11 | `lib/widgets/widget_caretaker.dart` | **Spiel-Logik (größte Datei)** |
+| 12 | `lib/objects/object_player.dart` | Kampfsystem |
+| 13 | `lib/objects/object_host.dart` | KI-Verhalten |
+| 14 | `doc/rules/combat_rules.md` | Regelwerk |
 
 ---
 
@@ -68,27 +75,52 @@ final player = ObjectPlayer();
 final host = ObjectHost();
 ```
 
-### 2.2 Warum Callbacks statt Vererbung?
+### 2.2 Warum ein separates Datenmodell und Parser?
 
-`WidgetMapLoader` gibt seine Daten (Kartendimensionen, Spawnpunkte, TransformationController) über **Callbacks** an `ScreenMain` weiter, statt Teil einer großen Widget-Hierarchie zu sein. Das hält die Komponenten entkoppelt und testbar.
+Die Karten-Daten wurden aus `WidgetMapLoader` in ein separates **Datenmodell** (`lib/models/map_data.dart`) und **Parser-Interface** (`lib/services/map_parser.dart`) ausgelagert. Vorteile:
+- **Trennung von Concerns**: Parsing-Logik ist unabhängig vom Widget
+- **Wiederverwendbarkeit**: Parser können ohne Widget-Kontext getestet werden
+- **Erweiterbarkeit**: Neue Encodings oder Kartenformate können leicht hinzugefügt werden
+- **TMJ-Support**: JSON-Format wird neben TMX (XML) unterstützt
 
-### 2.3 Warum ein CustomPainter für die Karte?
+### 2.3 Warum Callbacks statt Vererbung?
+
+`WidgetMapLoader` gibt seine Daten (Kartendimensionen, Spawnpunkte, TransformationController, Terrain-Daten) über **Callbacks** an `ScreenMain` weiter, statt Teil einer großen Widget-Hierarchie zu sein. Das hält die Komponenten entkoppelt und testbar.
+
+### 2.4 Warum ein CustomPainter für die Karte?
 
 Die Hex-Karte wird mit `_HexMapPainter` (ein `CustomPainter`) gezeichnet, weil:
 - Performance: Nur ein Widget statt hunderter einzelner Tile-Widgets
 - Flexibilität: Direkter Zugriff auf Canvas-API für Hex-Gitter
 - Einfachheit: Die Hex-Positionierung ist im Painter zentralisiert
 
-### 2.4 Warum Viewport-Culling?
+### 2.5 Warum Viewport-Culling?
 
 Große Karten (z. B. 30×30) können hunderte Tokens enthalten. Viewport-Culling stellt sicher, dass nur Tokens im sichtbaren Bereich gezeichnet werden. Das verbessert die Performance drastisch.
 
-### 2.5 Warum BFS für Bewegung?
+### 2.6 Warum BFS für Bewegung?
 
 Die Bewegung verwendet **Breadth-First Search** (BFS), um:
 1. Alle erreichbaren Felder innerhalb der Bewegungspunkte zu finden
-2. Belegte Felder als Hindernisse zu behandeln
-3. Pfadfindung für `_snapToNearestFreeHex` zu ermöglichen
+2. Geländekosten (z. B. Wald 1.5×, Sumpf 3×) zu berücksichtigen
+3. Belegte Felder als Hindernisse zu behandeln
+4. Pfadfindung für `_snapToNearestFreeHex` zu ermöglichen
+
+Der BFS ist im `TerrainService` als `effectiveMovementRange()` und `reachableHexes()` implementiert.
+
+### 2.7 Warum Cube-Koordinaten für Line-of-Sight?
+
+Line-of-Sight verwendet **Cube-Koordinaten-DDA** (angepasster Bresenham), weil:
+- Genauer auf dem Hex-Gitter als Pixel-basiertes Raycasting
+- Keine Rundungsfehler durch Pixel→Hex-Rückkonvertierung
+- Einheitlich mit der Hex-Distanzberechnung
+
+### 2.8 Warum zwei Ebenen für Fog of War?
+
+Der `FogOfWarService` unterscheidet zwischen **visible** (aktuell sichtbar) und **revealed** (jemals gesehen):
+- **visible**: Wird pro Runde neu berechnet, berücksichtigt Token-Bewegung
+- **revealed**: Akkumuliert über Runden, bleibt dauerhaft sichtbar
+- Erlaubt "Fog of War vs. Fog of Exploration" – aufgedeckte Karte bleibt sichtbar
 
 ---
 
@@ -108,6 +140,7 @@ class ObjectChef extends ObjectToken {
     movementValue: 4,
     damageValue: 3,
     rangeValue: 2,
+    fieldOfView: 5, // Sichtweite in Hex-Feldern
   );
 }
 ```
@@ -118,10 +151,19 @@ class ObjectChef extends ObjectToken {
 
 ### 3.2 Neue Karte hinzufügen
 
-1. TMX-Datei in `assets/maps/` ablegen
-2. Tileset-Bild in `assets/maps/` ablegen
-3. In `widget_map_loader.dart` den Pfad in `_loadMap()` anpassen
-4. Spawnpunkte in der TMX-Datei als Objectgroup "Spawns" definieren
+1. TMX- oder TMJ-Datei in `assets/maps/` ablegen
+2. Tileset-Bild(er) in `assets/maps/` ablegen
+3. In `screen_main.dart` den `mapPath`-Parameter anpassen
+4. Spawnpunkte in der Kartendatei als Objectgroup "Spawns" definieren
+5. **Layer-Struktur** (empfohlen für neue Karten):
+   - `ground` (TileLayer) – Bodenbelag
+   - `decoration` (TileLayer) – Dekoration
+   - `collision` (TileLayer) – Kollisions-Tiles (optional)
+   - `spawns` (ObjectGroup) – Spawnpunkte
+   - `Gelaendetypen` (ObjectGroup) – Geländetypen (optional)
+6. Die Layer-Namen können über `MapLoadConfig` angepasst werden
+7. Über den `onTerrainParsed`-Callback von `WidgetMapLoader` werden die
+   Geländedaten und das Kollisions-Set an das übergeordnete Widget übergeben
 
 ### 3.3 Kampfregeln ändern
 
@@ -134,6 +176,12 @@ class ObjectChef extends ObjectToken {
 1. `object_host.dart` → `_moveZombieTowardsTarget()` oder `performAllZombieAttacks()` ändern
 2. Enneagramm-Profile in `EnneagramProfile.all` erweitern
 3. Fuzzy-Regeln in `HostPersonality.initializeRules()` anpassen
+
+### 3.5 Neuen Geländetyp hinzufügen
+
+1. `TerrainType`-Enum in `lib/models/map_data.dart` erweitern
+2. `TerrainConfig.defaults`-Map ergänzen
+3. `TerrainType.fromString()` in der switch-Anweisung ergänzen
 
 ---
 
@@ -165,7 +213,7 @@ class ObjectChef extends ObjectToken {
 
 ### 4.4 Tests
 
-Tests befinden sich in `lib/fuzzy_logic/test/`. Für neue Funktionen sollten Tests ergänzt werden.
+Tests befinden sich in `lib/fuzzy_logic/test/` sowie in `test/fog_of_war_test.dart` (Fog of War). Für neue Funktionen sollten Tests ergänzt werden.
 
 ---
 
@@ -180,11 +228,23 @@ Tests befinden sich in `lib/fuzzy_logic/test/`. Für neue Funktionen sollten Tes
 - Prüfe `_isLoading` und `_error` in WidgetMapLoader
 - Prüfe Viewport-Culling: Zoome ganz heraus
 - Prüfe `_allTokens` in WidgetCaretaker
+- Prüfe Fog-of-War-Status (Token könnte auf unsichtbarem Feld stehen)
 
 ### "Bewegung rastet nicht ein"
 - Prüfe `_snapToNearestFreeHex()` in WidgetCaretaker
-- Prüfe BFS in `_reachableHexFields`
+- Prüfe BFS in `TerrainService.effectiveMovementRange()`
 - Prüfe `_isHexFieldFree()` und `_getOccupiedHexFields()`
+
+### "Geländekosten werden ignoriert"
+- Prüfe, ob die "Gelaendetypen"-Objektgruppe in der TMX existiert
+- Prüfe die `type`-Werte (müssen mit `TerrainType.fromString()` übereinstimmen)
+- Prüfe `TerrainConfig.defaults` in `map_data.dart`
+
+### "Fog of War zeigt zu viel / zu wenig"
+- Prüfe `fieldOfView`-Werte der Tokens
+- Prüfe `hasLineOfSight()` im FogOfWarService
+- Prüfe `blocksVision`-Flags der Geländetypen
+- Prüfe `debugPrint`-Ausgaben bei `computeVisibility()`
 
 ### "Der Kampf funktioniert nicht"
 - Prüfe `performAction()` in `object_player.dart`
@@ -207,6 +267,7 @@ Tests befinden sich in `lib/fuzzy_logic/test/`. Für neue Funktionen sollten Tes
 | `doc/doc/02_flow_diagrams.md` | Ablaufpläne |
 | `doc/doc/03_dependency_graph.md` | Abhängigkeitsdiagramm |
 | `doc/doc/04_cliffnotes.md` | Cliffnotes (kurz & knapp) |
+| `doc/todo/feat_better_maps/3_terrain_system.md` | Detaillierte Terrain-System-Doku |
 | `doc/rules/combat_rules.md` | Vollständige Kampfregeln |
 | `pubspec.yaml` | Abhängigkeiten und Metadaten |
 

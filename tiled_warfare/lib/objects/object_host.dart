@@ -8,11 +8,8 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:random_name_generator/random_name_generator.dart';
-
-/// Konstante Tile-Größe für die Hex-Gitter-Berechnung (aus der TMX-Datei).
-const int _hostTileWidth = 32;
-const int _hostTileHeight = 32;
 
 /// Repräsentiert ein Enneagramm-Persönlichkeitsprofil.
 ///
@@ -159,6 +156,15 @@ class ObjectHost {
     _initializePersonality();
   }
 
+  /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
+  HexGrid? _hexGrid;
+
+  /// Setzt die Hex-Utility-Instanz für diesen Host.
+  /// Muss aufgerufen werden, bevor Hex-Berechnungen durchgeführt werden.
+  void setHexGrid(HexGrid grid) {
+    _hexGrid = grid;
+  }
+
   /// Zufälliger Name für den Host.
   String name = RandomNames(Zone.us).fullName();
 
@@ -248,29 +254,15 @@ class ObjectHost {
 
   /// Rechnet Pixel-Koordinaten in die nächstgelegenen Hex-Gitter-Koordinaten
   /// (x, y) um (odd-r staggerindex="odd").
-  /// Gleiche Logik wie in WidgetCaretaker.
+  /// Nutzt die zentrale [HexGrid]-Instanz.
   ({int x, int y}) _pixelToHex(Offset pixel) {
-    final approxY = (pixel.dy / (_hostTileHeight * 3.0 / 4.0)).round();
-    int x;
-    if (approxY % 2 == 1) {
-      x = ((pixel.dx - _hostTileWidth / 2) / _hostTileWidth).round();
-    } else {
-      x = (pixel.dx / _hostTileWidth).round();
-    }
-    return (x: x, y: approxY);
+    return _hexGrid!.pixelToHex(pixel);
   }
 
   /// Rechnet Hex-Gitter-Koordinaten (x, y) in Pixel-Koordinaten um
   /// (odd-r staggerindex="odd").
   Offset _hexToPixel({required int x, required int y}) {
-    final double pixelX;
-    if (y % 2 == 1) {
-      pixelX = (x * _hostTileWidth).toDouble() + _hostTileWidth / 2;
-    } else {
-      pixelX = (x * _hostTileWidth).toDouble();
-    }
-    final pixelY = y * (_hostTileHeight * 3.0 / 4.0);
-    return Offset(pixelX, pixelY);
+    return _hexGrid!.hexToPixel(x: x, y: y);
   }
 
   /// Bewegt einen einzelnen Zombie auf das nächste Ziel zu.
@@ -311,7 +303,7 @@ class ObjectHost {
     final occupied = _buildOccupiedHostHexes(playerUnits: targets);
     // Entferne den Zombie selbst aus der belegten-Menge, damit er sich
     // von seinem eigenen Feld wegbewegen kann
-    occupied.remove(zombieHex.y * 100 + zombieHex.x);
+    occupied.remove(_hexGrid!.hexKey(zombieHex.x, zombieHex.y));
 
     // Schrittweite = min(1, movementValue) Hex-Felder
     // Zombies movementValue = 1, also genau 1 Schritt
@@ -328,28 +320,26 @@ class ObjectHost {
       final currentX = newHexX;
       final currentY = newHexY;
 
-      // Nachbarn für aktuelles y (gerade/ungerade)
-      final neighbors = (currentY % 2 == 0)
-          ? [(-1, -1), (0, -1), (-1, 0), (1, 0), (-1, 1), (0, 1)]
-          : [(0, -1), (1, -1), (-1, 0), (1, 0), (0, 1), (1, 1)];
-
       // Den Nachbarn mit der geringsten Entfernung zum Ziel wählen,
       // der nicht belegt ist
       ({int dx, int dy}) bestNeighbor = (dx: 0, dy: 0);
       int bestDistance = 999999;
 
-      for (final (ndx, ndy) in neighbors) {
-        final nx = currentX + ndx;
-        final ny = currentY + ndy;
-        if (nx < 0 || ny < 0) continue; // Kartenränder überspringen
+      for (final offset in _hexGrid!.neighborOffsets(currentY)) {
+        final nx = currentX + offset.dx;
+        final ny = currentY + offset.dy;
+        if (!_hexGrid!.isInBounds(nx, ny)) continue;
 
         // Belegte Felder überspringen (Kollisionsvermeidung)
-        if (occupied.contains(ny * 100 + nx)) continue;
+        if (occupied.contains(_hexGrid!.hexKey(nx, ny))) continue;
 
-        final dist = ((targetHex.x - nx).abs() + (targetHex.y - ny).abs());
+        final dist = _hexGrid!.distance(
+          x1: nx, y1: ny,
+          x2: targetHex.x, y2: targetHex.y,
+        );
         if (dist < bestDistance) {
           bestDistance = dist;
-          bestNeighbor = (dx: ndx, dy: ndy);
+          bestNeighbor = (dx: offset.dx, dy: offset.dy);
         }
       }
 
@@ -399,7 +389,10 @@ class ObjectHost {
         if (zombie.woundValue <= 0) continue;
         if (zombie.hasActed) continue;
         final zombieHex = _pixelToHex(zombie.position);
-        final hexDistance = (zombieHex.x - targetHex.x).abs() + (zombieHex.y - targetHex.y).abs();
+        final hexDistance = _hexGrid!.distance(
+          x1: zombieHex.x, y1: zombieHex.y,
+          x2: targetHex.x, y2: targetHex.y,
+        );
         if (hexDistance <= zombie.rangeValue + 1) {
           availableZombies.add(zombie);
         }
@@ -519,7 +512,10 @@ class ObjectHost {
           // Hex-Entfernung zwischen Zombie und Ziel ermitteln
           final zombieHex = _pixelToHex(zombie.position);
           final cookHex = _pixelToHex(cook.position);
-          final hexDistance = (zombieHex.x - cookHex.x).abs() + (zombieHex.y - cookHex.y).abs();
+          final hexDistance = _hexGrid!.distance(
+            x1: zombieHex.x, y1: zombieHex.y,
+            x2: cookHex.x, y2: cookHex.y,
+          );
 
           // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
           if (hexDistance <= zombie.rangeValue + 1) {
@@ -611,12 +607,11 @@ class ObjectHost {
     final occupied = <int>{};
     for (final dumpster in doughDumpsterList) {
       final dh = _pixelToHex(dumpster.position);
-      // Kartenbreite ist unbekannt, verwende 100 als konservative Schätzung
-      occupied.add(dh.y * 100 + dh.x);
+      occupied.add(_hexGrid!.hexKey(dh.x, dh.y));
       for (final zombie in dumpster.zombieList) {
         if (zombie.woundValue <= 0) continue;
         final zh = _pixelToHex(zombie.position);
-        occupied.add(zh.y * 100 + zh.x);
+        occupied.add(_hexGrid!.hexKey(zh.x, zh.y));
       }
     }
     // Auch Spieler-Einheiten als belegt markieren,
@@ -625,7 +620,7 @@ class ObjectHost {
       for (final unit in playerUnits) {
         if (unit.woundValue <= 0) continue;
         final uh = _pixelToHex(unit.position);
-        occupied.add(uh.y * 100 + uh.x);
+        occupied.add(_hexGrid!.hexKey(uh.x, uh.y));
       }
     }
     return occupied;
@@ -635,55 +630,19 @@ class ObjectHost {
   /// Durchsucht spiralförmig beginnend beim Start-Hex, bis ein freies Feld
   /// gefunden wird oder der maximale Radius erreicht ist.
   /// Gibt das erste freie Hex als Pixel-Position zurück.
+  /// Delegiert an die zentrale [HexGrid]-Instanz.
   Offset _findFreeHexNear({
     required int startX,
     required int startY,
     required Set<int> occupied,
     int maxRadius = 12,
   }) {
-    // Prüfe, ob das Start-Hex selbst frei ist
-    if (!occupied.contains(startY * 100 + startX)) {
-      return _hexToPixel(x: startX, y: startY);
-    }
-
-    // Spiralförmige Suche
-    for (int radius = 1; radius <= maxRadius; radius++) {
-      // Obere Kante
-      for (int dx = -radius; dx <= radius; dx++) {
-        final x = startX + dx;
-        final y = startY - radius;
-        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
-          return _hexToPixel(x: x, y: y);
-        }
-      }
-      // Untere Kante
-      for (int dx = -radius; dx <= radius; dx++) {
-        final x = startX + dx;
-        final y = startY + radius;
-        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
-          return _hexToPixel(x: x, y: y);
-        }
-      }
-      // Linke Kante (ohne Ecken)
-      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
-        final x = startX - radius;
-        final y = startY + dy;
-        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
-          return _hexToPixel(x: x, y: y);
-        }
-      }
-      // Rechte Kante (ohne Ecken)
-      for (int dy = -radius + 1; dy <= radius - 1; dy++) {
-        final x = startX + radius;
-        final y = startY + dy;
-        if (x >= 0 && y >= 0 && !occupied.contains(y * 100 + x)) {
-          return _hexToPixel(x: x, y: y);
-        }
-      }
-    }
-
-    // Fallback: Start-Position zurückgeben
-    return _hexToPixel(x: startX, y: startY);
+    return _hexGrid!.findFreeHexNear(
+      startX: startX,
+      startY: startY,
+      occupied: occupied,
+      maxRadius: maxRadius,
+    );
   }
 
   /// Lässt alle Dough Dumpster neue Zombies spawnen (für jede neue Runde).
@@ -717,7 +676,7 @@ class ObjectHost {
           // Neu platzierten Zombie als belegt markieren, damit nachfolgende
           // Zombies in derselben Runde nicht auf demselben Feld spawnen
           final zh = _pixelToHex(freePosition);
-          occupied.add(zh.y * 100 + zh.x);
+          occupied.add(_hexGrid!.hexKey(zh.x, zh.y));
         }
       }
     }

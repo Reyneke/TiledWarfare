@@ -30,6 +30,7 @@ enum CombatAction {
 /// | [woundValue]     | Trefferpunkte (Gesundheit)       |
 /// | [movementValue]  | Maximale Bewegung pro Zug        |
 /// | [rangeValue]     | Reichweite für Fernkampf         |
+/// | [fieldOfView]    | Sichtweite in Hex-Feldern        |
 ///
 /// Siehe auch: [ObjectApprentice] (Spieler-Charaktere),
 /// [ObjectDoughZombie] (Standard-Gegner).
@@ -61,6 +62,14 @@ class ObjectToken {
 
   /// Maximale Bewegung in Hex-Feldern pro Zug.
   int movementValue;
+
+  /// Sichtweite in Hex-Feldern für Fog of War.
+  ///
+  /// Gibt an, wie viele Hex-Felder weit dieser Token sehen kann.
+  /// 0 bedeutet: der Token sieht nur sein eigenes Feld.
+  /// Dieser Wert wird von [FogOfWarService] verwendet, um die
+  /// aktuell sichtbaren Felder zu berechnen.
+  int fieldOfView;
 
   /// Schadenswert – Höhe des Schadens, den dieser Token bei einem Treffer verursacht.
   int damageValue;
@@ -118,6 +127,7 @@ class ObjectToken {
     this.attackValue = 0,
     this.defenseValue = 0,
     this.movementValue = 0,
+    this.fieldOfView = 3,
     this.damageValue = 1,
     this.rangeValue = 1,
     this.moneyValue = 100,
@@ -133,6 +143,7 @@ class ObjectToken {
     int? attackValue,
     int? defenseValue,
     int? movementValue,
+    int? fieldOfView,
     int? damageValue,
     int? rangeValue,
     int? moneyValue,
@@ -148,6 +159,7 @@ class ObjectToken {
       attackValue: attackValue ?? this.attackValue,
       defenseValue: defenseValue ?? this.defenseValue,
       movementValue: movementValue ?? this.movementValue,
+      fieldOfView: fieldOfView ?? this.fieldOfView,
       damageValue: damageValue ?? this.damageValue,
       rangeValue: rangeValue ?? this.rangeValue,
       moneyValue: moneyValue ?? this.moneyValue,

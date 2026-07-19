@@ -1,12 +1,47 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
-import 'package:xml/xml.dart';
+import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/services/map_parser.dart';
+import 'package:tiled_warfare/services/terrain_service.dart';
+import 'package:tiled_warfare/utils/hex_grid.dart';
 
-/// Lädt die Karte "street_battle.tmx" aus dem "assets" Ordner und zeigt sie an.
+/// Konfiguration für das Karten-Laden.
+///
+/// Erlaubt die Anpassung, welche Layer und Objektgruppen verwendet werden.
+class MapLoadConfig {
+  /// Name des Boden-Layers (TileLayer), der als Karten-Boden gezeichnet wird.
+  final String groundLayerName;
+
+  /// Name des Kollisions-Layers (TileLayer), falls vorhanden.
+  final String? collisionLayerName;
+
+  /// Name der Objektgruppe für Spawnpunkte.
+  final String spawnGroupName;
+
+  /// Name des Dekorations-Layers (TileLayer), der über dem Boden gezeichnet wird.
+  final String? decorationLayerName;
+
+  /// Name des oberen Dekorations-Layers (TileLayer), ganz oben gezeichnet.
+  final String? decorationUpperLayerName;
+
+  const MapLoadConfig({
+    this.groundLayerName = 'ground',
+    this.collisionLayerName = 'collision',
+    this.spawnGroupName = 'Spawns',
+    this.decorationLayerName = 'decoration',
+    this.decorationUpperLayerName = 'decoration - upper',
+  });
+}
+
+/// Lädt eine Tiled-Karte (TMX oder TMJ) und zeigt sie an.
 /// Die Karte kann gezoomt und gescrollt werden.
 class WidgetMapLoader extends StatefulWidget {
+  /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
+  final HexGrid hexGrid;
+
   /// Callback, der aufgerufen wird, sobald die Karte geladen wurde.
   /// Übergibt die Kartendimensionen (Tile-Größe und Karten-Größe).
   final void Function({
@@ -29,154 +64,106 @@ class WidgetMapLoader extends StatefulWidget {
   final void Function(List<({String name, double x, double y})> spawnPoints)?
       onSpawnPointsParsed;
 
-  /// Der Pfad zur .tmx-Datei, die geladen werden soll.
+  /// Callback, der die geparsten Terrain-Daten und das Kollisions-Set
+  /// an das übergeordnete Widget weitergibt.
+  final void Function(
+    Map<int, TerrainType> terrainMap,
+    Set<int> collisionSet,
+  )? onTerrainParsed;
+
+  /// Der Pfad zur .tmx/.tmj-Datei, die geladen werden soll.
   /// Standardmäßig wird "assets/maps/street_battle.tmx" verwendet.
   final String mapPath;
 
+  /// Konfiguration für das Karten-Laden.
+  final MapLoadConfig config;
+
   const WidgetMapLoader({
     super.key,
+    required this.hexGrid,
     this.onMapLoaded,
     this.onTransformationControllerCreated,
     this.onSpawnPointsParsed,
+    this.onTerrainParsed,
     this.mapPath = 'assets/maps/street_battle.tmx',
+    this.config = const MapLoadConfig(),
   });
-
 
   @override
   State<WidgetMapLoader> createState() => _WidgetMapLoaderState();
 }
 
 class _WidgetMapLoaderState extends State<WidgetMapLoader> {
-  ui.Image? _tilesetImage;
-  List<List<int>>? _tileData;
+  /// Alle geladenen Tileset-Bilder, indiziert nach firstGid.
+  final Map<int, ({ui.Image image, int columns})> _tilesetImages = {};
+
+  /// Die geladenen Kartendaten.
+  MapData? _mapData;
+
   int _mapWidth = 30;
   int _mapHeight = 30;
   int _tileWidth = 32;
   int _tileHeight = 32;
-  int _tilesetColumns = 16;
   bool _isLoading = true;
   String? _error;
-  final TransformationController _transformationController = TransformationController();
+  final TransformationController _transformationController =
+      TransformationController();
 
   @override
   void initState() {
     super.initState();
-    // TransformationController sofort über Callback bekannt geben,
-    // damit WidgetCaretaker ihn nutzen kann
     widget.onTransformationControllerCreated?.call(_transformationController);
     _loadMap();
   }
 
-
   @override
   void dispose() {
     _transformationController.dispose();
+    for (final entry in _tilesetImages.values) {
+      entry.image.dispose();
+    }
     super.dispose();
   }
 
+  // ──────────────────────────────────────────────
+  // Karten-Ladevorgang
+  // ──────────────────────────────────────────────
+
   Future<void> _loadMap() async {
     try {
-      // TMX-Datei laden und parsen
-      final tmxString = await rootBundle.loadString(widget.mapPath);
-      final document = XmlDocument.parse(tmxString);
-      final mapElement = document.findElements('map').first;
-
-      _mapWidth = int.parse(mapElement.getAttribute('width') ?? '30');
-      _mapHeight = int.parse(mapElement.getAttribute('height') ?? '30');
-      _tileWidth = int.parse(mapElement.getAttribute('tilewidth') ?? '32');
-      _tileHeight = int.parse(mapElement.getAttribute('tileheight') ?? '32');
-
-      // Tile-Layer-Daten parsen
-      final layer = mapElement.findElements('layer').first;
-      final dataElement = layer.findElements('data').first;
-      final csvData = dataElement.innerText.trim();
-      final tileIds = csvData
-          .split(',')
-          .map((s) => int.parse(s.trim()))
-          .toList();
-
-      final tileData = <List<int>>[];
-      for (int y = 0; y < _mapHeight; y++) {
-        final row = <int>[];
-        for (int x = 0; x < _mapWidth; x++) {
-          row.add(tileIds[y * _mapWidth + x]);
-        }
-        tileData.add(row);
-      }
-      _tileData = tileData;
-
-      // Tileset-Bild laden
-      // Ermittle das Verzeichnis der TMX-Datei, um relative Pfade aufzulösen
-      final mapDir = widget.mapPath.substring(
-        0,
-        widget.mapPath.lastIndexOf('/'),
+      final parser = MapParser.forPath(
+        widget.mapPath,
+        assetBundle: rootBundle,
       );
 
-      // Lade den TSX-Tileset, um das tatsächliche Bild und die Spaltenanzahl zu finden
-      String tilesetImagePath;
-      try {
-        final tilesetElement = mapElement.findElements('tileset').first;
-        final tsxSource = tilesetElement.getAttribute('source');
-        if (tsxSource != null) {
-          // TSX-Datei laden
-          final tsxPath = '$mapDir/$tsxSource';
-          final tsxString = await rootBundle.loadString(tsxPath);
-          final tsxDocument = XmlDocument.parse(tsxString);
-          final tsxTileset = tsxDocument.findElements('tileset').first;
+      final mapData = await parser.loadFromAsset(widget.mapPath);
+      _mapData = mapData;
 
-          // Spaltenanzahl aus dem TSX übernehmen
-          final columnsAttr = tsxTileset.getAttribute('columns');
-          if (columnsAttr != null) {
-            _tilesetColumns = int.parse(columnsAttr);
-          }
+      _mapWidth = mapData.width;
+      _mapHeight = mapData.height;
+      _tileWidth = mapData.tileWidth;
+      _tileHeight = mapData.tileHeight;
 
-          final imageElement = tsxTileset.findElements('image').first;
-          final imageSource = imageElement.getAttribute('source');
-          tilesetImagePath = '$mapDir/$imageSource';
-        } else {
-          // Spaltenanzahl direkt aus dem TMX-tileset übernehmen
-          final columnsAttr = tilesetElement.getAttribute('columns');
-          if (columnsAttr != null) {
-            _tilesetColumns = int.parse(columnsAttr);
-          }
+      final basePath = MapParser.basePath(widget.mapPath);
+      await _loadTilesetImages(mapData, basePath);
 
-          // Fallback: image-Attribut direkt im tileset-Element
-          final imageElement = tilesetElement.findElements('image').first;
-          final imageSource = imageElement.getAttribute('source');
-          tilesetImagePath = '$mapDir/$imageSource';
-        }
-      } catch (_) {
-        // Fallback für den ursprünglichen hardcodierten Pfad
-        tilesetImagePath = 'assets/maps/Thespazztikone_tilemaps_005_neu.png';
-      }
-
-      var byteData = await rootBundle.load(tilesetImagePath);
-      var codec = await ui.instantiateImageCodec(byteData.buffer.asUint8List());
-      var frameInfo = await codec.getNextFrame();
-      _tilesetImage = frameInfo.image;
-
-      // Spawnpunkte aus der "Spawns"-Objektgruppe parsen
-      final spawnPoints = <({String name, double x, double y})>[];
-      try {
-        final spawnObjectGroup = mapElement.findElements('objectgroup').firstWhere(
-          (og) => og.getAttribute('name') == 'Spawns',
-        );
-        for (final obj in spawnObjectGroup.findElements('object')) {
-          final name = obj.getAttribute('name') ?? '';
-          final x = double.parse(obj.getAttribute('x') ?? '0');
-          final y = double.parse(obj.getAttribute('y') ?? '0');
-          if (name.isNotEmpty) {
-            spawnPoints.add((name: name, x: x, y: y));
-          }
-        }
-      } catch (_) {
-        // Keine Spawns-Objektgruppe vorhanden – ignorieren
-      }
-
-      // Spawnpunkte an den Callback melden
+      final spawnPoints = _extractSpawnPoints(mapData);
       widget.onSpawnPointsParsed?.call(spawnPoints);
 
-      // Kartendimensionen an den Callback melden
+      // Terrain aus "Gelaendetypen"-Objektgruppe parsen
+      final terrainGroup = mapData.objectGroups
+          .where((g) => g.name == 'Gelaendetypen')
+          .firstOrNull;
+      final terrainMap = parseTerrain(terrainGroup, widget.hexGrid);
+
+      // Kollisions-Set berechnen
+      final collisionSet = mapData.computeCollisionTiles(
+        widget.config.collisionLayerName ?? 'collision',
+      );
+
+      // Beides an den Callback übergeben
+      widget.onTerrainParsed?.call(terrainMap, collisionSet);
+
       widget.onMapLoaded?.call(
         tileWidth: _tileWidth,
         tileHeight: _tileHeight,
@@ -187,13 +174,69 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       setState(() {
         _isLoading = false;
       });
+    } on FormatException catch (e) {
+      setState(() {
+        _error = 'Formatfehler: ${e.message}';
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Unbekannter Fehler: $e';
         _isLoading = false;
       });
     }
   }
+
+  // ──────────────────────────────────────────────
+  // Tileset-Bilder laden
+  // ──────────────────────────────────────────────
+
+  Future<void> _loadTilesetImages(MapData mapData, String basePath) async {
+    for (final tileset in mapData.tilesets) {
+      final imagePath = tileset.imageSource != null
+          ? '$basePath/${tileset.imageSource}'
+          : null;
+      if (imagePath == null) continue;
+
+      try {
+        final byteData = await rootBundle.load(imagePath);
+        final codec =
+            await ui.instantiateImageCodec(byteData.buffer.asUint8List());
+        final frameInfo = await codec.getNextFrame();
+        _tilesetImages[tileset.firstGid] = (
+          image: frameInfo.image,
+          columns: tileset.columns ?? 16,
+        );
+      } catch (e) {
+        // Tileset-Bild konnte nicht geladen werden – überspringen
+        debugPrint('Warning: Could not load tileset image: $imagePath ($e)');
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // Spawnpunkte extrahieren
+  // ──────────────────────────────────────────────
+
+  List<({String name, double x, double y})> _extractSpawnPoints(
+    MapData mapData,
+  ) {
+    final spawnPoints = <({String name, double x, double y})>[];
+    for (final group in mapData.objectGroups) {
+      if (group.name == widget.config.spawnGroupName) {
+        for (final obj in group.objects) {
+          if (obj.name.isNotEmpty) {
+            spawnPoints.add((name: obj.name, x: obj.x, y: obj.y));
+          }
+        }
+      }
+    }
+    return spawnPoints;
+  }
+
+  // ──────────────────────────────────────────────
+  // Build
+  // ──────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -214,41 +257,39 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       );
     }
 
-    if (_tilesetImage == null || _tileData == null) {
+    if (_tilesetImages.isEmpty || _mapData == null) {
       return const Center(child: Text('Keine Kartendaten geladen.'));
     }
 
-    // Berechne die Größe der hexagonalen Karte
-    // Bei staggeraxis="y" (pointy-topped hexagons):
-    // Breite = columns * tileWidth + tileWidth / 2
-    // Höhe = rows * (tileHeight * 3/4) + tileHeight / 4
-    final mapPixelWidth = _mapWidth * _tileWidth + _tileWidth ~/ 2;
-    final mapPixelHeight = (_mapHeight * _tileHeight * 3 ~/ 4) + _tileHeight ~/ 4;
+    // Berechne die Größe der hexagonalen Karte mittels zentraler HexGrid-Utility
+    final mapPixelWidth = widget.hexGrid.mapPixelWidth;
+    final mapPixelHeight = widget.hexGrid.mapPixelHeight;
 
     // Der Rand muss groß genug sein, damit _centerMap() in ScreenMain
     // die Karte mittig positionieren kann. Der minimale Offset für die
     // Zentrierung ist mapPixelWidth/2 (linker Rand der Karte), also
     // setzen wir die Grenze auf die gesamte Kartenbreite.
-    // (Bugfix: "Karte verliert Zentrierung nach Scrollen/Zoomen")
     final boundary = max(mapPixelWidth, mapPixelHeight).toDouble();
 
-    return InteractiveViewer(
-      transformationController: _transformationController,
-      boundaryMargin: EdgeInsets.all(boundary),
-      minScale: 0.25,
-      maxScale: 4.0,
-      child: SizedBox(
-        width: mapPixelWidth.toDouble(),
-        height: mapPixelHeight.toDouble(),
-        child: CustomPaint(
-          painter: _HexMapPainter(
-            tilesetImage: _tilesetImage!,
-            tileData: _tileData!,
-            mapWidth: _mapWidth,
-            mapHeight: _mapHeight,
-            tileWidth: _tileWidth,
-            tileHeight: _tileHeight,
-            tilesetColumns: _tilesetColumns,
+    return RepaintBoundary(
+      child: InteractiveViewer(
+        transformationController: _transformationController,
+        boundaryMargin: EdgeInsets.all(boundary),
+        minScale: 0.25,
+        maxScale: 4.0,
+        child: SizedBox(
+          width: mapPixelWidth.toDouble(),
+          height: mapPixelHeight.toDouble(),
+          child: CustomPaint(
+            painter: _HexMapPainter(
+              tilesetImages: _tilesetImages,
+              tilesets: _mapData!.tilesets,
+              mapData: _mapData!,
+              tileWidth: _tileWidth,
+              tileHeight: _tileHeight,
+              hexGrid: widget.hexGrid,
+              config: widget.config,
+            ),
           ),
         ),
       ),
@@ -256,73 +297,130 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   }
 }
 
+/// Ermittelt das passende Tileset für eine Tile-ID anhand des firstGid-Bereichs.
+TilesetInfo? findTileset(int tileId, List<TilesetInfo> tilesets) {
+  if (tileId == 0) return null;
+  for (int i = tilesets.length - 1; i >= 0; i--) {
+    if (tileId >= tilesets[i].firstGid) {
+      return tilesets[i];
+    }
+  }
+  return null;
+}
+
 class _HexMapPainter extends CustomPainter {
-  final ui.Image tilesetImage;
-  final List<List<int>> tileData;
-  final int mapWidth;
-  final int mapHeight;
+  /// Alle geladenen Tileset-Bilder, indiziert nach firstGid.
+  final Map<int, ({ui.Image image, int columns})> tilesetImages;
+
+  /// Alle Tileset-Informationen (für firstGid-Mapping).
+  final List<TilesetInfo> tilesets;
+
+  /// Die vollständigen Kartendaten.
+  final MapData mapData;
+
   final int tileWidth;
   final int tileHeight;
-  final int tilesetColumns;
+  final HexGrid hexGrid;
+  final MapLoadConfig config;
+
+  /// Vorberechnete Pixel-Positionen für jedes Hex-Feld.
+  late final List<List<Offset>> _pixelPositions;
 
   _HexMapPainter({
-    required this.tilesetImage,
-    required this.tileData,
-    required this.mapWidth,
-    required this.mapHeight,
+    required this.tilesetImages,
+    required this.tilesets,
+    required this.mapData,
     required this.tileWidth,
     required this.tileHeight,
-    required this.tilesetColumns,
-  });
+    required this.hexGrid,
+    required this.config,
+  }) {
+    _precomputePositions();
+  }
+
+  /// Berechnet alle Pixel-Positionen einmal vor, statt sie jedes Frame neu zu berechnen.
+  void _precomputePositions() {
+    _pixelPositions = List.generate(
+      mapData.height,
+      (y) => List.generate(
+        mapData.width,
+        (x) => hexGrid.hexToPixel(x: x, y: y),
+      ),
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Karten-Tiles zeichnen
-    for (int y = 0; y < mapHeight; y++) {
-      for (int x = 0; x < mapWidth; x++) {
-        final tileId = tileData[y][x];
-        if (tileId == 0) continue; // Leeres Tile überspringen
+    final visibleRect = Offset.zero & size;
 
-        // Berechne Position im Tileset (tileId - 1, da firstgid=1)
-        final tilesetIndex = tileId - 1;
-        final tilesetX = (tilesetIndex % tilesetColumns) * tileWidth;
-        final tilesetY = (tilesetIndex ~/ tilesetColumns) * tileHeight;
+    // 1. Boden-Layer zeichnen
+    _drawLayer(canvas, visibleRect, config.groundLayerName);
 
-        // Berechne Pixel-Position auf der Karte
-        // Hexagonales Gitter mit staggeraxis="y", staggerindex="odd"
-        final double pixelX;
-        final double pixelY;
+    // 2. Dekorations-Layer zeichnen (falls vorhanden)
+    if (config.decorationLayerName != null) {
+      _drawLayer(canvas, visibleRect, config.decorationLayerName!);
+    }
 
-        if (y % 2 == 1) {
-          // Ungerade Zeilen sind nach rechts versetzt
-          pixelX = (x * tileWidth).toDouble() + tileWidth / 2;
-        } else {
-          pixelX = (x * tileWidth).toDouble();
-        }
-        pixelY = y * (tileHeight * 3.0 / 4.0);
+    // 3. Oberen Dekorations-Layer zeichnen (falls vorhanden)
+    if (config.decorationUpperLayerName != null) {
+      _drawLayer(canvas, visibleRect, config.decorationUpperLayerName!);
+    }
+  }
 
-        // Source-Rechteck im Tileset
-        final srcRect = Rect.fromLTWH(
-          tilesetX.toDouble(),
-          tilesetY.toDouble(),
+  /// Zeichnet einen benannten Tile-Layer mit Viewport-Culling.
+  void _drawLayer(Canvas canvas, Rect visibleRect, String layerName) {
+    TileLayer? layer;
+    for (final l in mapData.layers) {
+      if (l.name == layerName) {
+        layer = l;
+        break;
+      }
+    }
+    if (layer == null) return;
+
+    final paint = Paint();
+    if (layer.opacity < 1.0) {
+      paint.color = paint.color.withValues(alpha: layer.opacity);
+    }
+
+    for (int y = 0; y < layer.height; y++) {
+      for (int x = 0; x < layer.width; x++) {
+        final tileId = layer.tileAt(x, y);
+        if (tileId == 0) continue;
+
+        final pixel = _pixelPositions[y][x];
+        final tileRect = Rect.fromLTWH(
+          pixel.dx,
+          pixel.dy,
           tileWidth.toDouble(),
           tileHeight.toDouble(),
         );
 
-        // Destination-Rechteck auf der Karte
-        final dstRect = Rect.fromLTWH(
-          pixelX,
-          pixelY,
-          tileWidth.toDouble(),
-          tileHeight.toDouble(),
-        );
+        // Viewport-Culling: Nur zeichnen, wenn Tile sichtbar ist
+        if (!visibleRect.overlaps(tileRect)) continue;
 
-        // Tile zeichnen
+        // Korrektes Tileset anhand firstGid ermitteln
+        final tilesetInfo = findTileset(tileId, tilesets);
+        if (tilesetInfo == null) continue;
+
+        final tilesetEntry = tilesetImages[tilesetInfo.firstGid];
+        if (tilesetEntry == null) continue;
+
+        // Lokale ID innerhalb des Tilesets (0-basiert)
+        final localId = tileId - tilesetInfo.firstGid;
+        final tilesetX = (localId % tilesetEntry.columns) * tileWidth;
+        final tilesetY = (localId ~/ tilesetEntry.columns) * tileHeight;
+
         canvas.drawImageRect(
-          tilesetImage,
-          srcRect,
-          dstRect,
-          Paint(),
+          tilesetEntry.image,
+          Rect.fromLTWH(
+            tilesetX.toDouble(),
+            tilesetY.toDouble(),
+            tileWidth.toDouble(),
+            tileHeight.toDouble(),
+          ),
+          tileRect,
+          paint,
         );
       }
     }
@@ -330,7 +428,8 @@ class _HexMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HexMapPainter oldDelegate) {
-    return oldDelegate.tilesetImage != tilesetImage ||
-        oldDelegate.tileData != tileData;
+    return oldDelegate.tilesetImages != tilesetImages ||
+        oldDelegate.mapData != mapData ||
+        oldDelegate.hexGrid != hexGrid;
   }
 }
