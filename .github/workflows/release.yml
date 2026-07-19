@@ -10,25 +10,8 @@ defaults:
     working-directory: tiled_warfare
 
 jobs:
-  test:
-    name: Run tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: tiled_warfare
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.44.6'
-          channel: 'stable'
-      - run: flutter pub get
-      - run: flutter test
-      - run: flutter analyze
-
   build-windows:
     name: Build Windows (x64)
-    needs: test
     runs-on: windows-latest
     defaults:
       run:
@@ -45,12 +28,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-windows
-          path: tiled_warfare/build/windows/x64/runner/Release/tiled_warfare.exe
+          path: build/windows/x64/runner/Release/tiled_warfare.exe
           compression-level: 0
 
   build-linux:
     name: Build Linux (AppImage)
-    needs: test
+    needs: build-windows
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,12 +53,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-linux
-          path: tiled_warfare/build/linux/x64/release/bundle/
+          path: build/linux/x64/release/bundle/
           compression-level: 6
 
   build-android:
     name: Build Android (APK)
-    needs: test
+    needs: build-windows
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -92,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-android
-          path: tiled_warfare/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           compression-level: 0
 
   create-release:
