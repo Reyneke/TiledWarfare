@@ -199,6 +199,8 @@
 | `_TokenWidget`      | Widget zur Darstellung eines Tokens auf der Karte  |
 | `_HexMapPainter`    | CustomPainter für das Zeichnen der Hex-Karte (multi-layer, multi-tileset, Viewport-Culling) |
 | `MapData`           | Datenmodell für geparste Karten (TMX/TMJ)         |
+| `MapMeta`           | Metadaten einer Karte aus maps.json (title, previewPath, tmxPath) |
+| `MapRegistry`       | Lädt maps.json, stellt `List<MapMeta>` bereit     |
 | `TmxParser`         | Parser für TMX (XML)-Karten                       |
 | `TmjParser`         | Parser für TMJ (JSON)-Karten                      |
 | `MapParser`         | Interface + Factory für Karten-Parser             |

@@ -1,6 +1,51 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
+/// Metadaten einer Karte aus der `maps.json`.
+///
+/// Enthält den Anzeigenamen, den Pfad zur TMX-Datei und optional
+/// ein Vorschaubild für die Kartenauswahl.
+@immutable
+class MapMeta {
+  /// Ordner-Pfad (z. B. "assets/maps/map0").
+  final String mapPath;
+
+  /// Anzeigename der Karte (z. B. "Street Battle").
+  final String title;
+
+  /// Optionaler Pfad zu einem Vorschaubild (z. B. "assets/maps/map0/preview.png").
+  final String? previewPath;
+
+  /// Pfad zur .tmx/.tmj-Datei (z. B. "assets/maps/map0/street_battle.tmx").
+  final String tmxPath;
+
+  const MapMeta({
+    required this.mapPath,
+    required this.title,
+    this.previewPath,
+    required this.tmxPath,
+  });
+
+  factory MapMeta.fromJson(Map<String, dynamic> json) => MapMeta(
+        mapPath: json['mapPath'] as String,
+        title: json['title'] as String,
+        previewPath: json['previewPath'] as String?,
+        tmxPath: json['tmxPath'] as String,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MapMeta &&
+          mapPath == other.mapPath &&
+          title == other.title &&
+          previewPath == other.previewPath &&
+          tmxPath == other.tmxPath;
+
+  @override
+  int get hashCode => Object.hash(mapPath, title, previewPath, tmxPath);
+}
+
 /// Repräsentiert die Ausrichtung einer Tiled-Karte.
 enum MapOrientation {
   orthogonal,

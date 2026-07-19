@@ -11,7 +11,9 @@
 | `lib/main.dart` | Startpunkt – hier beginnt alles |
 | `lib/main_app.dart` | Das Haupt-Fenster (MaterialApp) |
 | `lib/screens/screen_main.dart` | Der Bildschirm: Karte + Overlay |
-| `lib/models/map_data.dart` | Datenmodell (MapData, TileLayer, TilesetInfo, TerrainType, TerrainConfig) |
+| `lib/screens/screen_restaurant.dart` | Restaurant: Personal verwalten + Karte auswählen |
+| `lib/models/map_data.dart` | Datenmodell (MapData, MapMeta, TileLayer, TilesetInfo, TerrainType, TerrainConfig) |
+| `lib/services/map_registry.dart` | **Neu**: Lädt `maps.json`, stellt `List<MapMeta>` bereit |
 | `lib/services/map_parser.dart` | TMX/TMJ-Parser (Interface + Implementierung) |
 | `lib/services/terrain_service.dart` | **Geländesystem**: TerrainService, parseTerrain, Bewegungskosten-BFS, Passierbarkeit |
 | `lib/services/fog_of_war.dart` | **Fog of War**: Sichtbarkeitsberechnung (visible + revealed hexes) |
@@ -46,6 +48,13 @@
 - Wände und Ruinen blockieren die Sicht (das Hindernis selbst ist sichtbar)
 - Tote Tokens tragen nicht zur Sicht bei
 - `getVisibleEnemies()` filtert Gegner auf sichtbaren Feldern
+
+### Kartenauswahl
+- Verfügbare Karten werden aus `assets/maps/maps.json` geladen
+- `MapRegistry` parst die JSON-Datei in `List<MapMeta>`-Objekte
+- Im `ScreenRestaurant` kann der Spieler vor dem Kampf eine Karte auswählen
+- Die Auswahl (MapMeta.tmxPath) wird an `ScreenMain` übergeben
+- Vorschaubilder werden via `previewPath` unterstützt (mit `Image.asset` + `errorBuilder`)
 
 ### Kampf (W100-System)
 - **W100** = Würfel 1–100
@@ -133,6 +142,7 @@ Initiative würfeln → Wer gewinnt, fängt an
 5. **`object_host.dart`** (518 Zeilen) – KI-Verhalten
 6. **`widget_map_loader.dart`** (334 Zeilen) – Karten-Ladung, Multi-Tileset, Multi-Layer
 7. **`map_parser.dart`** – TMX/TMJ-Parser (CSV, Base64, Zlib)
-8. **`map_data.dart`** – Datenmodell (MapData, TileLayer, TerrainType, TerrainConfig)
-9. **`hex_grid.dart`** – Zentrale Hex-Utility
-10. **`combat_rules.md`** (187 Zeilen) – Regelwerk
+8. **`map_registry.dart`** – Lädt maps.json, List<MapMeta>
+9. **`map_data.dart`** – Datenmodell (MapData, MapMeta, TileLayer, TerrainType, TerrainConfig)
+10. **`hex_grid.dart`** – Zentrale Hex-Utility
+11. **`combat_rules.md`** (187 Zeilen) – Regelwerk

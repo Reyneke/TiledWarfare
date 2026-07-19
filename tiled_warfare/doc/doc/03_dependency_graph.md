@@ -16,6 +16,19 @@ screen_main.dart
   ├─ widget_map_loader.dart
   └─ utils/hex_grid.dart
 
+screen_restaurant.dart
+  ├─ models/map_data.dart (MapMeta)
+  ├─ services/map_registry.dart
+  ├─ services/profile_storage.dart
+  ├─ objects/object_profile.dart
+  ├─ theme/app_theme.dart
+  └─ l10n/app_localizations.dart
+
+map_registry.dart (services/)
+  ├─ dart:convert
+  ├─ flutter/services.dart
+  └─ models/map_data.dart (MapMeta)
+
 widget_map_loader.dart
   ├─ flutter/material.dart
   ├─ flutter/services.dart
@@ -35,6 +48,7 @@ map_parser.dart (services/)
 map_data.dart (models/)
   ├─ dart:typed_data
   └─ flutter/foundation.dart
+  (now also contains MapMeta – no additional imports needed)
 
 widget_caretaker.dart
   ├─ dart:collection
@@ -126,6 +140,18 @@ WidgetMapLoader
   ├─→ ScreenMain: Liefert Kartendaten via Callbacks
   └─→ _HexMapPainter: Zeichnet die Karte (multi-layer, multi-tileset, Viewport-Culling)
 
+MapRegistry (Service)
+  │
+  ├─→ MapMeta: Produziert MapMeta-Instanzen aus maps.json
+  └─→ ScreenRestaurant: Nutzt MapRegistry für Map-Auswahl
+
+ScreenRestaurant
+  │
+  ├─→ ScreenMain: Startet Spiel mit ausgewählter Map (tmxPath)
+  ├─→ MapRegistry: Lädt Kartenliste
+  ├─→ ObjectProfile: Verwaltet Personal + Team-Zusammenstellung
+  └─→ AppTheme: Darstellung
+
 WidgetCaretaker (Zentrale Spiel-Logik)
   │
   ├─→ ScreenMain: Kind-Widget, erhält Parameter
@@ -143,6 +169,7 @@ ScreenMain
   └─→ AppTheme: Nutzt Theme für UI
 
 MainApp
+  ├─→ ScreenStart: Startbildschirm (Profil-Auswahl)
   └─→ AppTheme: Konfiguriert Light/Dark Mode
 ```
 
@@ -208,3 +235,6 @@ WidgetMapLoader._loadMap()
 | MapParser → MapData | Produktion | Parser erzeugt MapData-Instanzen |
 | WidgetMapLoader → MapData | Nutzung | MapLoader verwendet Kartendaten |
 | ScreenMain → HexGrid | Erzeugung | ScreenMain erstellt HexGrid aus Kartendaten |
+| ScreenRestaurant → MapRegistry | Nutzung | ScreenRestaurant lädt Kartenliste für Auswahl |
+| ScreenRestaurant → ScreenMain | Navigation | Übergibt MapMeta.tmxPath an ScreenMain |
+| MapRegistry → MapMeta | Produktion | Erzeugt MapMeta-Instanzen aus maps.json |

@@ -151,19 +151,31 @@ class ObjectChef extends ObjectToken {
 
 ### 3.2 Neue Karte hinzufügen
 
-1. TMX- oder TMJ-Datei in `assets/maps/` ablegen
-2. Tileset-Bild(er) in `assets/maps/` ablegen
-3. In `screen_main.dart` den `mapPath`-Parameter anpassen
-4. Spawnpunkte in der Kartendatei als Objectgroup "Spawns" definieren
-5. **Layer-Struktur** (empfohlen für neue Karten):
+1. TMX- oder TMJ-Datei in `assets/maps/<name>/` ablegen (eigenes Unterverzeichnis pro Karte)
+2. Tileset-Bild(er) in `assets/maps/<name>/` ablegen
+3. Optionales Vorschaubild in `assets/maps/<name>/` ablegen (z. B. `preview.png`)
+4. Eintrag in `assets/maps/maps.json` hinzufügen:
+   ```json
+   {
+     "mapPath": "assets/maps/<name>",
+     "title": "Meine Karte",
+     "previewPath": "assets/maps/<name>/preview.png",
+     "tmxPath": "assets/maps/<name>/meine_karte.tmx"
+   }
+   ```
+   - `previewPath` kann `null` sein (dann wird ein Icon angezeigt)
+   - `title` wird im UI für die Kartenauswahl verwendet
+5. Spawnpunkte in der Kartendatei als Objectgroup "Spawns" definieren
+6. **Layer-Struktur** (empfohlen für neue Karten):
    - `ground` (TileLayer) – Bodenbelag
    - `decoration` (TileLayer) – Dekoration
    - `collision` (TileLayer) – Kollisions-Tiles (optional)
    - `spawns` (ObjectGroup) – Spawnpunkte
    - `Gelaendetypen` (ObjectGroup) – Geländetypen (optional)
-6. Die Layer-Namen können über `MapLoadConfig` angepasst werden
-7. Über den `onTerrainParsed`-Callback von `WidgetMapLoader` werden die
+7. Die Layer-Namen können über `MapLoadConfig` angepasst werden
+8. Über den `onTerrainParsed`-Callback von `WidgetMapLoader` werden die
    Geländedaten und das Kollisions-Set an das übergeordnete Widget übergeben
+9. Die Karte erscheint automatisch im `ScreenRestaurant` – keine Code-Änderungen nötig
 
 ### 3.3 Kampfregeln ändern
 
@@ -268,6 +280,7 @@ Tests befinden sich in `lib/fuzzy_logic/test/` sowie in `test/fog_of_war_test.da
 | `doc/doc/03_dependency_graph.md` | Abhängigkeitsdiagramm |
 | `doc/doc/04_cliffnotes.md` | Cliffnotes (kurz & knapp) |
 | `doc/todo/feat_better_maps/3_terrain_system.md` | Detaillierte Terrain-System-Doku |
+| `doc/todo/feat_better_maps/4_Kartenauswahl.md` | Kartenauswahl: maps.json, MapMeta, MapRegistry |
 | `doc/rules/combat_rules.md` | Vollständige Kampfregeln |
 | `pubspec.yaml` | Abhängigkeiten und Metadaten |
 
