@@ -120,10 +120,3 @@ jobs:
             release/tiled_warfare-v0.1.0-android.apk
           draft: true
           prerelease: true
-</write_to_file>
-<task_progress>
-- [ ] `.github/workflows/release.yml` erstellen
-- [ ] `.github/workflows/nightly.yml` erstellen
-- [ ] Secrets dokumentieren
-</task_progress>
-</write_to_file>
