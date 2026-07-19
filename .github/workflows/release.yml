@@ -5,10 +5,17 @@ on:
     branches:
       - main
 
+defaults:
+  run:
+    working-directory: tiled_warfare
+
 jobs:
   test:
     name: Run tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tiled_warfare
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -23,6 +30,9 @@ jobs:
     name: Build Windows (x64)
     needs: test
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tiled_warfare
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -35,13 +45,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-windows
-          path: build\windows\x64\runner\Release\tiled_warfare.exe
+          path: tiled_warfare/build/windows/x64/runner/Release/tiled_warfare.exe
           compression-level: 0
 
   build-linux:
     name: Build Linux (AppImage)
     needs: test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tiled_warfare
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -57,13 +70,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-linux
-          path: build/linux/x64/release/bundle/
+          path: tiled_warfare/build/linux/x64/release/bundle/
           compression-level: 6
 
   build-android:
     name: Build Android (APK)
     needs: test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tiled_warfare
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -76,7 +92,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-v0.1.0-android
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: tiled_warfare/build/app/outputs/flutter-apk/app-release.apk
           compression-level: 0
 
   create-release:
@@ -85,6 +101,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: tiled_warfare
     steps:
       - uses: actions/checkout@v4
       - name: Download all artifacts
@@ -94,9 +113,9 @@ jobs:
       - name: Create release archive
         run: |
           mkdir -p release
-          cp artifacts/tiled_warfare-v0.1.0-windows/tiled_warfare.exe release/
-          zip -r release/tiled_warfare-v0.1.0-linux.zip artifacts/tiled_warfare-v0.1.0-linux/
-          cp artifacts/tiled_warfare-v0.1.0-android/app-release.apk release/tiled_warfare-v0.1.0-android.apk
+          cp ../artifacts/tiled_warfare-v0.1.0-windows/tiled_warfare.exe release/
+          zip -r release/tiled_warfare-v0.1.0-linux.zip ../artifacts/tiled_warfare-v0.1.0-linux/
+          cp ../artifacts/tiled_warfare-v0.1.0-android/app-release.apk release/tiled_warfare-v0.1.0-android.apk
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -115,8 +134,8 @@ jobs:
             | Linux     | `tiled_warfare-v0.1.0-linux.zip` |
             | Android   | `tiled_warfare-v0.1.0-android.apk` |
           files: |
-            release/tiled_warfare.exe
-            release/tiled_warfare-v0.1.0-linux.zip
-            release/tiled_warfare-v0.1.0-android.apk
+            tiled_warfare/release/tiled_warfare.exe
+            tiled_warfare/release/tiled_warfare-v0.1.0-linux.zip
+            tiled_warfare/release/tiled_warfare-v0.1.0-android.apk
           draft: true
           prerelease: true
