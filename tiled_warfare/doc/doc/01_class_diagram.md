@@ -18,9 +18,9 @@
 │  + position: Offset                                             │
 │  + hasActed: bool                                               │
 └──────────────────────┬──────────────────────────────────────────┘
-                       │ extends
-          ┌────────────┼─────────────┬──────────────────┐
-          ▼            ▼             ▼                  ▼
+                        │ extends
+           ┌────────────┼─────────────┬──────────────────┐
+           ▼            ▼             ▼                  ▼
 ┌─────────────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐
 │  ObjectLineCook │ │ObjectDough│ │ObjectDough   │ │ (Zukünftige  │
 │  (Spieler)      │ │Zombie    │ │Dumpster      │ │  Token-Typen)│
@@ -31,10 +31,10 @@
 │  damage: 2      │ │ damage: 1 │ │ damage: 0    │ │              │
 │  range: 3       │ │ range: 0  │ │ range: 0     │ │              │
 └────────┬────────┘ └──────────┘ └──────┬───────┘ └──────────────┘
-         │                              │
-         │ 1..*                         │ 1
-         │                              │
-         ▼                              ▼
+          │                              │
+          │ 1..*                         │ 1
+          │                              │
+          ▼                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ObjectPlayer                             │
 │  (Singleton – Spieler-Steuerung)                                │
@@ -96,8 +96,8 @@
 │  + basePath(assetPath) → String (static)                        │
 │  + forPath(path) → MapParser (static Factory)                   │
 └─────────────────────────────────────────────────────────────────┘
-          ▲                              ▲
-          │                              │
+           ▲                              ▲
+           │                              │
 ┌─────────┴──────────────┐  ┌───────────┴──────────────┐
 │      TmxParser         │  │       TmjParser          │
 ├────────────────────────┤  ├──────────────────────────┤
@@ -120,20 +120,28 @@
 │  + layers: List<TileLayer>                                       │
 │  + tilesets: List<TilesetInfo>                                   │
 │  + objectGroups: List<ObjectGroup>                               │
+│  + _layerIndexByName: Map<String, int> (late)                    │
+│  + layerByName(name) → TileLayer? (O(1))                        │
+│  + layerByPurpose(purpose) → TileLayer? (O(1))                  │
+│  + layerByPurposeWithMapping() → TileLayer?                     │
+│  + computeCollisionTiles(hexGrid) → Set<int>                    │
 │  + copyWith()                                                    │
 └─────────────────────────────────────────────────────────────────┘
 
-┌──────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────┐
-│        TileLayer         │  │       TilesetInfo        │  │     ObjectGroup      │
-│  (@immutable)            │  │  (@immutable)            │  │  (@immutable)        │
-├──────────────────────────┤  ├──────────────────────────┤  ├──────────────────────┤
-│  + name                  │  │  + firstGid              │  │  + name              │
-│  + width, height         │  │  + source                │  │  + objects: List<    │
-│  + opacity, visible      │  │  + name, tileWidth       │  │      MapObject>      │
-│  + tileData: Uint32List  │  │  + tileCount, columns    │  └──────────────────────┘
-│  + tileAt(x, y) → int   │  │  + imageSource           │
-│  + toListOfLists()       │  │  + imageWidth/Height     │
-└──────────────────────────┘  └──────────────────────────┘
+┌──────────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────┐
+│        TileLayer             │  │       TilesetInfo        │  │     ObjectGroup      │
+│  (@immutable)                │  │  (@immutable)            │  │  (@immutable)        │
+├──────────────────────────────┤  ├──────────────────────────┤  ├──────────────────────┤
+│  + name                      │  │  + firstGid              │  │  + name              │
+│  + width, height             │  │  + source                │  │  + objects: List<    │
+│  + opacity, visible          │  │  + name, tileWidth       │  │      MapObject>      │
+│  + tileData: Uint32List      │  │  + tileCount, columns    │  └──────────────────────┘
+│  + purpose: LayerPurpose     │  │  + imageSource           │
+│  + isEmpty: bool             │  │  + imageWidth/Height     │
+│  + tileAt(x, y) → int       │  └──────────────────────────┘
+│  + copyWith()                │
+│  + toListOfLists()           │
+└──────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        WidgetMapLoader                           │
@@ -184,25 +192,26 @@
 
 ## Hilfsklassen
 
-| Klasse              | Zweck                                              |
-|---------------------|----------------------------------------------------|
-| `CombatAction`      | Enum: `melee`, `ranged`                            |
-| `CombatResult`      | Datenklasse für Kampfergebnisse (hit, damage, ...) |
-| `EnneagramProfile`  | 12 Enneagramm-Persönlichkeitsprofile               |
-| `HostPersonality`   | Fuzzy-Logik-basierte Persönlichkeitsbewertung      |
-| `Aggressiveness`    | Fuzzy-Variable (0–100)                             |
-| `RiskTolerance`     | Fuzzy-Variable (0–100)                             |
-| `TacticalComplexity`| Fuzzy-Variable (0–100)                             |
-| `_HexUtils`         | Hex-Gitter-Hilfsfunktionen (odd-r)                 |
-| `_BfsVisitedSet`    | Optimiertes Set für BFS-Besuchsmarkierungen        |
-| `_TokenRenderInfo`  | Kapselt Token + Metadaten für Darstellung          |
-| `_TokenWidget`      | Widget zur Darstellung eines Tokens auf der Karte  |
-| `_HexMapPainter`    | CustomPainter für das Zeichnen der Hex-Karte (multi-layer, multi-tileset, Viewport-Culling) |
-| `MapData`           | Datenmodell für geparste Karten (TMX/TMJ)         |
-| `MapMeta`           | Metadaten einer Karte aus maps.json (title, previewPath, tmxPath) |
-| `MapRegistry`       | Lädt maps.json, stellt `List<MapMeta>` bereit     |
-| `TmxParser`         | Parser für TMX (XML)-Karten                       |
-| `TmjParser`         | Parser für TMJ (JSON)-Karten                      |
-| `MapParser`         | Interface + Factory für Karten-Parser             |
-| `MapLoadConfig`     | Konfiguration für Layer-/Gruppennamen beim Laden  |
-| `MapOrientation`    | Enum: orthogonal, isometric, hexagonal, staggered  |
+| Klasse | Zweck |
+|--------|-------|
+| `CombatAction` | Enum: `melee`, `ranged` |
+| `CombatResult` | Datenklasse für Kampfergebnisse (hit, damage, ...) |
+| `EnneagramProfile` | 12 Enneagramm-Persönlichkeitsprofile |
+| `HostPersonality` | Fuzzy-Logik-basierte Persönlichkeitsbewertung |
+| `Aggressiveness` | Fuzzy-Variable (0–100) |
+| `RiskTolerance` | Fuzzy-Variable (0–100) |
+| `TacticalComplexity` | Fuzzy-Variable (0–100) |
+| `_HexUtils` | Hex-Gitter-Hilfsfunktionen (odd-r) |
+| `_BfsVisitedSet` | Optimiertes Set für BFS-Besuchsmarkierungen |
+| `_TokenRenderInfo` | Kapselt Token + Metadaten für Darstellung |
+| `_TokenWidget` | Widget zur Darstellung eines Tokens auf der Karte |
+| `_HexMapPainter` | CustomPainter für das Zeichnen der Hex-Karte (multi-layer, multi-tileset, Viewport-Culling) |
+| `MapData` | Datenmodell für geparste Karten (TMX/TMJ) |
+| `MapMeta` | Metadaten einer Karte aus maps.json (title, previewPath, tmxPath) |
+| `MapRegistry` | Lädt maps.json, stellt `List<MapMeta>` bereit |
+| `TmxParser` | Parser für TMX (XML)-Karten |
+| `TmjParser` | Parser für TMJ (JSON)-Karten |
+| `MapParser` | Interface + Factory für Karten-Parser |
+| `MapLoadConfig` | Konfiguration für Layer-/Gruppennamen beim Laden |
+| `MapOrientation` | Enum: orthogonal, isometric, hexagonal, staggered |
+| **`LayerPurpose`** | **Neu**: Enum für typsichere Layer-Klassifizierung (ground, collision, decorative, decorativeUpper, terrain, unknown) |

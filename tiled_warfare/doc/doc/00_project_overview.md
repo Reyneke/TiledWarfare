@@ -23,7 +23,8 @@ lib/
 ├── main_app.dart                # Root-Widget (MaterialApp)
 ├── models/
 │   ├── map_data.dart            # Datenmodell (MapData, MapMeta, TileLayer,
-│   │                            #   TilesetInfo, TerrainType, TerrainConfig)
+│   │                            #   LayerPurpose, TilesetInfo, TerrainType,
+│   │                            #   TerrainConfig)
 │   └── ...                      # Weitere Modelle (match_record, profile_data)
 ├── services/
 │   ├── map_registry.dart        # Lädt maps.json, stellt verfügbare Karten bereit
@@ -64,6 +65,7 @@ doc/
 
 ## Kernkonzepte
 
+0. **Tile-Layer-System**: Die Karte unterstützt mehrere Tile-Layer (Boden, Dekoration, Kollision), die über den `LayerPurpose`-Enum typsicher klassifiziert werden. Layer-Lookups erfolgen in O(1) über einen vorberechneten Index. Siehe `doc/todo/feat_better_maps/8_tile_layer_system.md`.
 1. **Hex-Gitter**: Die Karte verwendet ein Pointy-Top-Hex-Gitter mit `staggeraxis="y"` und `staggerindex="odd"` (odd-r). Berechnungen erfolgen zentral über `HexGrid` (`lib/utils/hex_grid.dart`).
 2. **Karten-Parsing**: TMX (XML) und TMJ (JSON) werden über das `MapParser`-Interface mit `TmxParser` und `TmjParser` geparst. Das Datenmodell (`lib/models/map_data.dart`) kapselt alle Karteninformationen.
 3. **Gelände-System**: Die Karte unterstützt Geländetypen (normal, ruin, forest, water, wall, openGround, swamp) mit individuellen Bewegungskosten und Sichtbarkeitsregeln. Zentral verwaltet durch `TerrainService` (`lib/services/terrain_service.dart`).
@@ -79,6 +81,7 @@ doc/
 | Service | Beschreibung | Datei |
 |---------|-------------|-------|
 | `MapParser` | Interface für Karten-Parsing (TMX, TMJ) | `lib/services/map_parser.dart` |
+| `LayerPurpose` | Enum für typsichere Layer-Klassifizierung (ground, collision, decorative, ...) | `lib/models/map_data.dart` |
 | `TerrainService` | Geländekonfiguration, Bewegungskosten-BFS, Passierbarkeit | `lib/services/terrain_service.dart` |
 | `MapRegistry` | Lädt `maps.json`, parsed verfügbare Karten in `List<MapMeta>` | `lib/services/map_registry.dart` |
 | `FogOfWarService` | Sichtbarkeitsberechnung (visible + revealed) | `lib/services/fog_of_war.dart` |

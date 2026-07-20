@@ -12,13 +12,13 @@
 | `lib/main_app.dart` | Das Haupt-Fenster (MaterialApp) |
 | `lib/screens/screen_main.dart` | Der Bildschirm: Karte + Overlay |
 | `lib/screens/screen_restaurant.dart` | Restaurant: Personal verwalten + Karte auswählen |
-| `lib/models/map_data.dart` | Datenmodell (MapData, MapMeta, TileLayer, TilesetInfo, TerrainType, TerrainConfig) |
+| `lib/models/map_data.dart` | Datenmodell (MapData, MapMeta, TileLayer, LayerPurpose, TilesetInfo, TerrainType, TerrainConfig) |
 | `lib/services/map_registry.dart` | **Neu**: Lädt `maps.json`, stellt `List<MapMeta>` bereit |
 | `lib/services/map_parser.dart` | TMX/TMJ-Parser (Interface + Implementierung) |
 | `lib/services/terrain_service.dart` | **Geländesystem**: TerrainService, parseTerrain, Bewegungskosten-BFS, Passierbarkeit |
 | `lib/services/fog_of_war.dart` | **Fog of War**: Sichtbarkeitsberechnung (visible + revealed hexes) |
 | `lib/utils/hex_grid.dart` | **Zentrale Hex-Utility**: Pixel↔Hex, Distanz, Nachbarn, belegte Felder |
-| `lib/widgets/widget_map_loader.dart` | Lädt und rendert die Karte (TMX/TMJ) |
+| `lib/widgets/widget_map_loader.dart` | Lädt und rendert die Karte (TMX/TMJ) mit Viewport-Culling |
 | `lib/widgets/widget_caretaker.dart` | **Das Herzstück** – Tokens, Runden, Kämpfe |
 | `lib/objects/object_token.dart` | Basis-Klasse für alle Einheiten (inkl. `fieldOfView`) |
 | `lib/objects/object_line_cook.dart` | Deine Köche (Angriff 80, Bewegung 3) |
@@ -41,6 +41,13 @@
 - Jeder Typ hat Bewegungskosten (1×–3×) und kann Sicht blockieren
 - `TerrainService` berechnet effektive Bewegungsreichweite via BFS
 - Kollisions-Tiles aus Tile-Layern + Token-Positionen blockieren Bewegung
+
+### Tile-Layer-System
+- `LayerPurpose`-Enum für typsichere Layer-Klassifizierung: `ground`, `collision`, `decorative`, `decorativeUpper`, `terrain`, `unknown`
+- Automatische Zuordnung: Layer-Name → Purpose via `LayerPurpose.fromLayerName()`
+- `TileLayer.purpose` – cached beim ersten Zugriff
+- O(1)-Layer-Lookups via `MapData.layerByName()` und `MapData.layerByPurpose()` (vorberechneter Index)
+- `computeCollisionTiles()` verwendet jetzt `layerByPurpose(LayerPurpose.collision)` statt String-Vergleich
 
 ### Fog of War
 - Jeder Token hat `fieldOfView` (Sichtweite in Hex-Feldern, Default: 3)
@@ -69,6 +76,15 @@
 3. Spieler: Tokens bewegen (Drag & Drop) + angreifen (Kontextmenü)
 4. KI: Zombies bewegen + angreifen
 5. Nächste Runde
+
+### Karten-Rendering (Viewport-Culling)
+- `_HexMapPainter` ist eine **private** `CustomPainter`-Klasse in `widget_map_loader.dart`
+- Zeichnet **nur sichtbare Tiles** (Viewport-Culling) → ~50 statt 10.000 Iterationen bei großen Karten
+- Nutzt `canvas.clipRect()` für GPU-beschleunigtes Clipping – Pixel außerhalb des Viewports werden Hardware-seitig verworfen
+- Vorberechnete Pixel-Positionen (`_pixelPositions`) sparen Frame-Zeit, Speicher ~14 KB (30×30) bis ~1,4 MB (300×300)
+- Drei Layer: `ground` → `decoration` → `decoration_upper` (konfigurierbar über `MapLoadConfig`)
+- `shouldRepaint` vergleicht Layer-Inhalte tief (Namen + Tile-Daten + Purpose), nicht nur Referenzen
+- `_drawLayer()` verwendet `mapData.layerByName()` (O(1) statt O(n) pro Frame)
 
 ### Token-Typen
 | Token | Farbe | HP | Angriff | Bewegung | Sicht | Besonderheit |
@@ -143,6 +159,6 @@ Initiative würfeln → Wer gewinnt, fängt an
 6. **`widget_map_loader.dart`** (334 Zeilen) – Karten-Ladung, Multi-Tileset, Multi-Layer
 7. **`map_parser.dart`** – TMX/TMJ-Parser (CSV, Base64, Zlib)
 8. **`map_registry.dart`** – Lädt maps.json, List<MapMeta>
-9. **`map_data.dart`** – Datenmodell (MapData, MapMeta, TileLayer, TerrainType, TerrainConfig)
+9. **`map_data.dart`** – Datenmodell (MapData, MapMeta, TileLayer, LayerPurpose, TerrainType, TerrainConfig)
 10. **`hex_grid.dart`** – Zentrale Hex-Utility
 11. **`combat_rules.md`** (187 Zeilen) – Regelwerk

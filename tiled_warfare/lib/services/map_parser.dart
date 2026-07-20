@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:xml/xml.dart';
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/services/map_exceptions.dart';
 
 /// Gemeinsames Interface für TMX- und TMJ-Parser.
 abstract class MapParser {
@@ -27,7 +28,10 @@ abstract class MapParser {
     } else if (path.endsWith('.tmx')) {
       return TmxParser(assetBundle: assetBundle);
     }
-    throw ArgumentError('Unsupported map format (expected .tmx or .tmj): $path');
+    throw MapParseException(
+      message: 'Unsupported map format (expected .tmx or .tmj)',
+      path: path,
+    );
   }
 }
 
@@ -54,7 +58,7 @@ class TmxParser implements MapParser {
       orientation: orientation,
       staggerAxis: mapElement.getAttribute('staggeraxis') ?? 'y',
       staggerIndex: mapElement.getAttribute('staggerindex') ?? 'odd',
-      layers: _parseLayers(mapElement),
+      layers: _parseLayers(mapElement, basePath),
       tilesets: _parseTilesets(mapElement, basePath),
       objectGroups: _parseObjectGroups(mapElement),
     );
@@ -70,13 +74,15 @@ class TmxParser implements MapParser {
   // Layer-Parsing
   // ──────────────────────────────────────────────
 
-  List<TileLayer> _parseLayers(XmlElement mapElement) {
+  List<TileLayer> _parseLayers(XmlElement mapElement, String basePath) {
     final layers = <TileLayer>[];
     for (final layerElement in mapElement.findElements('layer')) {
       final dataElement = layerElement.findElements('data').firstOrNull;
       if (dataElement == null) {
-        throw FormatException(
-          'Missing <data> element in layer "${layerElement.getAttribute('name')}"',
+        throw MapParseException(
+          message:
+              'Missing <data> element in layer "${layerElement.getAttribute('name')}"',
+          path: basePath,
         );
       }
 
@@ -92,16 +98,20 @@ class TmxParser implements MapParser {
           tileIds = _parseBase64(dataElement.innerText, compression);
           break;
         default:
-          throw FormatException('Unsupported encoding: $encoding');
+          throw MapParseException(
+            message: 'Unsupported encoding: $encoding',
+            path: basePath,
+          );
       }
 
       final width = int.parse(layerElement.getAttribute('width') ?? '0');
       final height = int.parse(layerElement.getAttribute('height') ?? '0');
 
       if (tileIds.length != width * height) {
-        throw FormatException(
-          'Tile data length (${tileIds.length}) does not match '
-          'layer dimensions ($width x $height = ${width * height})',
+        throw MapParseException(
+          message: 'Tile data length (${tileIds.length}) does not match '
+              'layer dimensions ($width x $height = ${width * height})',
+          path: basePath,
         );
       }
 
@@ -130,12 +140,16 @@ class TmxParser implements MapParser {
   }
 
   // ──────────────────────────────────────────────
-  // Base64/Zlib-Parsing
+  // Base64/Zlib/Gzip-Parsing
   // ──────────────────────────────────────────────
 
   List<int> _parseBase64(String base64Data, String? compression) {
     final decoded = base64.decode(base64Data.trim());
-    final bytes = compression == 'zlib' ? zlib.decode(decoded) : decoded;
+    final bytes = switch (compression) {
+      'zlib' => zlib.decode(decoded),
+      'gzip' => gzip.decode(decoded),
+      _ => decoded, // keine Kompression
+    };
 
     // 4 Bytes pro Tile-ID (little-endian)
     final result = <int>[];
@@ -170,22 +184,46 @@ class TmxParser implements MapParser {
     return tilesets;
   }
 
+  /// Parst ein `<tileset>`-Element mit externem `source`.
+  ///
+  /// Da die TSX-Details nur async geladen werden können, wird hier nur
+  /// die `source`-Referenz gespeichert. Der spätere async-Schritt
+  /// [loadExternalTileset] lädt die vollständigen Metadaten nach.
   TilesetInfo _parseExternalTileset(
     XmlElement tsElement,
     int firstGid,
     String source,
     String basePath,
   ) {
-    final tsxPath = '$basePath/$source';
-    final tsxString = _assetBundle.loadString(tsxPath) as String?;
-    if (tsxString == null) {
-      // Falls synchron kein Zugriff möglich, throw
-      throw FormatException('Cannot load external tileset: $tsxPath');
-    }
-    // Hinweis: _assetBundle.loadString ist async. Für synchrones Parsen
-    // laden wir stattdessen die Datei aus dem Asset-Bundle.
-    // Siehe loadFromAsset für den async-Flow.
     return _parseTilesetElement(tsElement, firstGid, source: source);
+  }
+
+  /// Lädt und parst eine TSX-Datei asynchron.
+  ///
+  /// Wirft [MapNotFoundException], wenn die TSX-Datei nicht gefunden wird,
+  /// oder [MapParseException], wenn das XML ungültig ist.
+  /// [tsxPath] ist der vollständige Asset-Pfad zur .tsx-Datei.
+  Future<TilesetInfo> loadExternalTileset(String tsxPath) async {
+    final tsxContent = await _assetBundle.loadString(tsxPath);
+    final document = XmlDocument.parse(tsxContent);
+    final tilesetElement = document.findElements('tileset').first;
+    return _parseTilesetElementFromXml(tilesetElement);
+  }
+
+  /// Parst ein `<tileset>`-Element aus XML und gibt die Metadaten zurück.
+  TilesetInfo _parseTilesetElementFromXml(XmlElement element) {
+    final imageElement = element.findElements('image').firstOrNull;
+    return TilesetInfo(
+      firstGid: 1, // firstGid wird vom aufrufenden Kontext gesetzt
+      name: element.getAttribute('name'),
+      tileWidth: int.tryParse(element.getAttribute('tilewidth') ?? ''),
+      tileHeight: int.tryParse(element.getAttribute('tileheight') ?? ''),
+      tileCount: int.tryParse(element.getAttribute('tilecount') ?? ''),
+      columns: int.tryParse(element.getAttribute('columns') ?? ''),
+      imageSource: imageElement?.getAttribute('source'),
+      imageWidth: int.tryParse(imageElement?.getAttribute('width') ?? ''),
+      imageHeight: int.tryParse(imageElement?.getAttribute('height') ?? ''),
+    );
   }
 
   TilesetInfo _parseInlineTileset(XmlElement tsElement, int firstGid) {
@@ -254,19 +292,22 @@ class TmxParser implements MapParser {
     return groups;
   }
 
-  dynamic _parsePropertyValue(String value, String type) {
-    switch (type) {
-      case 'int':
-        return int.tryParse(value);
-      case 'float':
-        return double.tryParse(value);
-      case 'bool':
-        return value == 'true';
-      case 'color':
-        return value;
-      default:
-        return value;
-    }
+  dynamic _parsePropertyValue(dynamic value, String type) {
+    if (value == null) return null;
+    return switch (type) {
+      'int' => value is int
+          ? value
+          : value is String
+              ? int.tryParse(value)
+              : (value as num).toInt(),
+      'float' => value is double
+          ? value
+          : value is String
+              ? double.tryParse(value)
+              : (value as num).toDouble(),
+      'bool' => value is bool ? value : value == 'true',
+      _ => value.toString(),
+    };
   }
 }
 
@@ -426,15 +467,19 @@ class TmjParser implements MapParser {
 
   dynamic _parsePropertyValue(dynamic value, String type) {
     if (value == null) return null;
-    switch (type) {
-      case 'int':
-        return (value as num).toInt();
-      case 'float':
-        return (value as num).toDouble();
-      case 'bool':
-        return value as bool;
-      default:
-        return value.toString();
-    }
+    return switch (type) {
+      'int' => value is int
+          ? value
+          : value is String
+              ? int.tryParse(value)
+              : (value as num).toInt(),
+      'float' => value is double
+          ? value
+          : value is String
+              ? double.tryParse(value)
+              : (value as num).toDouble(),
+      'bool' => value is bool ? value : value == 'true',
+      _ => value.toString(),
+    };
   }
 }

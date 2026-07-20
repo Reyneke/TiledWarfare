@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
@@ -38,6 +39,9 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
 
   /// Die geparsten Spawnpunkte aus der Map.
   List<({String name, double x, double y})> _spawnPoints = [];
+
+  /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der geladenen Karte.
+  Set<int> _collisionSet = {};
 
   /// Flag, ob die Karte bereits einmal zentriert wurde.
   /// Verhindert, dass _centerMap() bei jedem Build erneut aufgerufen wird
@@ -120,6 +124,14 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   void _onSpawnPointsParsed(List<({String name, double x, double y})> spawnPoints) {
     setState(() {
       _spawnPoints = spawnPoints;
+    });
+  }
+
+  /// Wird vom [WidgetMapLoader] aufgerufen, sobald Terrain- und
+  /// Kollisionsdaten aus der Map geparst wurden.
+  void _onTerrainParsed(Map<int, TerrainType> terrainMap, Set<int> collisionSet) {
+    setState(() {
+      _collisionSet = collisionSet;
     });
   }
 
@@ -345,6 +357,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
                   onTransformationControllerCreated:
                       _onTransformationControllerCreated,
                   onSpawnPointsParsed: _onSpawnPointsParsed,
+                  onTerrainParsed: _onTerrainParsed,
                 ),
               ),
               // Token-Overlay im Vordergrund (erst anzeigen, wenn Karte geladen ist)
@@ -354,6 +367,7 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
                     hexGrid: _hexGrid!,
                     transformationController: _mapTransformationController!,
                     spawnPoints: _spawnPoints,
+                    collisionSet: _collisionSet,
                     onGameOver: _onGameOver,
                     onRequestCameraFocus: _focusCameraOn,
                   ),

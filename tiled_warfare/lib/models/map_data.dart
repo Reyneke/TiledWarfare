@@ -1,5 +1,77 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:tiled_warfare/utils/hex_grid.dart';
+
+// ──────────────────────────────────────────────
+// Layer-Purpose-System (Section 8)
+// ──────────────────────────────────────────────
+
+/// Definiert den Zweck eines Tile-Layers über den bloßen Namen hinaus.
+///
+/// Während [TileLayer.name] direkt aus der TMX/TMJ-Datei stammt, erlaubt
+/// [LayerPurpose] eine **typsichere** Klassifizierung, welche Layer von der
+/// Engine wie verwendet werden sollen (Boden, Kollision, Dekoration usw.).
+///
+/// Die Zuordnung von Layer-Name → Purpose erfolgt beim Laden über
+/// [LayerPurpose.resolve] oder über [MapData.layerByPurpose].
+///
+/// ## Beispiel
+/// ```dart
+/// final ground = mapData.layerByPurpose(LayerPurpose.ground);
+/// ```
+enum LayerPurpose {
+  /// Boden-Ebene: Wird zuerst gezeichnet, bildet die Grundfläche.
+  ground,
+
+  /// Kollisions-Ebene: Enthält Tiles, die als unpassierbar markiert sind.
+  /// Wird in der Regel nicht visuell gezeichnet, sondern nur für
+  /// Bewegungseinschränkungen verwendet.
+  collision,
+
+  /// Dekorations-Ebene: Wird über dem Boden gezeichnet (z. B. Bäume, Steine).
+  decorative,
+
+  /// Obere Dekorations-Ebene: Wird ganz oben gezeichnet (z. B. Dächer, Wolken).
+  decorativeUpper,
+
+  /// Gelände-Ebene: Enthält Informationen über Geländetypen.
+  terrain,
+
+  /// Standard/andere Layer ohne spezifischen Zweck.
+  unknown;
+
+  /// Standardmäßige Layer-Namen für jeden Purpose in der TMX/TMJ-Datei.
+  ///
+  /// Kann über [MapLoadConfig] überschrieben werden (siehe widget_map_loader.dart).
+  static const Map<LayerPurpose, String> defaultLayerNames = {
+    LayerPurpose.ground: 'ground',
+    LayerPurpose.collision: 'collision',
+    LayerPurpose.decorative: 'decoration',
+    LayerPurpose.decorativeUpper: 'decoration - upper',
+    LayerPurpose.terrain: 'terrain',
+  };
+
+  /// Versucht, einen [LayerPurpose] aus einem Layer-Namen zu ermitteln.
+  ///
+  /// Verwendet die [defaultLayerNames]-Zuordnung. Wenn der Name nicht
+  /// erkannt wird, wird [LayerPurpose.unknown] zurückgegeben.
+  static LayerPurpose fromLayerName(String name) {
+    for (final entry in defaultLayerNames.entries) {
+      if (entry.value == name) return entry.key;
+    }
+    return LayerPurpose.unknown;
+  }
+
+  /// Erstellt eine reverse-Map: Layer-Name → LayerPurpose.
+  ///
+  /// Nützlich für Lookups mit benutzerdefinierten Namen.
+  static Map<String, LayerPurpose> nameMapping([
+    Map<LayerPurpose, String>? customNames,
+  ]) {
+    final names = customNames ?? defaultLayerNames;
+    return {for (final e in names.entries) e.value: e.key};
+  }
+}
 
 /// Metadaten einer Karte aus der `maps.json`.
 ///
@@ -32,6 +104,13 @@ class MapMeta {
         previewPath: json['previewPath'] as String?,
         tmxPath: json['tmxPath'] as String,
       );
+
+  Map<String, dynamic> toJson() => {
+        'mapPath': mapPath,
+        'title': title,
+        'previewPath': previewPath,
+        'tmxPath': tmxPath,
+      };
 
   @override
   bool operator ==(Object other) =>
@@ -88,9 +167,17 @@ class MapData {
   /// Wird aus der Objektgruppe `"Gelaendetypen"` geparst.
   /// Felder, die nicht in dieser Map vorkommen, gelten als
   /// [TerrainType.normal].
-  final Map<int, TerrainType> terrain;
+  ///
+  /// `null`, wenn das Terrain noch nicht geparst wurde.
+  final Map<int, TerrainType>? terrain;
 
-  const MapData({
+  /// Vorberechnete Layer-Lookup-Map: Layer-Name → Layer-Index.
+  ///
+  /// Wird beim ersten Zugriff aufgebaut und dann für O(1)-Lookups
+  /// in [layerByName] und [layerByPurpose] verwendet.
+  late final Map<String, int> _layerIndexByName = _buildLayerIndex(layers);
+
+  MapData({
     required this.width,
     required this.height,
     required this.tileWidth,
@@ -101,30 +188,102 @@ class MapData {
     this.layers = const [],
     this.tilesets = const [],
     this.objectGroups = const [],
-    this.terrain = const {},
+    this.terrain,
   });
 
-  /// Berechnet die Kollisions-Tiles aus dem benannten Tile-Layer.
+  /// Erstellt einen Index Layer-Name → Position für O(1)-Lookups.
+  static Map<String, int> _buildLayerIndex(List<TileLayer> layers) {
+    final index = <String, int>{};
+    for (int i = 0; i < layers.length; i++) {
+      index[layers[i].name] = i;
+    }
+    return index;
+  }
+
+  // ──────────────────────────────────────────────
+  // Effiziente Layer-Lookups
+  // ──────────────────────────────────────────────
+
+  /// Gibt den Layer mit dem angegebenen Namen zurück, oder `null`.
   ///
-  /// [collisionLayerName] – Name des Kollisions-Layers (Standard: 'collision').
+  /// **O(1)** dank vorberechnetem Index.
+  TileLayer? layerByName(String name) {
+    final i = _layerIndexByName[name];
+    return i != null ? layers[i] : null;
+  }
+
+  /// Gibt den Layer zurück, der dem angegebenen [LayerPurpose] entspricht.
+  ///
+  /// Verwendet die Standard-Namenszuordnung aus [LayerPurpose.defaultLayerNames].
+  /// **O(1)**.
+  TileLayer? layerByPurpose(LayerPurpose purpose) {
+    final name = LayerPurpose.defaultLayerNames[purpose];
+    if (name == null) return null;
+    return layerByName(name);
+  }
+
+  /// Gibt alle Layer zurück, deren Purpose über [customMapping] bestimmt wird.
+  ///
+  /// Nützlich, wenn benutzerdefinierte Layer-Namen verwendet werden.
+  TileLayer? layerByPurposeWithMapping(
+    LayerPurpose purpose,
+    Map<LayerPurpose, String> nameMapping,
+  ) {
+    final name = nameMapping[purpose];
+    if (name == null) return null;
+    return layerByName(name);
+  }
+
+  // ──────────────────────────────────────────────
+  // Kollisionsberechnung
+  // ──────────────────────────────────────────────
+
+  /// Berechnet die Kollisions-Tiles aus dem Kollisions-Layer.
+  ///
+  /// Verwendet den Standard-Layer-Namen `'collision'` (entspricht
+  /// [LayerPurpose.collision]).
   /// Ein Tile gilt als blockiert, wenn [TileLayer.tileAt] != 0.
-  Set<int> computeCollisionTiles(String collisionLayerName) {
+  Set<int> computeCollisionTiles(HexGrid hexGrid) {
+    final layer = layerByPurpose(LayerPurpose.collision);
+    if (layer == null) return {};
+    return _computeCollisionForLayer(layer, hexGrid);
+  }
+
+  /// Berechnet Kollisions-Tiles aus einem benannten Layer (Rückwärtskompatibilität).
+  ///
+  /// [collisionLayerName] – Name des Kollisions-Layers.
+  /// [hexGrid] – Hex-Utility für hexKey-Berechnung.
+  /// Ein Tile gilt als blockiert, wenn [TileLayer.tileAt] != 0.
+  @Deprecated('Use computeCollisionTiles(hexGrid) instead, '
+      'which uses the standard collision layer by purpose.')
+  Set<int> computeCollisionTilesByName(
+    String collisionLayerName,
+    HexGrid hexGrid,
+  ) {
+    final layer = layerByName(collisionLayerName);
+    if (layer == null) return {};
+    return _computeCollisionForLayer(layer, hexGrid);
+  }
+
+  /// Gemeinsame Kollisions-Logik für einen beliebigen TileLayer.
+  static Set<int> _computeCollisionForLayer(
+    TileLayer layer,
+    HexGrid hexGrid,
+  ) {
     final collided = <int>{};
-    for (final layer in layers) {
-      if (layer.name != collisionLayerName) continue;
-      for (int y = 0; y < layer.height; y++) {
-        for (int x = 0; x < layer.width; x++) {
-          if (layer.tileAt(x, y) != 0) {
-            collided.add(hexKey(x, y));
-          }
+    for (int y = 0; y < layer.height; y++) {
+      for (int x = 0; x < layer.width; x++) {
+        if (layer.tileAt(x, y) != 0) {
+          collided.add(hexGrid.hexKey(x, y));
         }
       }
     }
     return collided;
   }
 
-  /// Erzeugt eine eindeutige Kennung für ein Hex-Feld.
-  int hexKey(int x, int y) => y * width + x;
+  // ──────────────────────────────────────────────
+  // copyWith & Serialisierung
+  // ──────────────────────────────────────────────
 
   MapData copyWith({
     int? width,
@@ -138,6 +297,7 @@ class MapData {
     List<TilesetInfo>? tilesets,
     List<ObjectGroup>? objectGroups,
     Map<int, TerrainType>? terrain,
+    bool clearTerrain = false,
   }) =>
       MapData(
         width: width ?? this.width,
@@ -150,8 +310,76 @@ class MapData {
         layers: layers ?? this.layers,
         tilesets: tilesets ?? this.tilesets,
         objectGroups: objectGroups ?? this.objectGroups,
-        terrain: terrain ?? this.terrain,
+        terrain: clearTerrain ? null : terrain ?? this.terrain,
       );
+
+  Map<String, dynamic> toJson() => {
+        'width': width,
+        'height': height,
+        'tilewidth': tileWidth,
+        'tileheight': tileHeight,
+        'orientation': orientation.name,
+        'staggeraxis': staggerAxis,
+        'staggerindex': staggerIndex,
+        'layers': layers.map((l) => l.toJson()).toList(),
+        'tilesets': tilesets.map((t) => t.toJson()).toList(),
+        'objectgroups': objectGroups.map((g) => g.toJson()).toList(),
+        if (terrain != null)
+          'terrain': terrain!.map((k, v) => MapEntry(k.toString(), v.name)),
+      };
+
+  factory MapData.fromJson(Map<String, dynamic> json, {HexGrid? hexGrid}) {
+    final layersList = (json['layers'] as List<dynamic>?)
+            ?.map((l) => TileLayer.fromJson(l as Map<String, dynamic>))
+            .toList() ??
+        [];
+    return MapData(
+      width: json['width'] as int,
+      height: json['height'] as int,
+      tileWidth: json['tilewidth'] as int,
+      tileHeight: json['tileheight'] as int,
+      orientation: MapOrientation.fromString(
+          json['orientation'] as String? ?? 'orthogonal'),
+      staggerAxis: json['staggeraxis'] as String? ?? 'y',
+      staggerIndex: json['staggerindex'] as String? ?? 'odd',
+      layers: layersList,
+      tilesets: (json['tilesets'] as List<dynamic>?)
+              ?.map((t) => TilesetInfo.fromJson(t as Map<String, dynamic>))
+              .toList() ??
+          [],
+      objectGroups: (json['objectgroups'] as List<dynamic>?)
+              ?.map((g) => ObjectGroup.fromJson(g as Map<String, dynamic>))
+              .toList() ??
+          [],
+      terrain: json['terrain'] != null
+          ? (json['terrain'] as Map<String, dynamic>).map(
+              (k, v) =>
+                  MapEntry(int.parse(k), TerrainType.fromString(v as String)))
+          : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MapData &&
+          width == other.width &&
+          height == other.height &&
+          tileWidth == other.tileWidth &&
+          tileHeight == other.tileHeight &&
+          orientation == other.orientation &&
+          staggerAxis == other.staggerAxis &&
+          staggerIndex == other.staggerIndex &&
+          listEquals(layers, other.layers) &&
+          listEquals(tilesets, other.tilesets) &&
+          listEquals(objectGroups, other.objectGroups) &&
+          mapEquals(terrain, other.terrain);
+
+  @override
+  int get hashCode => Object.hash(
+      width, height, tileWidth, tileHeight, orientation, staggerAxis,
+      staggerIndex, Object.hashAll(layers), Object.hashAll(tilesets),
+      Object.hashAll(objectGroups), terrain);
 }
 
 /// Repräsentiert einen Tile-Layer einer Tiled-Karte.
@@ -168,7 +396,13 @@ class TileLayer {
   /// 0 bedeutet leeres Tile.
   final Uint32List tileData;
 
-  const TileLayer({
+  /// Der [LayerPurpose] dieses Layers, ermittelt aus dem Namen.
+  ///
+  /// Wird beim ersten Zugriff berechnet und dann zwischengespeichert.
+  /// Kann über [MapLoadConfig] benutzerdefiniert zugeordnet werden.
+  late final LayerPurpose purpose = LayerPurpose.fromLayerName(name);
+
+  TileLayer({
     required this.name,
     required this.width,
     required this.height,
@@ -181,6 +415,9 @@ class TileLayer {
   /// Gibt die Tile-ID an Position (x, y) zurück.
   /// 0 bedeutet leeres (leeres) Tile.
   int tileAt(int x, int y) => tileData[y * width + x];
+
+  /// Gibt `true` zurück, wenn dieser Layer keine Tiles enthält.
+  bool get isEmpty => tileData.every((id) => id == 0);
 
   /// Gibt die Tile-Daten als 2D-Liste zurück (für Rückwärtskompatibilität).
   List<List<int>> toListOfLists() {
@@ -195,6 +432,50 @@ class TileLayer {
     return result;
   }
 
+  /// Erstellt eine Kopie dieses Layers mit optional geänderten Feldern.
+  ///
+  /// Nützlich für Layertransformationen (z. B. Opacity-Override,
+  /// dynamische Tile-Änderungen).
+  TileLayer copyWith({
+    String? name,
+    int? width,
+    int? height,
+    double? opacity,
+    bool? visible,
+    Uint32List? tileData,
+  }) =>
+      TileLayer(
+        name: name ?? this.name,
+        width: width ?? this.width,
+        height: height ?? this.height,
+        opacity: opacity ?? this.opacity,
+        visible: visible ?? this.visible,
+        tileData: tileData ?? this.tileData,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'width': width,
+        'height': height,
+        'opacity': opacity,
+        'visible': visible,
+        'data': tileData.toList(),
+      };
+
+  factory TileLayer.fromJson(Map<String, dynamic> json) {
+    final dataList = (json['data'] as List<dynamic>)
+        .map((e) => (e as num).toInt())
+        .toList();
+    return TileLayer(
+      name: json['name'] as String,
+      width: json['width'] as int,
+      height: json['height'] as int,
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      visible: json['visible'] as bool? ?? true,
+      tileData: Uint32List.fromList(dataList),
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -207,7 +488,8 @@ class TileLayer {
           tileData == other.tileData;
 
   @override
-  int get hashCode => Object.hash(name, width, height, opacity, visible, tileData);
+  int get hashCode =>
+      Object.hash(name, width, height, opacity, visible, tileData);
 }
 
 /// Repräsentiert ein Tileset in einer Tiled-Karte.
@@ -237,6 +519,32 @@ class TilesetInfo {
     this.imageHeight,
   });
 
+  Map<String, dynamic> toJson() => {
+        'firstgid': firstGid,
+        if (source != null) 'source': source,
+        if (name != null) 'name': name,
+        if (tileWidth != null) 'tilewidth': tileWidth,
+        if (tileHeight != null) 'tileheight': tileHeight,
+        if (tileCount != null) 'tilecount': tileCount,
+        if (columns != null) 'columns': columns,
+        if (imageSource != null) 'image': imageSource,
+        if (imageWidth != null) 'imagewidth': imageWidth,
+        if (imageHeight != null) 'imageheight': imageHeight,
+      };
+
+  factory TilesetInfo.fromJson(Map<String, dynamic> json) => TilesetInfo(
+        firstGid: json['firstgid'] as int,
+        source: json['source'] as String?,
+        name: json['name'] as String?,
+        tileWidth: json['tilewidth'] as int?,
+        tileHeight: json['tileheight'] as int?,
+        tileCount: json['tilecount'] as int?,
+        columns: json['columns'] as int?,
+        imageSource: json['image'] as String?,
+        imageWidth: json['imagewidth'] as int?,
+        imageHeight: json['imageheight'] as int?,
+      );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -256,6 +564,30 @@ class ObjectGroup {
     required this.name,
     this.objects = const [],
   });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'objects': objects.map((o) => o.toJson()).toList(),
+      };
+
+  factory ObjectGroup.fromJson(Map<String, dynamic> json) => ObjectGroup(
+        name: json['name'] as String,
+        objects: (json['objects'] as List<dynamic>?)
+                ?.map(
+                    (o) => MapObject.fromJson(o as Map<String, dynamic>))
+                .toList() ??
+            [],
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ObjectGroup &&
+          name == other.name &&
+          listEquals(objects, other.objects);
+
+  @override
+  int get hashCode => Object.hash(name, Object.hashAll(objects));
 }
 
 /// Repräsentiert ein einzelnes Objekt in einer Objektgruppe.
@@ -284,6 +616,52 @@ class MapObject {
     this.visible = true,
     this.properties = const {},
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'x': x,
+        'y': y,
+        'width': width,
+        'height': height,
+        'rotation': rotation,
+        'visible': visible,
+        'properties': Map<String, dynamic>.from(properties),
+      };
+
+  factory MapObject.fromJson(Map<String, dynamic> json) => MapObject(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        type: json['type'] as String? ?? '',
+        x: (json['x'] as num?)?.toDouble() ?? 0,
+        y: (json['y'] as num?)?.toDouble() ?? 0,
+        width: (json['width'] as num?)?.toDouble() ?? 0,
+        height: (json['height'] as num?)?.toDouble() ?? 0,
+        rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
+        visible: json['visible'] as bool? ?? true,
+        properties: Map<String, dynamic>.from(
+            json['properties'] as Map<String, dynamic>? ?? {}),
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MapObject &&
+          id == other.id &&
+          name == other.name &&
+          type == other.type &&
+          x == other.x &&
+          y == other.y &&
+          width == other.width &&
+          height == other.height &&
+          rotation == other.rotation &&
+          visible == other.visible &&
+          mapEquals(properties, other.properties);
+
+  @override
+  int get hashCode => Object.hash(
+      id, name, type, x, y, width, height, rotation, visible, properties);
 }
 
 // ──────────────────────────────────────────────
@@ -352,13 +730,33 @@ class TerrainConfig {
     this.impassable = false,
   });
 
+  Map<String, dynamic> toJson() => {
+        'movementCostMultiplier': movementCostMultiplier,
+        'blocksVision': blocksVision,
+        'impassable': impassable,
+      };
+
   static const Map<TerrainType, TerrainConfig> defaults = {
     TerrainType.normal: TerrainConfig(),
-    TerrainType.ruin: TerrainConfig(movementCostMultiplier: 2.0, blocksVision: true),
-    TerrainType.forest: TerrainConfig(movementCostMultiplier: 1.5, blocksVision: true),
+    TerrainType.ruin:
+        TerrainConfig(movementCostMultiplier: 2.0, blocksVision: true),
+    TerrainType.forest:
+        TerrainConfig(movementCostMultiplier: 1.5, blocksVision: true),
     TerrainType.water: TerrainConfig(impassable: true),
     TerrainType.wall: TerrainConfig(impassable: true, blocksVision: true),
     TerrainType.openGround: TerrainConfig(),
     TerrainType.swamp: TerrainConfig(movementCostMultiplier: 3.0),
   };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TerrainConfig &&
+          movementCostMultiplier == other.movementCostMultiplier &&
+          blocksVision == other.blocksVision &&
+          impassable == other.impassable;
+
+  @override
+  int get hashCode =>
+      Object.hash(movementCostMultiplier, blocksVision, impassable);
 }

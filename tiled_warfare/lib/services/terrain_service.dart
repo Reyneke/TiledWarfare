@@ -44,7 +44,7 @@ Set<int> buildAllBlockedFields({
   required HexGrid hexGrid,
 }) {
   final blocked = hexGrid.buildOccupiedHexFields(tokens, excludeToken: excludeToken);
-  blocked.addAll(mapData.computeCollisionTiles(collisionLayerName));
+  blocked.addAll(mapData.computeCollisionTiles(hexGrid));
   return blocked;
 }
 
@@ -123,7 +123,7 @@ class TerrainService {
   /// Berechnet die maximale Reichweite eines Tokens in Hex-Feldern
   /// unter Berücksichtigung der Geländekosten.
   ///
-  /// Verwendet BFS, der die kumulierten Bewegungskosten pro Feld tracked.
+  /// Delegiert an [reachableHexes] und zählt die Anzahl.
   /// [startX], [startY] – Startposition des Tokens.
   /// [maxMovement] – Maximale Bewegungspunkte ([ObjectToken.movementValue]).
   /// [occupied] – Optional: Menge blockierter Felder (Token + Kollision).
@@ -135,53 +135,21 @@ class TerrainService {
     required int maxMovement,
     Set<int>? occupied,
   }) {
-    if (maxMovement <= 0) return 0;
-
-    final startKey = _hexGrid.hexKey(startX, startY);
-    final reachable = <int>{};
-    // Queue: (x, y, accumulatedCost)
-    // accumulatedCost ist die Summe der Bewegungskosten vom Start zu diesem Feld
-    final queue = <(int x, int y, double cost)>[];
-    final visited = <int>{startKey};
-    queue.add((startX, startY, 0.0));
-
-    while (queue.isNotEmpty) {
-      final (currentX, currentY, currentCost) = queue.removeAt(0);
-
-      for (final offset in _hexGrid.neighborOffsets(currentY)) {
-        final nx = currentX + offset.dx;
-        final ny = currentY + offset.dy;
-        final nKey = _hexGrid.hexKey(nx, ny);
-
-        if (!_hexGrid.isInBounds(nx, ny)) continue;
-        if (visited.contains(nKey)) continue;
-
-        // Geländekosten für das Zielfeld
-        final config = configAt(nx, ny);
-        if (config.impassable) continue;
-
-        // Prüfen, ob das Feld durch Tokens/Kollision blockiert ist
-        if (occupied?.contains(nKey) ?? false) continue;
-
-        final newCost = currentCost + config.movementCostMultiplier;
-
-        // Wenn die Gesamtkosten das maximale Bewegungskontingent überschreiten,
-        // wird dieses Feld nicht betreten
-        if (newCost > maxMovement) continue;
-
-        visited.add(nKey);
-        reachable.add(nKey);
-        queue.add((nx, ny, newCost));
-      }
-    }
-
-    return reachable.length;
+    return reachableHexes(
+      startX: startX,
+      startY: startY,
+      maxMovement: maxMovement,
+      occupied: occupied,
+    ).length;
   }
 
   /// Berechnet die Menge aller erreichbaren Hex-Felder (exkl. Startfeld).
   ///
-  /// Wie [effectiveMovementRange], gibt aber die tatsächliche Menge der
-  /// Hex-Keys zurück, statt nur der Anzahl.
+  /// [startX], [startY] – Startposition des Tokens.
+  /// [maxMovement] – Maximale Bewegungspunkte.
+  /// [occupied] – Optional: Menge blockierter Felder (Token + Kollision).
+  ///
+  /// Gibt die Menge der Hex-Keys aller erreichbaren Felder zurück.
   Set<int> reachableHexes({
     required int startX,
     required int startY,

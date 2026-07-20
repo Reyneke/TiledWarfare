@@ -4,5 +4,11 @@
     "title": "Street Battle",
     "previewPath": null,
     "tmxPath": "assets/maps/map0/street_battle.tmx"
+  },
+  {
+    "mapPath": "assets/maps/map1",
+    "title": "Street Battle - Colliders",
+    "previewPath": null,
+    "tmxPath": "assets/maps/map1/street_battle_colliders.tmx"
   }
 ]

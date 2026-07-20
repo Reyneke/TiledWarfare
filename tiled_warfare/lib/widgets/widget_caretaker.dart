@@ -55,6 +55,12 @@ class WidgetCaretaker extends StatefulWidget {
   /// Der übergebene Boolean ist `true` bei Sieg, `false` bei Niederlage.
   final void Function(bool playerWon)? onGameOver;
 
+  /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der TMX-Karte.
+  ///
+  /// Wird vom [ScreenMain] nach dem Parsen der Karte übergeben.
+  /// Enthält alle Hex-Keys, die durch den "collision"-Layer blockiert sind.
+  final Set<int> collisionSet;
+
   const WidgetCaretaker({
     super.key,
     required this.hexGrid,
@@ -62,6 +68,7 @@ class WidgetCaretaker extends StatefulWidget {
     this.spawnPoints = const [],
     this.onGameOver,
     this.onRequestCameraFocus,
+    this.collisionSet = const {},
   });
 
   @override
@@ -267,7 +274,6 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     final random = Random(DateTime.now().microsecondsSinceEpoch);
     // Vorherige Host-Objekte entfernen, falls diese Methode erneut aufgerufen wird
     _host.doughDumpsterList.clear();
-    _baseMovementValues.clear();
 
     // ── Spieler-Einheiten initialisieren ──────────────────────────────
     // Die unitList wurde bereits von ScreenRestaurant via selectTeamForBattle()
@@ -345,23 +351,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     _invalidateCache();
   }
 
-  /// Setzt die Bewegungspunkte aller Einheiten auf ihre Basiswerte zurück.
-  /// Verwaltet die Initialwerte über eine Map, da ObjectToken.movementValue
-  /// mutable ist und während des Spiels verbraucht wird.
-  final Map<ObjectToken, int> _baseMovementValues = {};
-
-  /// Speichert den Basis-Bewegungswert eines Tokens (wird bei der ersten
-  /// Runde von [_startNewRound] automatisch ermittelt).
-  void _storeBaseMovementValue(ObjectToken token) {
-    if (!_baseMovementValues.containsKey(token)) {
-      _baseMovementValues[token] = token.movementValue;
-    }
-  }
-
   /// Setzt den Bewegungswert und das hasActed-Flag eines Tokens zurück.
+  /// Nutzt [ObjectToken.baseMovementValue] (final), um den ursprünglichen
+  /// Konstruktor-Wert zu erhalten – unabhängig von früheren Spielrunden.
   void _resetTokenRoundState(ObjectToken token) {
-    _storeBaseMovementValue(token);
-    token.movementValue = _baseMovementValues[token]!;
+    token.movementValue = token.baseMovementValue;
     token.hasActed = false;
   }
 
@@ -618,33 +612,38 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     return widget.hexGrid.pixelToHex(token.position);
   }
 
-  /// Baut eine Menge aller aktuell belegten Hex-Felder auf.
-  /// Ein Feld gilt als belegt, wenn dort ein lebender Token steht.
-  /// Der [excludeToken] wird dabei nicht berücksichtigt (z. B. der
+  /// Baut eine Menge aller blockierten Hex-Felder auf.
+  ///
+  /// Ein Feld gilt als blockiert, wenn:
+  /// 1. Ein lebender Token darauf steht (Token-Belegung)
+  /// 2. Es im Kollisions-Layer der Karte markiert ist (TMX collision-Layer)
+  ///
+  /// Der [excludeToken] wird bei der Token-Belegung ignoriert (z. B. der
   /// gerade gezogene Token).
   ///
-  /// Das Ergebnis wird gecached, da diese Methode mehrfach pro Frame
-  /// aufgerufen werden kann.
-  Set<int> _getOccupiedHexFields({ObjectToken? excludeToken}) {
+  /// Das Ergebnis wird gecached, wenn kein excludeToken übergeben wird.
+  Set<int> _getBlockedHexFields({ObjectToken? excludeToken}) {
     if (excludeToken != null || _cacheDirty || _cachedOccupiedFields == null) {
-      // Wenn ein excludeToken angegeben ist, können wir nicht cachen
-      return _buildOccupiedHexFields(excludeToken: excludeToken);
+      return _buildBlockedHexFields(excludeToken: excludeToken);
     }
     return _cachedOccupiedFields!;
   }
 
-  Set<int> _buildOccupiedHexFields({ObjectToken? excludeToken}) {
-    return widget.hexGrid.buildOccupiedHexFields(
+  Set<int> _buildBlockedHexFields({ObjectToken? excludeToken}) {
+    final blocked = widget.hexGrid.buildOccupiedHexFields(
       _allTokens.map((r) => r.token),
       excludeToken: excludeToken,
     );
+    blocked.addAll(widget.collisionSet);
+    return blocked;
   }
 
   /// Prüft, ob ein bestimmtes Hex-Feld (x, y) frei ist (kein lebender Token
-  /// darauf steht). Der [excludeToken] wird ignoriert.
+  /// darauf steht, und nicht durch den Kollisions-Layer blockiert).
+  /// Der [excludeToken] wird ignoriert.
   bool _isHexFieldFree(int x, int y, {ObjectToken? excludeToken}) {
-    final occupied = _getOccupiedHexFields(excludeToken: excludeToken);
-    return !occupied.contains(widget.hexGrid.hexKey(x, y));
+    final blocked = _getBlockedHexFields(excludeToken: excludeToken);
+    return !blocked.contains(widget.hexGrid.hexKey(x, y));
   }
 
   /// Prüft, ob ein Ziel-Hex-Feld vom Start-Hex-Feld aus über einen freien
@@ -662,7 +661,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   }) {
     if (startX == targetX && startY == targetY) return true;
 
-    final occupied = _buildOccupiedHexFields(excludeToken: excludeToken);
+    final blocked = _buildBlockedHexFields(excludeToken: excludeToken);
     visited.reset();
     final queue = Queue<({int x, int y, int steps})>();
     queue.add((x: startX, y: startY, steps: maxSteps));
@@ -681,7 +680,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         if (visited.contains(key)) continue;
         visited.add(key);
         if (key == targetKey) return true;
-        if (occupied.contains(key)) continue;
+        if (blocked.contains(key)) continue;
         queue.add((x: nx, y: ny, steps: current.steps - 1));
       }
     }
@@ -1276,9 +1275,6 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       _selectedToken = null;
     }
 
-    // Basis-Bewegungswerte für tote Tokens aufräumen (Memory Leak vermeiden)
-    _baseMovementValues.removeWhere((token, _) => token.woundValue <= 0);
-
     // Cache invalidieren, damit tote Tokens sofort aus der Darstellung verschwinden
     _invalidateCache();
   }
@@ -1845,7 +1841,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
 
     final hex = _getTokenHex(_selectedToken!);
     final maxMovement = _selectedToken!.movementValue;
-    final occupied = _getOccupiedHexFields(excludeToken: _selectedToken);
+    final blocked = _getBlockedHexFields(excludeToken: _selectedToken);
 
     // BFS: Queue von (x, y, remainingSteps)
     visited.reset();
@@ -1865,7 +1861,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         final key = widget.hexGrid.hexKey(nx, ny);
         if (visited.contains(key)) continue;
         visited.add(key);
-        if (occupied.contains(key)) continue;
+        if (blocked.contains(key)) continue;
         reachable.add(key);
         queue.add((x: nx, y: ny, steps: current.steps - 1));
       }

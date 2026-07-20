@@ -30,7 +30,7 @@ Das Projekt folgt einer einfachen Struktur:
 lib/               → Quellcode
   main.dart        ← HIER STARTET DIE APP
   main_app.dart    ← Root-Widget
-  models/          ← Datenmodelle (MapData, TileLayer, TerrainType, etc.)
+  models/          ← Datenmodelle (MapData, TileLayer, LayerPurpose, TerrainType, etc.)
   services/        ← Dienste (Parser, TerrainService, FogOfWarService, etc.)
   screens/         ← Bildschirme
   widgets/         ← Wieder-verwendbare UI-Komponenten
@@ -50,7 +50,7 @@ doc/               → Dokumentation
 | 2 | `doc/doc/04_cliffnotes.md` | Schnellüberblick |
 | 3 | `lib/main.dart` + `lib/main_app.dart` | Einstiegspunkt verstehen |
 | 4 | `lib/screens/screen_main.dart` | Hauptbildschirm |
-| 5 | `lib/models/map_data.dart` + `lib/services/map_parser.dart` | Karten-Datenmodell & Parser |
+| 5 | `lib/models/map_data.dart` + `lib/services/map_parser.dart` | Karten-Datenmodell (inkl. `LayerPurpose`-Enum) & Parser |
 | 6 | `lib/services/terrain_service.dart` | **Geländesystem** (TerrainService, BFS, parseTerrain) |
 | 7 | `lib/services/fog_of_war.dart` | **Fog of War** (Sichtbarkeitsberechnung) |
 | 8 | `lib/widgets/widget_map_loader.dart` | Karte laden & rendern (nutzt Parser) |
@@ -96,7 +96,20 @@ Die Hex-Karte wird mit `_HexMapPainter` (ein `CustomPainter`) gezeichnet, weil:
 
 ### 2.5 Warum Viewport-Culling?
 
-Große Karten (z. B. 30×30) können hunderte Tokens enthalten. Viewport-Culling stellt sicher, dass nur Tokens im sichtbaren Bereich gezeichnet werden. Das verbessert die Performance drastisch.
+Es gibt **zwei Ebenen** von Viewport-Culling:
+
+1. **Token-Culling** im `WidgetCaretaker`: Nur Tokens im sichtbaren Bereich werden als Widgets dargestellt (über `_getVisibleMapRect()`).
+2. **Tile-Culling** im `_HexMapPainter`: Nur sichtbare Tiles werden auf die Canvas gezeichnet – der sichtbare Tile-Bereich wird vor der Schleife berechnet, sodass nur ~50 statt 10.000+ Tiles durchlaufen werden.
+
+Beide zusammen stellen sicher, dass große Karten (300×300+) flüssig laufen.
+
+**Performance-Vergleich (Tile-Culling):**
+
+| Kartengröße | Tiles gesamt | Sichtbar | Iterationen alt | Iterationen neu | Faktor |
+|------------|-------------|---------|-----------------|----------------|--------|
+| 30×30      | 900         | ~50     | 2.700 (3 Layer) | 150            | 18×    |
+| 100×100    | 10.000      | ~80     | 30.000          | 240            | 125×   |
+| 300×300    | 90.000      | ~120    | 270.000         | 360            | 750×   |
 
 ### 2.6 Warum BFS für Bewegung?
 
@@ -121,6 +134,26 @@ Der `FogOfWarService` unterscheidet zwischen **visible** (aktuell sichtbar) und 
 - **visible**: Wird pro Runde neu berechnet, berücksichtigt Token-Bewegung
 - **revealed**: Akkumuliert über Runden, bleibt dauerhaft sichtbar
 - Erlaubt "Fog of War vs. Fog of Exploration" – aufgedeckte Karte bleibt sichtbar
+
+### 2.9 Architektur des Karten-Renderings
+
+Das Rendering der Karte ist ein mehrstufiger Prozess mit klaren Verantwortlichkeiten:
+
+1. **`_WidgetMapLoaderState._loadMap()`**: Lädt die TMX-Datei asynchron, parst alle Layer, Tilesets und Objektgruppen. Ruft `_loadTilesetImages()` auf, das Bilder aus dem Asset-Bundle dekodiert.
+
+2. **`_HexMapPainter`** (private CustomPainter-Klasse in `widget_map_loader.dart`): Erhält die fertigen Daten (Tile-Ids, Bilder) und zeichnet sie auf die Canvas:
+   - `_computePositions()` (static): Berechnet Pixel-Koordinaten für jedes Hex-Feld einmalig im Konstruktor
+   - `paint()`: Berechnet den sichtbaren Tile-Bereich (`_computeVisibleTileRange`), clippt die GPU (`canvas.clipRect()`), zeichnet dann Layer für Layer (`_drawLayer`)
+   - `_drawLayer()`: Iteriert nur über sichtbare Tiles und zeichnet jedes Tile via `canvas.drawImageRect()`; verwendet `mapData.layerByName()` für O(1)-Layer-Lookup
+   - `shouldRepaint()`: Führt Tiefenvergleich der Layer-Daten (Namen + Tile-Daten + Purpose) durch, vermeidet überflüssiges Neuzeichnen
+
+3. **Performance-Mechanismen**:
+   - Viewport-Culling: Nur ~50 statt 10.000+ Tiles pro Frame (abhängig von Kartengröße)
+   - `RepaintBoundary`: Isoliert das Karten-Rendering vom übrigen Widget-Baum
+   - `canvas.clipRect()`: GPU-Clipping – Pixel außerhalb des Viewports werden Hardware-seitig verworfen
+   - `try-finally`: Stellt sicher, dass `canvas.restore()` auch bei Exceptions aufgerufen wird
+   - Speicher: Vorberechnete Positionen belegen ~14 KB (30×30) bis ~1,4 MB (300×300)
+   - **Neu**: O(1)-Layer-Lookups via vorberechneten `Map<String, int>`-Index statt `where().firstOrNull` (O(n))
 
 ---
 
@@ -167,12 +200,12 @@ class ObjectChef extends ObjectToken {
    - `title` wird im UI für die Kartenauswahl verwendet
 5. Spawnpunkte in der Kartendatei als Objectgroup "Spawns" definieren
 6. **Layer-Struktur** (empfohlen für neue Karten):
-   - `ground` (TileLayer) – Bodenbelag
-   - `decoration` (TileLayer) – Dekoration
-   - `collision` (TileLayer) – Kollisions-Tiles (optional)
+   - `ground` (TileLayer, `LayerPurpose.ground`) – Bodenbelag
+   - `decoration` (TileLayer, `LayerPurpose.decorative`) – Dekoration
+   - `collision` (TileLayer, `LayerPurpose.collision`) – Kollisions-Tiles (optional)
    - `spawns` (ObjectGroup) – Spawnpunkte
    - `Gelaendetypen` (ObjectGroup) – Geländetypen (optional)
-7. Die Layer-Namen können über `MapLoadConfig` angepasst werden
+7. Die Layer-Namen werden automatisch über `LayerPurpose.fromLayerName()` dem passenden Purpose zugeordnet. Bei abweichenden Namen kann das Mapping über `MapLoadConfig` angepasst werden.
 8. Über den `onTerrainParsed`-Callback von `WidgetMapLoader` werden die
    Geländedaten und das Kollisions-Set an das übergeordnete Widget übergeben
 9. Die Karte erscheint automatisch im `ScreenRestaurant` – keine Code-Änderungen nötig
@@ -281,6 +314,7 @@ Tests befinden sich in `lib/fuzzy_logic/test/` sowie in `test/fog_of_war_test.da
 | `doc/doc/04_cliffnotes.md` | Cliffnotes (kurz & knapp) |
 | `doc/todo/feat_better_maps/3_terrain_system.md` | Detaillierte Terrain-System-Doku |
 | `doc/todo/feat_better_maps/4_Kartenauswahl.md` | Kartenauswahl: maps.json, MapMeta, MapRegistry |
+| `doc/todo/feat_better_maps/8_tile_layer_system.md` | Tile-Layer-System (LayerPurpose, O(1)-Lookups) |
 | `doc/rules/combat_rules.md` | Vollständige Kampfregeln |
 | `pubspec.yaml` | Abhängigkeiten und Metadaten |
 

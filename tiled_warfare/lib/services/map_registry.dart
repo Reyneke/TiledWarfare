@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/services/map_exceptions.dart';
 
 /// Liest [maps.json] aus, parsed sie und stellt die Liste der verfügbaren
 /// Karten bereit.
@@ -18,16 +20,30 @@ class MapRegistry {
 
   MapRegistry({required this.maps});
 
-  /// Lädt [maps.json] aus dem Asset-Bundle.
+  /// Lädt eine [maps.json]-Datei aus dem Asset-Bundle.
   ///
-  /// Wirft einen [FormatException], wenn das JSON ungültig ist,
-  /// oder einen [FlutterError], wenn die Datei fehlt (z. B. Deployment-Fehler).
-  static Future<MapRegistry> loadFromAsset() async {
-    final jsonString = await rootBundle.loadString('assets/maps/maps.json');
-    final List<dynamic> jsonList = json.decode(jsonString) as List<dynamic>;
-    final maps = jsonList
-        .map((e) => MapMeta.fromJson(e as Map<String, dynamic>))
-        .toList(growable: false);
-    return MapRegistry(maps: maps);
+  /// [path] – Pfad zur maps.json-Datei (Standard: `'assets/maps/maps.json'`).
+  ///
+  /// Wirft [MapNotFoundException], wenn die Datei nicht gefunden wird,
+  /// oder [MapParseException], wenn das JSON ungültig ist.
+  static Future<MapRegistry> loadFromAsset({String path = 'assets/maps/maps.json'}) async {
+    try {
+      final jsonString = await rootBundle.loadString(path);
+      final List<dynamic> jsonList = json.decode(jsonString) as List<dynamic>;
+      final maps = jsonList
+          .map((e) => MapMeta.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false);
+      return MapRegistry(maps: maps);
+    } on FlutterError {
+      throw MapNotFoundException(
+        message: 'maps.json not found in assets',
+        path: path,
+      );
+    } on FormatException catch (e) {
+      throw MapParseException(
+        message: 'Invalid JSON in maps.json: ${e.message}',
+        path: path,
+      );
+    }
   }
 }
