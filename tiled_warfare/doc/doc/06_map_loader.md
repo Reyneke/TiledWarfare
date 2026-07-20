@@ -92,7 +92,8 @@ Layer Panel (von unten nach oben):
 
 ### 3.4 Kollisions-Layer
 
-Der `"collision"`-Layer ist **unsichtbar** und dient nur der Kollisionserkennung.
+Der `"collision"`-Layer ist **unsichtbar** und dient nur der **Bewegungssperre** (Kollisionserkennung).
+Er hat **keinen Einfluss auf die Sichtbarkeit (Field of View)** – siehe [Abschnitt 4.2](#42-geländetypen-gelaendetypen) für Sichtblockaden.
 
 - Jedes Tile mit einer **Tile-ID ≠ 0** wird als **blockiert** (unpassierbar) markiert.
 - Tile-ID = 0 bedeutet freies Feld (keine Kollision).
