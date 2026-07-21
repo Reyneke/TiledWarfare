@@ -28,7 +28,8 @@ class ScreenMain extends StatefulWidget {
   State<ScreenMain> createState() => _ScreenMainState();
 }
 
-class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
+class _ScreenMainState extends State<ScreenMain>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
   /// Wird erstellt, sobald die Kartendaten geladen sind.
   HexGrid? _hexGrid;
@@ -58,10 +59,65 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// werden, um Memory Leaks zu vermeiden.
   AnimationController? _focusAnimationController;
 
+  /// Letzte bekannte Bildschirmgröße. Wird verwendet, um unnötige
+  /// Neu-Zentrierungen bei unwesentlichen Größenänderungen zu vermeiden.
+  Size? _lastScreenSize;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusAnimationController?.dispose();
     super.dispose();
+  }
+
+  /// Wird bei Fenster-Größenänderungen (z.B. Maximieren/Ziehen) aufgerufen.
+  /// Zentriert die Karte neu, wenn sich die Fenstergröße wesentlich geändert hat,
+  /// damit die Karte nicht abgeschnitten wird (Bugfix: "Unterer Teil der Karte
+  /// wird nicht gezeichnet, wenn Fenster größer wird").
+  @override
+  void didChangeMetrics() {
+    if (_mapDataReady && _hexGrid != null) {
+      // Kurze Verzögerung, damit MediaQuery.of(context) die neue Größe hat
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // Prüfen, ob sich die Größe relevant geändert hat (mehr als 20px)
+          final newSize = MediaQuery.of(context).size;
+          if (_lastScreenSize != null) {
+            final deltaH = (newSize.height - _lastScreenSize!.height).abs();
+            final deltaW = (newSize.width - _lastScreenSize!.width).abs();
+            if (deltaH < 20 && deltaW < 20) return;
+          }
+          _lastScreenSize = newSize;
+          // Nur bei nicht-triviale Zoomstufe neu zentrieren
+          // (bei Scale > 1.1 hat der Benutzer manuell gezoomt, dann nicht stören)
+          final controller = _mapTransformationController;
+          if (controller != null) {
+            final scale = controller.value.getMaxScaleOnAxis();
+            final baseScale = _computeFitToScreenScale();
+            // Nur neu zentrieren, wenn der Zoom nahe an der "Fit-to-Screen"-Skala liegt
+            if ((scale - baseScale).abs() < 0.15) {
+              _centerMap();
+            }
+          }
+        }
+      });
+    }
+  }
+
+  /// Berechnet die Skalierung, die nötig ist, damit die Karte auf den Bildschirm passt.
+  double _computeFitToScreenScale() {
+    if (_hexGrid == null) return 1.0;
+    final screenSize = MediaQuery.of(context).size;
+    final availableHeight = screenSize.height - kToolbarHeight;
+    final scaleX = screenSize.width / _hexGrid!.mapPixelWidth;
+    final scaleY = availableHeight / _hexGrid!.mapPixelHeight;
+    return (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
   }
 
   /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
@@ -130,6 +186,9 @@ class _ScreenMainState extends State<ScreenMain> with TickerProviderStateMixin {
   /// Wird vom [WidgetMapLoader] aufgerufen, sobald Terrain- und
   /// Kollisionsdaten aus der Map geparst wurden.
   void _onTerrainParsed(Map<int, TerrainType> terrainMap, Set<int> collisionSet) {
+    // Kollisionsdaten auch an den ObjectHost weitergeben,
+    // damit Host-Tokens (Zombies) nicht durch Wände laufen können.
+    ObjectHost().collisionSet = collisionSet;
     setState(() {
       _collisionSet = collisionSet;
     });

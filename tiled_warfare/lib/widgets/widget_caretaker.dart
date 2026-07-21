@@ -960,10 +960,21 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   }
 
   /// Aktualisiert die Position des gezogenen Tokens während des Drags.
+  /// Der _dragOffset wird auf die Karten-Pixel-Grenzen begrenzt, sodass der
+  /// Token nicht außerhalb der Karte landen kann (Bugfix: "Tokens können die
+  /// Karte verlassen"). Der Clamp erfolgt direkt im Offset, nicht erst beim
+  /// Rendering, damit es keine Sprünge beim Loslassen gibt.
   void _handleDragUpdate(Offset delta) {
     if (!_isDragging || _draggedToken == null) return;
     setState(() {
-      _dragOffset += delta;
+      final newOffset = _dragOffset + delta;
+      final startPos = _draggedToken!.position;
+      final newPos = startPos + newOffset;
+      final clampedPos = Offset(
+        newPos.dx.clamp(0, widget.hexGrid.mapPixelWidth.toDouble()),
+        newPos.dy.clamp(0, widget.hexGrid.mapPixelHeight.toDouble()),
+      );
+      _dragOffset = clampedPos - startPos;
     });
   }
 
@@ -1977,6 +1988,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       Offset displayPosition = token.position;
       if (_isDragging && _draggedToken == token) {
         displayPosition += _dragOffset;
+        // Während des Drags die Position auf die Karten-Bounds clampen,
+        // damit der Token nicht sichtbar außerhalb der Karte landen kann.
+        // (Bugfix: "Tokens können die Karte verlassen")
+        displayPosition = Offset(
+          displayPosition.dx.clamp(0, hexGrid.mapPixelWidth.toDouble()),
+          displayPosition.dy.clamp(0, hexGrid.mapPixelHeight.toDouble()),
+        );
       }
 
       // Viewport-Culling: Nur Tokens im sichtbaren Bereich zeichnen

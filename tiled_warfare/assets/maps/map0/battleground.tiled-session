@@ -1,8 +1,9 @@
 {
-    "activeFile": "street_battle_colliders.tmx",
+    "activeFile": "Thespazztikone_tilemaps_005_neu.tsx",
     "expandedProjectPaths": [
         "."
     ],
+    "file.lastUsedOpenFilter": "Alle Dateien (*)",
     "fileStates": {
         "Thespazztikone_tilemaps_005_neu.tsx": {
             "scaleInDock": 1,
@@ -32,7 +33,6 @@
     "map.lastUsedFormat": "tmx",
     "map.orientation": "2",
     "openFiles": [
-        "street_battle_colliders.tmx",
         "Thespazztikone_tilemaps_005_neu.tsx"
     ],
     "project": "battleground.tiled-project",

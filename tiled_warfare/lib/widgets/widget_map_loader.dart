@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' show max, min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,27 +14,42 @@ import 'package:tiled_warfare/utils/hex_grid.dart';
 ///
 /// Erlaubt die Anpassung, welche Layer und Objektgruppen verwendet werden.
 class MapLoadConfig {
-  /// Name des Boden-Layers (TileLayer), der als Karten-Boden gezeichnet wird.
-  final String groundLayerName;
-
-  /// Name des Kollisions-Layers (TileLayer), falls vorhanden.
-  final String? collisionLayerName;
-
   /// Name der Objektgruppe für Spawnpunkte.
   final String spawnGroupName;
 
-  /// Name des Dekorations-Layers (TileLayer), der über dem Boden gezeichnet wird.
-  final String? decorationLayerName;
+  /// Benutzerdefinierte Zuordnung von [LayerPurpose] zu Layer-Namen.
+  ///
+  /// Überschreibt die Standard-Namen aus [LayerPurpose.defaultLayerNames].
+  /// Nur die angegebenen Zweige werden überschrieben; nicht aufgeführte
+  /// Zweige verwenden weiterhin die Standard-Namen.
+  ///
+  /// Beispiel:
+  /// ```dart
+  /// MapLoadConfig(layerNameOverrides: {
+  ///   LayerPurpose.ground: 'my_ground',
+  ///   LayerPurpose.decorative: 'my_deco',
+  /// })
+  /// ```
+  final Map<LayerPurpose, String> layerNameOverrides;
 
-  /// Name des oberen Dekorations-Layers (TileLayer), ganz oben gezeichnet.
-  final String? decorationUpperLayerName;
+  /// Erstellt die effektive Namenstabelle: Standard + Overrides.
+  Map<LayerPurpose, String> get effectiveLayerNames {
+    final result = Map<LayerPurpose, String>.from(
+      LayerPurpose.defaultLayerNames,
+    );
+    result.addAll(layerNameOverrides);
+    return result;
+  }
+
+  /// Gibt den konfigurierten Layer-Namen für einen [LayerPurpose] zurück.
+  String layerNameFor(LayerPurpose purpose) {
+    return effectiveLayerNames[purpose] ??
+        LayerPurpose.defaultLayerNames[purpose]!;
+  }
 
   const MapLoadConfig({
-    this.groundLayerName = 'ground',
-    this.collisionLayerName = 'collision',
     this.spawnGroupName = 'Spawns',
-    this.decorationLayerName = 'decoration',
-    this.decorationUpperLayerName = 'decoration - upper',
+    this.layerNameOverrides = const {},
   });
 }
 
@@ -119,7 +134,11 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   int _tileWidth = 32;
   int _tileHeight = 32;
   bool _isLoading = true;
+
+  /// Fehlermeldung und -typ getrennt speichern (kein string-basierter Typabgleich).
   String? _error;
+  _MapErrorType? _errorType;
+
   final TransformationController _transformationController =
       TransformationController();
 
@@ -133,10 +152,16 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   @override
   void dispose() {
     _transformationController.dispose();
+    _disposeTilesetImages();
+    super.dispose();
+  }
+
+  /// Disposed alle zwischengespeicherten Tileset-Bilder.
+  void _disposeTilesetImages() {
     for (final entry in _tilesetImages.values) {
       entry.image.dispose();
     }
-    super.dispose();
+    _tilesetImages.clear();
   }
 
   // ──────────────────────────────────────────────
@@ -145,12 +170,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
 
   Future<void> _loadMap() async {
     try {
-      // Alte Tileset-Bilder disposen, bevor neue geladen werden
-      // (verhindert Memory-Leaks bei Kartenwechsel)
-      for (final entry in _tilesetImages.values) {
-        entry.image.dispose();
-      }
-      _tilesetImages.clear();
+      _disposeTilesetImages();
 
       final parser = MapParser.forPath(
         widget.mapPath,
@@ -192,33 +212,39 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
 
       setState(() {
         _isLoading = false;
+        _error = null;
+        _errorType = null;
       });
     } on MapParseException catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      _setErrorState('Kartenformat-Fehler: $e', _MapErrorType.parseError);
     } on MapNotFoundException catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      _setErrorState('Karte nicht gefunden: $e', _MapErrorType.notFound);
     } on FormatException catch (e) {
-      setState(() {
-        _error = 'Formatfehler: ${e.message}';
-        _isLoading = false;
-      });
+      _setErrorState('Formatfehler: ${e.message}', _MapErrorType.parseError);
     } on FlutterError catch (e) {
-      setState(() {
-        _error = 'Asset-Fehler: ${e.message}';
-        _isLoading = false;
-      });
+      _setErrorState('Asset-Fehler: ${e.message}', _MapErrorType.notFound);
     } catch (e) {
-      setState(() {
-        _error = 'Unbekannter Fehler: $e';
-        _isLoading = false;
-      });
+      _setErrorState('Unbekannter Fehler: $e', _MapErrorType.unknown);
     }
+  }
+
+  /// Zentrale Methode zum Setzen von Fehlerzuständen.
+  void _setErrorState(String message, _MapErrorType type) {
+    setState(() {
+      _error = message;
+      _errorType = type;
+      _isLoading = false;
+    });
+  }
+
+  /// Startet einen erneuten Ladeversuch (für Retry-/Fallback-Buttons).
+  void _retryLoad() {
+    setState(() {
+      _error = null;
+      _errorType = null;
+      _isLoading = true;
+    });
+    _loadMap();
   }
 
   // ──────────────────────────────────────────────
@@ -230,16 +256,10 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       // Externes Tileset (TSX): imageSource nachladen
       String? imageSource = tileset.imageSource;
       if (imageSource == null && tileset.source != null) {
-        try {
-          final tsxPath = '$basePath/${tileset.source}';
-          final tsxContent = await rootBundle.loadString(tsxPath);
-          final tsxDoc = XmlDocument.parse(tsxContent);
-          final tsxTileset = tsxDoc.findElements('tileset').first;
-          final imageElement = tsxTileset.findElements('image').firstOrNull;
-          imageSource = imageElement?.getAttribute('source');
-        } catch (e) {
-          debugPrint('Warning: Could not load external tileset: ${tileset.source} ($e)');
-        }
+        imageSource = await _resolveExternalTilesetSource(
+          tileset.source!,
+          basePath,
+        );
       }
 
       final imagePath = imageSource != null
@@ -247,25 +267,49 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
           : null;
       if (imagePath == null) continue;
 
-      try {
-        final byteData = await rootBundle.load(imagePath);
-        final codec =
-            await ui.instantiateImageCodec(byteData.buffer.asUint8List());
-        final frameInfo = await codec.getNextFrame();
-        _tilesetImages[tileset.firstGid] = (
-          image: frameInfo.image,
-          columns: tileset.columns ?? 16,
-        );
-      } on FlutterError catch (e) {
-        // Asset nicht gefunden – z. B. Tileset-Bild fehlt im Deployment
-        debugPrint('Warning: Tileset image not found: $imagePath ($e.message)');
-      } on FormatException catch (e) {
-        // Bilddaten korrupt – z. B. keine gültige PNG/JPEG-Datei
-        debugPrint('Warning: Corrupted tileset image: $imagePath ($e.message)');
-      } catch (e) {
-        // Alle anderen Fehler (z. B. Codec-Fehler, OOM)
-        debugPrint('Warning: Could not load tileset image: $imagePath ($e)');
-      }
+      await _loadSingleTilesetImage(tileset.firstGid, imagePath, tileset.columns);
+    }
+  }
+
+  /// Lädt die Bildquelle eines externen TSX-Tilesets.
+  Future<String?> _resolveExternalTilesetSource(
+    String source,
+    String basePath,
+  ) async {
+    try {
+      final tsxPath = '$basePath/$source';
+      final tsxContent = await rootBundle.loadString(tsxPath);
+      final tsxDoc = XmlDocument.parse(tsxContent);
+      final tsxTileset = tsxDoc.findElements('tileset').first;
+      final imageElement = tsxTileset.findElements('image').firstOrNull;
+      return imageElement?.getAttribute('source');
+    } catch (e) {
+      debugPrint('Warning: Could not load external tileset: $source ($e)');
+      return null;
+    }
+  }
+
+  /// Lädt ein einzelnes Tileset-Bild und speichert es im Cache.
+  Future<void> _loadSingleTilesetImage(
+    int firstGid,
+    String imagePath,
+    int? columns,
+  ) async {
+    try {
+      final byteData = await rootBundle.load(imagePath);
+      final codec =
+          await ui.instantiateImageCodec(byteData.buffer.asUint8List());
+      final frameInfo = await codec.getNextFrame();
+      _tilesetImages[firstGid] = (
+        image: frameInfo.image,
+        columns: columns ?? 16,
+      );
+    } on FlutterError catch (e) {
+      debugPrint('Warning: Tileset image not found: $imagePath ($e.message)');
+    } on FormatException catch (e) {
+      debugPrint('Warning: Corrupted tileset image: $imagePath ($e.message)');
+    } catch (e) {
+      debugPrint('Warning: Could not load tileset image: $imagePath ($e)');
     }
   }
 
@@ -293,21 +337,6 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   // Build
   // ──────────────────────────────────────────────
 
-  /// Bestimmt den Fehlertyp aus der Fehlermeldung für die UI-Entscheidung.
-  _MapErrorType _classifyError() {
-    if (_error == null) return _MapErrorType.unknown;
-    if (_error!.contains('MapParseException') ||
-        _error!.contains('FormatException') ||
-        _error!.contains('Formatfehler')) {
-      return _MapErrorType.parseError;
-    }
-    if (_error!.contains('MapNotFoundException') ||
-        _error!.contains('Asset-Fehler')) {
-      return _MapErrorType.notFound;
-    }
-    return _MapErrorType.unknown;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -315,71 +344,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     }
 
     if (_error != null) {
-      final errorType = _classifyError();
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                switch (errorType) {
-                  _MapErrorType.parseError => Icons.warning_amber_rounded,
-                  _MapErrorType.notFound => Icons.map_outlined,
-                  _MapErrorType.unknown => Icons.error_outline,
-                },
-                size: 48,
-                color: Colors.red.shade300,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Fehler beim Laden der Karte:\n$_error',
-                style: const TextStyle(color: Colors.red),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (errorType == _MapErrorType.parseError)
-                    FilledButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Erneut versuchen'),
-                      onPressed: () {
-                        setState(() {
-                          _error = null;
-                          _isLoading = true;
-                        });
-                        _loadMap();
-                      },
-                    ),
-                  if (errorType == _MapErrorType.notFound)
-                    FilledButton.icon(
-                      icon: const Icon(Icons.swap_horiz),
-                      label: const Text('Fallback-Karte laden'),
-                      onPressed: () {
-                        // Fallback: Standardkarte laden
-                        setState(() {
-                          _error = null;
-                          _isLoading = true;
-                        });
-                        // Hier könnte man die MapRegistry nutzen, um eine
-                        // andere Karte zu laden. Vorerst wird erneut versucht.
-                        _loadMap();
-                      },
-                    ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Zurück'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildErrorWidget();
     }
 
     if (_tilesetImages.isEmpty || _mapData == null) {
@@ -390,16 +355,20 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     final mapPixelWidth = widget.hexGrid.mapPixelWidth;
     final mapPixelHeight = widget.hexGrid.mapPixelHeight;
 
-    // Der Rand muss groß genug sein, damit _centerMap() in ScreenMain
-    // die Karte mittig positionieren kann. Der minimale Offset für die
-    // Zentrierung ist mapPixelWidth/2 (linker Rand der Karte), also
-    // setzen wir die Grenze auf die gesamte Kartenbreite.
-    final boundary = max(mapPixelWidth, mapPixelHeight).toDouble();
+    // Dynamische boundaryMargin: 30% der Bildschirmdiagonale als Puffer.
+    // - Nicht zu groß (verhindert den "breiten Streifen unterhalb der Karte")
+    // - Nicht zu klein (ermöglicht Scrollen zum Kartenrand bei kleinen Fenstern)
+    // - Passt sich jeder Fenstergröße an (Maximieren vs. Fenstermodus)
+    // - Karten-unabhängig: gleicher Puffer für 30×30 oder 200×200 Tiles
+    final viewportWidth = MediaQuery.of(context).size.width;
+    final viewportHeight = MediaQuery.of(context).size.height;
+    final diagonal = (viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+    final boundaryMargin = diagonal * 0.15;
 
     return RepaintBoundary(
       child: InteractiveViewer(
         transformationController: _transformationController,
-        boundaryMargin: EdgeInsets.all(boundary),
+        boundaryMargin: EdgeInsets.all(boundaryMargin),
         minScale: 0.25,
         maxScale: 4.0,
         child: SizedBox(
@@ -420,9 +389,66 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       ),
     );
   }
+
+  /// Baut die Fehler-UI basierend auf dem gespeicherten Fehlertyp.
+  Widget _buildErrorWidget() {
+    final errorType = _errorType ?? _MapErrorType.unknown;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              switch (errorType) {
+                _MapErrorType.parseError => Icons.warning_amber_rounded,
+                _MapErrorType.notFound => Icons.map_outlined,
+                _MapErrorType.unknown => Icons.error_outline,
+              },
+              size: 48,
+              color: Colors.red.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Fehler beim Laden der Karte:\n$_error',
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (errorType == _MapErrorType.parseError)
+                  FilledButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Erneut versuchen'),
+                    onPressed: _retryLoad,
+                  ),
+                if (errorType == _MapErrorType.notFound)
+                  FilledButton.icon(
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Fallback-Karte laden'),
+                    onPressed: _retryLoad,
+                  ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Zurück'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Ermittelt das passende Tileset für eine Tile-ID anhand des firstGid-Bereichs.
+///
+/// Durchläuft die Tileset-Liste rückwärts, da Tilesets mit höherem firstGid
+/// später in der Liste stehen und zuerst matchen sollen.
 TilesetInfo? findTileset(int tileId, List<TilesetInfo> tilesets) {
   if (tileId == 0) return null;
   for (int i = tilesets.length - 1; i >= 0; i--) {
@@ -463,8 +489,17 @@ class _HexMapPainter extends CustomPainter {
   final HexGrid hexGrid;
   final MapLoadConfig config;
 
+  /// Vorberechnete effektive Layer-Namenszuordnung aus der Konfiguration.
+  final Map<LayerPurpose, String> _effectiveNames;
+
   /// Vorberechnete Pixel-Positionen für jedes Hex-Feld.
   final List<List<Offset>> _pixelPositions;
+
+  /// Vorberechnete Tileset-Lookup-Tabelle: firstGid → (Bild, Spalten).
+  ///
+  /// Wandelt die [_tilesetImages]-Map in eine Liste um, damit der Zugriff
+  /// in [_drawLayer] ohne Map-Lookup pro Tile erfolgt.
+  final Map<int, ({ui.Image image, int columns})> _tilesetLookup;
 
   _HexMapPainter({
     required this.tilesetImages,
@@ -474,10 +509,15 @@ class _HexMapPainter extends CustomPainter {
     required this.tileHeight,
     required this.hexGrid,
     required this.config,
-  }) : _pixelPositions = _computePositions(mapData, hexGrid);
+  })  : _effectiveNames = config.effectiveLayerNames,
+        _pixelPositions = _computePositions(mapData, hexGrid),
+        _tilesetLookup = tilesetImages;
 
   /// Berechnet alle Pixel-Positionen einmal vor, statt sie jedes Frame neu zu berechnen.
-  static List<List<Offset>> _computePositions(MapData mapData, HexGrid hexGrid) {
+  static List<List<Offset>> _computePositions(
+    MapData mapData,
+    HexGrid hexGrid,
+  ) {
     return List.generate(
       mapData.height,
       (y) => List.generate(
@@ -485,6 +525,34 @@ class _HexMapPainter extends CustomPainter {
         (x) => hexGrid.hexToPixel(x: x, y: y),
       ),
     );
+  }
+
+  /// Gibt die Layer zum Zeichnen in der richtigen Reihenfolge zurück.
+  ///
+  /// Zeichnet nur Layer, die in der Map existieren (nicht-null).
+  /// Die `visible`-Eigenschaft wird ignoriert, da Tiled-Layer als
+  /// unsichtbar markiert sein können, aber dennoch gezeichnet werden
+  /// sollen (z. B. zur Laufzeit eingeblendet werden).
+  Iterable<TileLayer> _getVisibleLayers() sync* {
+    // Boden: immer vorhanden
+    final ground = _layerByPurpose(LayerPurpose.ground);
+    if (ground != null) yield ground;
+
+    // Dekoration (optional)
+    final decor = _layerByPurpose(LayerPurpose.decorative);
+    if (decor != null) yield decor;
+
+    // Obere Dekoration (optional)
+    final decorUpper = _layerByPurpose(LayerPurpose.decorativeUpper);
+    if (decorUpper != null) yield decorUpper;
+  }
+
+  /// Findet einen Layer anhand des Purpose unter Berücksichtigung
+  /// der benutzerdefinierten Namenszuordnung.
+  TileLayer? _layerByPurpose(LayerPurpose purpose) {
+    final name = _effectiveNames[purpose];
+    if (name == null) return null;
+    return mapData.layerByName(name);
   }
 
   @override
@@ -495,21 +563,13 @@ class _HexMapPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(visibleRect);
 
-    // Sichtbaren Tile-Bereich einmal berechnen (statt 3× in _drawLayer)
+    // Sichtbaren Tile-Bereich einmal berechnen
     final viewportTiles = _computeVisibleTileRange(visibleRect);
 
     try {
-      // 1. Boden-Layer zeichnen
-      _drawLayer(canvas, viewportTiles, config.groundLayerName);
-
-      // 2. Dekorations-Layer zeichnen (falls vorhanden)
-      if (config.decorationLayerName != null) {
-        _drawLayer(canvas, viewportTiles, config.decorationLayerName!);
-      }
-
-      // 3. Oberen Dekorations-Layer zeichnen (falls vorhanden)
-      if (config.decorationUpperLayerName != null) {
-        _drawLayer(canvas, viewportTiles, config.decorationUpperLayerName!);
+      // Alle sichtbaren Layer in der richtigen Reihenfolge zeichnen
+      for (final layer in _getVisibleLayers()) {
+        _drawLayer(canvas, viewportTiles, layer);
       }
     } finally {
       canvas.restore();
@@ -542,7 +602,7 @@ class _HexMapPainter extends CustomPainter {
     );
   }
 
-  /// Zeichnet einen benannten Tile-Layer mit effizientem Viewport-Culling.
+  /// Zeichnet einen [TileLayer] mit effizientem Viewport-Culling.
   ///
   /// Die sichtbaren Tile-Koordinaten werden aus [viewportTiles] übernommen,
   /// das in [paint] einmal pro Frame berechnet wird. Dadurch sinkt die Anzahl
@@ -552,11 +612,11 @@ class _HexMapPainter extends CustomPainter {
   /// Zusätzlich sorgt [Canvas.clipRect] in der übergeordneten `paint()`-Methode
   /// dafür, dass GPU-Ressourcen nicht für Pixel außerhalb des Viewports
   /// verschwendet werden.
-  void _drawLayer(Canvas canvas, _VisibleTileRange viewportTiles, String layerName) {
-    // O(1)-Lookup über den vorberechneten Index in MapData
-    final layer = mapData.layerByName(layerName);
-    if (layer == null) return;
-
+  void _drawLayer(
+    Canvas canvas,
+    _VisibleTileRange viewportTiles,
+    TileLayer layer,
+  ) {
     final paint = Paint();
     if (layer.opacity < 1.0) {
       paint.color = paint.color.withValues(alpha: layer.opacity);
@@ -579,7 +639,7 @@ class _HexMapPainter extends CustomPainter {
         final tilesetInfo = findTileset(tileId, tilesets);
         if (tilesetInfo == null) continue;
 
-        final tilesetEntry = tilesetImages[tilesetInfo.firstGid];
+        final tilesetEntry = _tilesetLookup[tilesetInfo.firstGid];
         if (tilesetEntry == null) continue;
 
         // Lokale ID innerhalb des Tilesets (0-basiert)
@@ -607,7 +667,8 @@ class _HexMapPainter extends CustomPainter {
     // Referenzvergleich: Bei setState werden neue Maps/Objekte erzeugt
     if (identical(oldDelegate.tilesetImages, tilesetImages) &&
         identical(oldDelegate.mapData, mapData) &&
-        identical(oldDelegate.hexGrid, hexGrid)) {
+        identical(oldDelegate.hexGrid, hexGrid) &&
+        identical(oldDelegate.config, config)) {
       return false;
     }
 
@@ -617,21 +678,17 @@ class _HexMapPainter extends CustomPainter {
       return true;
     }
 
-    // Tiefenvergleich der Layer-Daten (Namen + Tile-Daten)
-    if (oldDelegate.mapData.layers.length != mapData.layers.length) return true;
-    for (int i = 0; i < mapData.layers.length; i++) {
-      final oldLayer = oldDelegate.mapData.layers[i];
-      final newLayer = mapData.layers[i];
-      if (oldLayer.name != newLayer.name) return true;
-      if (oldLayer.tileData != newLayer.tileData) return true;
+    // Tiefenvergleich der Layer-Daten nur bei unterschiedlichen Referenzen nötig
+    if (!identical(oldDelegate.mapData, mapData)) {
+      if (oldDelegate.mapData.layers.length != mapData.layers.length) return true;
+      for (int i = 0; i < mapData.layers.length; i++) {
+        final oldLayer = oldDelegate.mapData.layers[i];
+        final newLayer = mapData.layers[i];
+        if (oldLayer.name != newLayer.name) return true;
+        if (oldLayer.visible != newLayer.visible) return true;
+        if (oldLayer.tileData != newLayer.tileData) return true;
+      }
     }
-    // Prüfe Purpose-Änderungen (wichtig, falls Layer umbenannt wurden)
-    for (int i = 0; i < mapData.layers.length; i++) {
-      if (oldDelegate.mapData.layers[i].purpose != mapData.layers[i].purpose) return true;
-    }
-
-    // HexGrid-Referenz prüfen
-    if (oldDelegate.hexGrid != hexGrid) return true;
 
     return false;
   }

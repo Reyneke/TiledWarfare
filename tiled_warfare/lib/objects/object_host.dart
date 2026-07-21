@@ -159,6 +159,10 @@ class ObjectHost {
   /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
   HexGrid? _hexGrid;
 
+  /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der TMX-Karte.
+  /// Wird von [ScreenMain] nach dem Laden der Karte gesetzt.
+  Set<int> collisionSet = {};
+
   /// Setzt die Hex-Utility-Instanz für diesen Host.
   /// Muss aufgerufen werden, bevor Hex-Berechnungen durchgeführt werden.
   void setHexGrid(HexGrid grid) {
@@ -603,8 +607,13 @@ class ObjectHost {
   /// Optional können Spieler-Einheiten übergeben werden, deren Hex-Felder
   /// dann ebenfalls als belegt gelten (verhindert, dass Zombies auf
   /// Spieler-Token laufen/stapeln).
+  ///
+  /// Berücksichtigt auch das [collisionSet] aus dem Kollisions-Layer der Karte
+  /// (Wände, Mauern, etc.), sodass Zombies nicht durch Wände laufen können.
   Set<int> _buildOccupiedHostHexes({List<ObjectApprentice>? playerUnits}) {
     final occupied = <int>{};
+    // Kollisions-Layer der Karte (Wände, Mauern, etc.)
+    occupied.addAll(collisionSet);
     for (final dumpster in doughDumpsterList) {
       final dh = _pixelToHex(dumpster.position);
       occupied.add(_hexGrid!.hexKey(dh.x, dh.y));

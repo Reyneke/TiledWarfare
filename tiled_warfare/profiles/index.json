@@ -2,7 +2,7 @@
   {
     "id": 3507838291,
     "name": "Reyneke",
-    "creationDate": "2026-07-20T21:16:27.459120",
+    "creationDate": "2026-07-21T17:38:15.116907",
     "budget": 6800,
     "profileImagePath": "profiles/3507838291/profile_1783334585943.png",
     "staff": [
@@ -11,7 +11,7 @@
         "imagePath": "assets/images/token/token_cook_basic.png",
         "type": "apprentice",
         "levelValue": 1,
-        "currentXPValue": 20,
+        "currentXPValue": 30,
         "woundValue": 3,
         "attackValue": 40,
         "defenseValue": 20,
@@ -280,6 +280,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115353",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -288,7 +302,7 @@
         "imagePath": "assets/images/token/token_cook_basic.png",
         "type": "apprentice",
         "levelValue": 1,
-        "currentXPValue": 20,
+        "currentXPValue": 30,
         "woundValue": 3,
         "attackValue": 40,
         "defenseValue": 20,
@@ -546,6 +560,20 @@
           },
           {
             "date": "2026-07-20T21:16:27.459120",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
             "opponentName": "Street Battle Colliders",
             "result": "loss",
             "kills": 0,
@@ -820,6 +848,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -1076,6 +1118,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -1293,6 +1349,20 @@
           },
           {
             "date": "2026-07-20T21:16:27.459120",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
             "opponentName": "Street Battle Colliders",
             "result": "loss",
             "kills": 0,
@@ -1518,6 +1588,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -1721,6 +1805,20 @@
           },
           {
             "date": "2026-07-20T21:16:27.459120",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
             "opponentName": "Street Battle Colliders",
             "result": "loss",
             "kills": 0,
@@ -1932,6 +2030,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -2104,6 +2216,20 @@
             "result": "loss",
             "kills": 0,
             "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
           }
         ]
       },
@@ -2272,6 +2398,20 @@
           },
           {
             "date": "2026-07-20T21:16:27.459120",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T12:09:08.839293",
+            "opponentName": "Street Battle Colliders",
+            "result": "loss",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "date": "2026-07-21T17:38:15.115872",
             "opponentName": "Street Battle Colliders",
             "result": "loss",
             "kills": 0,
