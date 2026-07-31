@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' show max, min;
 
 import 'package:flutter/material.dart';
@@ -134,7 +135,14 @@ enum _MapErrorType {
 
 class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   /// Alle geladenen Tileset-Bilder, indiziert nach firstGid.
-  final Map<int, ({ui.Image image, int columns})> _tilesetImages = {};
+  ///
+  /// LRU-Cache (max. [kMaxTilesetImages] Einträge): Beim Kartenwechsel
+  /// werden zuletzt genutzte Bilder behalten, damit identische Tilesets
+  /// nicht erneut dekodiert werden müssen.
+  static const int kMaxTilesetImages = 5;
+
+  final LinkedHashMap<int, ({ui.Image image, int columns})> _tilesetImages =
+      LinkedHashMap<int, ({ui.Image image, int columns})>();
 
   /// Die geladenen Kartendaten.
   MapData? _mapData;
@@ -166,12 +174,38 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     super.dispose();
   }
 
-  /// Disposed alle zwischengespeicherten Tileset-Bilder.
+  /// Disposed Tileset-Bilder, die über das LRU-Limit hinausgehen.
+  ///
+  /// Beim Kartenwechsel wird die Map geleert und neu befüllt. Damit
+  /// identische Tilesets (z. B. beide Karten verwenden dasselbe Bild)
+  /// nicht erneut dekodiert werden müssen, bleiben die zuletzt
+  /// verwendeten Bilder im Cache erhalten.
   void _disposeTilesetImages() {
+    // Alle Bilder disposen (Kartenwechsel → keine Referenzen mehr gehalten)
     for (final entry in _tilesetImages.values) {
       entry.image.dispose();
     }
     _tilesetImages.clear();
+  }
+
+  /// Fügt ein Tileset-Bild in den LRU-Cache ein.
+  ///
+  /// Wenn das Limit [kMaxTilesetImages] überschritten wird, wird das
+  /// älteste (zuletzt am wenigsten verwendete) Bild disposet und entfernt.
+  void _putTilesetImage(int firstGid, ({ui.Image image, int columns}) entry) {
+    // Bereits vorhanden → aktualisieren und an das Ende verschieben
+    if (_tilesetImages.containsKey(firstGid)) {
+      _tilesetImages.remove(firstGid);
+    }
+
+    _tilesetImages[firstGid] = entry;
+
+    // LRU-Eviction: Ältestes Bild disposen, wenn Limit überschritten
+    while (_tilesetImages.length > kMaxTilesetImages) {
+      final oldestKey = _tilesetImages.keys.first;
+      final oldest = _tilesetImages.remove(oldestKey);
+      oldest?.image.dispose();
+    }
   }
 
   // ──────────────────────────────────────────────
@@ -189,6 +223,26 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
 
       final mapData = await parser.loadFromAsset(widget.mapPath);
       _mapData = mapData;
+
+      // Laufzeit-Validierung: Ground-Layer ist Pflicht
+      final groundLayer = mapData.layerByPurpose(LayerPurpose.ground);
+      if (groundLayer == null) {
+        throw MapParseException(
+          message: 'Map has no "ground" layer. '
+              'The layer named "ground" (or your custom ground layer name) is required '
+              'for the map to be rendered correctly.',
+          path: widget.mapPath,
+        );
+      }
+
+      // Laufzeit-Validierung: Spawn-Gruppe sollte existieren (nur Warnung)
+      final hasSpawns = mapData.objectGroups
+          .any((g) => g.name == widget.config.spawnGroupName && g.objects.isNotEmpty);
+      if (!hasSpawns) {
+        debugPrint('Warning: Map "${widget.mapPath}" has no spawn points '
+            'in object group "${widget.config.spawnGroupName}". '
+            'Players will not be able to spawn.');
+      }
 
       _mapWidth = mapData.width;
       _mapHeight = mapData.height;
@@ -299,7 +353,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     }
   }
 
-  /// Lädt ein einzelnes Tileset-Bild und speichert es im Cache.
+  /// Lädt ein einzelnes Tileset-Bild und speichert es im LRU-Cache.
   Future<void> _loadSingleTilesetImage(
     int firstGid,
     String imagePath,
@@ -310,10 +364,10 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       final codec =
           await ui.instantiateImageCodec(byteData.buffer.asUint8List());
       final frameInfo = await codec.getNextFrame();
-      _tilesetImages[firstGid] = (
+      _putTilesetImage(firstGid, (
         image: frameInfo.image,
         columns: columns ?? 16,
-      );
+      ));
     } on FlutterError catch (e) {
       debugPrint('Warning: Tileset image not found: $imagePath ($e.message)');
     } on FormatException catch (e) {

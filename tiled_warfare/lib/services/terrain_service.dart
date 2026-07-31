@@ -177,6 +177,7 @@ class TerrainService {
 
         final config = configAt(nx, ny);
         if (config.impassable) continue;
+        if (_collisionSet.contains(nKey)) continue;
         if (occupied?.contains(nKey) ?? false) continue;
 
         final newCost = currentCost + config.movementCostMultiplier;

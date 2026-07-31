@@ -246,26 +246,40 @@ group('TerrainService', () {
 
 ## 4. Zusammenfassung & Nächste Schritte
 
-### Kritische ToDos (vor dem nächsten Sprint)
+> **Status-Update (31. Juli 2026, nach Implementierung):** Die folgenden Häkchen zeigen, was bereits integriert wurde. Punkte ohne Häkchen sind noch offen.
 
-- [ ] **Bug 1 fixen:** `_parseExternalTileset` async machen oder entfernen
-- [ ] **Bug 2 fixen:** `firstGid` in `_parseTilesetElementFromXml` korrekt setzen
-- [ ] **Bug 3 fixen:** `screen_start.dart` `catch (_)` durch spezifische Exceptions ersetzen
+### ✅ Bereits integriert (in dieser Session)
+
+| # | Punkt | Status | Datei(en) |
+|---|-------|--------|-----------|
+| 1 | **Bug 2:** `firstGid` in `_parseTilesetElementFromXml` korrekt setzen | ✅ Erledigt | `lib/services/map_parser.dart` – `_parseTilesetElementFromXml` akzeptiert jetzt `firstGid`-Parameter |
+| 2 | **Bug 3:** `screen_start.dart` `catch (_)` durch spezifische Exceptions ersetzen | ✅ Erledigt | `lib/screens/screen_start.dart` – `on FileSystemException` + `on FormatException` |
+| 3 | **Problem 2:** `ObjectHost._hexGrid!` → `late final HexGrid hexGrid` | ✅ Erledigt | `lib/objects/object_host.dart` |
+| 4 | **Problem 3:** `ObjectHost.collisionSet` kapseln | ✅ Erledigt | `lib/objects/object_host.dart` – privates Feld + Getter/Setter |
+| 5 | **Problem 4:** `_tilesetLookup` in `_HexMapPainter` entfernen | ✅ Erledigt | `lib/widgets/widget_map_loader.dart` – nutzt direkt `tilesetImages` |
+| 6 | **Problem 5:** `respectLayerVisibility` in `MapLoadConfig` | ✅ Erledigt | `lib/widgets/widget_map_loader.dart` – neues Boolean-Feld (Default: `true`) |
+| 7 | **Problem 1 (teilweise):** Pixel-Distanz → Hex-Distanz | 🟡 Teilweise | `lib/objects/object_host.dart` – Reichweiten-Prüfungen nutzen `hexGrid.distance()`. Die Zielauswahl (`_moveZombieTowardsTarget`) und der `distance`-Parameter für `performAction()` verwenden weiterhin Pixel-Distanz. |
+| 8 | **Bug im LoS-Algorithmus:** Cube→Offset-Konvertierung | ✅ Erledigt | `lib/services/fog_of_war.dart` – `qz` statt `qy` für odd-r-Offset |
+| 9 | **Test-Bug:** Tokens an Map-Ecken mit `fieldOfView=1` | ✅ Erledigt | `test/fog_of_war_test.dart` – Test auf Kartenmitte korrigiert |
+| 10 | **Dokumentations-Lücken:** 3 Dateien | ✅ Erledigt | `01_class_diagram.md` (`_HexUtils`→`HexGrid`), `04_cliffnotes.md`, `05_new_employee_guide.md` (TMX-Pfad dynamisch) |
+| 11 | **Verifikation:** `flutter analyze` + `flutter test` | ✅ Erledigt | 0 Fehler, 0 Warnungen; alle 17 Fog-of-War-Tests bestehen |
+
+### ❌ Noch offen (Kritische ToDos)
+
+- [ ] **Bug 1:** `_parseExternalTileset` async machen oder entfernen
+  - **Anmerkung:** Der async-Flow existiert bereits über `_resolveExternalTilesetSource()` in `widget_map_loader.dart`. Die Parser-Methode selbst speichert nur die `source`-Referenz. Für Feature-Kompatibilität empfiehlt sich, `_parseExternalTileset` zu entfernen oder `loadExternalTileset()` korrekt in den Parser-Flow zu integrieren.
 - [ ] **HexGrid-Tests schreiben** (höchste Priorität)
 - [ ] **Parser-Tests schreiben** (TMX + TMJ)
 - [ ] **TerrainService-Tests schreiben**
 
-### Wichtige Verbesserungen (nächster Sprint)
+### ❌ Noch offen (Wichtige Verbesserungen)
 
-- [ ] `ObjectHost`: Pixel-Distanz durch Hex-Distanz ersetzen (3 Stellen)
-- [ ] `ObjectHost`: `_hexGrid!` durch defensive Prüfung ersetzen
-- [ ] `ObjectHost`: `collisionSet` kapseln (private + Setter)
-- [ ] `_tilesetLookup` in `_HexMapPainter` entfernen (unnötige Duplizierung)
-- [ ] A*-Pfadfindung für Zombies (statt gradliniger Bewegung)
-- [ ] `TerrainService` in `ObjectHost` integrieren
-- [ ] Vorschaubilder für Karten erstellen
+- [ ] **Problem 1 (Rest):** `_moveZombieTowardsTarget` – Zielauswahl und `distance`-Parameter für `performAction()` auf Hex-Distanz umstellen
+- [ ] **A*-Pfadfindung für Zombies** (statt gradliniger Bewegung)
+- [ ] **`TerrainService` in `ObjectHost` integrieren** (Zombies berücksichtigen Geländekosten)
+- [ ] **Vorschaubilder für Karten erstellen** (`previewPath` in `maps.json`)
 
-### Langfristige Ziele
+### ❌ Noch offen (Langfristige Ziele)
 
 - [ ] Laufzeittests (Widget-Tests + Golden Tests)
 - [ ] LRU-Cache für Tileset-Bilder
@@ -369,3 +383,80 @@ Nach den getroffenen Entscheidungen ergibt sich folgende priorisierte Aufgabenli
 | 🟡 Wichtig | LRU-Cache für Tileset-Bilder | 3 | Nächster |
 | 🟢 Nice-to-have | `_tilesetLookup` entfernen | 1 | Bei Gelegenheit |
 | 🟢 Nice-to-have | Dokumentations-Lücken fixen | 1 | Bei Gelegenheit |
+
+### 5.5 Ausführungsplan
+
+Basierend auf dem ganzen Dokument (besonders 5.4) müssen die folgenden Punkte noch umgesetzt werden. Der Plan ist in **Phasen** gegliedert, die jeweils eine abgeschlossene, testbare Einheit bilden.
+
+---
+
+#### Phase 1: Kritische Bugs & Tests (sofort – nächster Sprint, Aufwand: ~11)
+
+> **Ziel:** Stabilisierung der Basis – alle Kern-Komponenten sind getestet, bekannte Bugs sind behoben.
+
+| # | Punkt | Wie | Dateien | Aufwand |
+|---|-------|-----|---------|---------|
+| 1 | **Bug 1 fixen:** `_parseExternalTileset` async | `_parseExternalTileset` entfernen und durch den bestehenden async-Flow `_resolveExternalTilesetSource()` + `loadExternalTileset()` ersetzen. Alternativ: Die Methode zu `Future<TilesetInfo>` umbauen und `loadExternalTileset()` in den Tileset-Lade-Flow von `WidgetMapLoader` integrieren. | `lib/services/map_parser.dart`, `lib/widgets/widget_map_loader.dart` | 3 |
+| 2 | **HexGrid-Tests schreiben** | Neue Datei `test/hex_grid_test.dart`. Testfälle: `hexToPixel`/`pixelToHex` inverse Operationen, `distance` (Cube ≠ Manhattan), `hexKey` Eindeutigkeit, `neighborOffsets` liefert 6 Nachbarn, `isInBounds` clamping, `findFreeHexNear`, `buildOccupiedHexFields`. Siehe Test-Skizze in §3.4. | `test/hex_grid_test.dart` (neu) | 2 |
+| 3 | **Parser-Tests schreiben** | Neue Datei(en) `test/map_parser_test.dart`. TMX: CSV, Base64, Base64+Zlib, Base64+Gzip, mehrere Layer, mehrere Tilesets, Objektgruppen mit Properties, Fehlerfälle (`MapParseException`). TMJ: JSON-Parsing, Objektgruppen, Flip-Bit-Maskierung. Kurze Test-TMX/TMJ-Strings als Inline-Konstanten oder Fixture-Dateien in `test/fixtures/`. | `test/map_parser_test.dart` (neu), ggf. `test/fixtures/` | 3 |
+| 4 | **TerrainService-Tests schreiben** | Neue Datei `test/terrain_service_test.dart`. Testfälle: `configAt` korrekte Config pro TerrainType, `isPassable` (Kollision, belegt, impassable), `reachableHexes` mit Bewegungskosten-Multiplikatoren, `reachableHexes` stoppt bei impassable Terrain, `effectiveMovementRange` korrekte Anzahl. | `test/terrain_service_test.dart` (neu) | 2 |
+| 5 | **Problem 1 (Rest):** Pixel-Distanz → Hex-Distanz | In `_moveZombieTowardsTarget`: Die Zielauswahl (`(zombie.position - target.position).distance`) durch `hexGrid.distance()` ersetzen. In `performHostFocusFire` und `performAllZombieAttacks`: Den `distance`-Parameter für `player.performAction()` auf die Hex-Distanz (`hexGrid.distance()`) statt `distance.round()` umstellen. | `lib/objects/object_host.dart` | 1 |
+
+---
+
+#### Phase 2: KI-Verbesserungen (danach – nächster/übernächster Sprint, Aufwand: ~8)
+
+> **Ziel:** Zombies navigieren intelligent um Hindernisse und berücksichtigen Geländekosten.
+
+| # | Punkt | Wie | Dateien | Aufwand |
+|---|-------|-----|---------|---------|
+| 6 | **`TerrainService` in `ObjectHost` integrieren** | `ObjectHost` erhält eine `TerrainService`-Referenz (Setter oder Konstruktor-Injection). `_buildOccupiedHostHexes()` nutzt zusätzlich `terrainService.isPassable()`. Die Zombie-Bewegung berücksichtigt `movementCostMultiplier` bei der Schrittberechnung. | `lib/objects/object_host.dart`, `lib/services/terrain_service.dart`, `lib/screens/screen_main.dart` (Übergabe) | 3 |
+| 7 | **A*-Pfadfindung für Zombies** | Eine `findPath()`-Methode (A* oder Dijkstra) in `HexGrid` oder `TerrainService` implementieren, die Kollisions-Tiles und Geländekosten berücksichtigt. `_moveZombieTowardsTarget` ruft `findPath()` auf und bewegt den Zombie entlang des Pfads. BFS aus `TerrainService.reachableHexes()` als Fallback für wenige Schritte. | `lib/utils/hex_grid.dart` oder `lib/services/terrain_service.dart`, `lib/objects/object_host.dart` | 5 |
+
+---
+
+#### Phase 3: UX & Performance (parallel zu Phase 2, Aufwand: ~7)
+
+> **Ziel:** Bessere Benutzererfahrung und stabilere Performance.
+
+| # | Punkt | Wie | Dateien | Aufwand |
+|---|-------|-----|---------|---------|
+| 8 | **Vorschaubilder für Karten erstellen** | Screenshots der Karten `map0` und `map1` aus Tiled exportieren oder in der App rendern. Als `assets/maps/map0/preview.png` und `assets/maps/map1/preview.png` ablegen. `previewPath` in `maps.json` eintragen. | `assets/maps/map0/preview.png`, `assets/maps/map1/preview.png`, `assets/maps/maps.json` | 2 |
+| 9 | **Laufzeit-Validierung der Karte** | In `_loadMap()` nach dem Parsen prüfen: (a) `ground`-Layer existiert, (b) Spawn-Gruppe hat mindestens 1 Objekt. Fehlender `ground`-Layer → `MapParseException` werfen (Entscheidung aus §5.2, Frage 9). Optional: Warnung per `debugPrint` bei fehlender Collision-Schicht. | `lib/widgets/widget_map_loader.dart`, `lib/services/map_exceptions.dart` | 2 |
+| 10 | **LRU-Cache für Tileset-Bilder** | Eine `TilesetImageCache`-Klasse mit `LinkedHashMap` (max. 3–5 Einträge) implementieren. Bei Kartenwechsel: Nicht mehr referenzierte Bilder disposen, zuletzt genutzte behalten. `_WidgetMapLoaderState._tilesetImages` durch den Cache ersetzen. | `lib/widgets/widget_map_loader.dart` oder neue Datei `lib/services/tileset_image_cache.dart` | 3 |
+
+---
+
+#### Phase 4: Laufzeittests (nach Phasen 1–3, Aufwand: ~4)
+
+> **Ziel:** Verifizieren, dass graphische Elemente korrekt interagieren (Laufzeittests).
+
+| # | Punkt | Wie | Dateien | Aufwand |
+|---|-------|-----|---------|---------|
+| 11 | **Widget-Tests** | `test/widget_map_loader_test.dart`: `WidgetMapLoader` mit einer kleinen Test-TMX-Datei rendern. Prüfen: (a) `CustomPaint` wird gerendert, (b) `onMapLoaded`-Callback wird ausgelöst, (c) Fehler-UI wird bei kaputter Datei angezeigt. | `test/widget_map_loader_test.dart` (neu), ggf. `test/fixtures/test_map.tmx` | 2 |
+| 12 | **Integrationstests** | `test/game_flow_test.dart` oder `integration_test/`: Kompletter Spielfluss – Karte laden → Tokens spawnen → Bewegung → Kampf → Rundenfortschritt. Läuft gegen die echte `assets/maps/map0/street_battle.tmx`. | `test/game_flow_test.dart` (neu) | 2 |
+
+---
+
+#### Reihenfolge & Abhängigkeiten
+
+```
+Phase 1 (kritisch, ~11 Aufwand)
+  │
+  ├── Phase 2 (KI, ~8 Aufwand)     ← hängt an Phase 1 (Tests sichern Refactoring ab)
+  │
+  └── Phase 3 (UX/Perf, ~7 Aufwand) ← unabhängig von Phase 2, parallel möglich
+          │
+          └── Phase 4 (Laufzeittests, ~4 Aufwand) ← hängt an Phase 2+3
+```
+
+**Empfehlung:** Phase 1 vollständig abschließen (inkl. grüner `flutter test`), dann Phase 2 und 3 parallel bearbeiten, zum Schluss Phase 4. Gesamtaufwand: **~30** (in Relation zu den bisherigen ~4.500 Zeilen Code).
+
+---
+
+#### Verantwortlichkeiten & Definition of Done
+
+- **Jede Phase** endet mit: `flutter analyze` ohne Fehler/Warnungen + `flutter test` grün.
+- **Neue Tests** werden in die bestehende Test-Struktur integriert (`test/`-Verzeichnis).
+- **Dokumentation** wird bei jeder Änderung aktualisiert (§1 im Dokument, ggf. `06_map_loader.md` bei neuen Validierungsregeln).
+- **Empfehlung:** Pro Phase einen separaten Commit/Branch, damit Fehler isoliert bleiben.

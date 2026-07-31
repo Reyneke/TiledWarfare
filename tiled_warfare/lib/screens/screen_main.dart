@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
+import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:tiled_warfare/widgets/widget_caretaker.dart';
@@ -189,6 +190,18 @@ class _ScreenMainState extends State<ScreenMain>
     // Kollisionsdaten auch an den ObjectHost weitergeben,
     // damit Host-Tokens (Zombies) nicht durch Wände laufen können.
     ObjectHost().collisionSet = collisionSet;
+
+    // TerrainService erstellen und an den ObjectHost übergeben,
+    // damit Zombies Geländekosten bei der Bewegung berücksichtigen.
+    if (_hexGrid != null) {
+      ObjectHost().setTerrainService(TerrainService(
+        terrainMap: terrainMap,
+        configs: TerrainConfig.defaults,
+        collisionSet: collisionSet,
+        hexGrid: _hexGrid!,
+      ));
+    }
+
     setState(() {
       _collisionSet = collisionSet;
     });

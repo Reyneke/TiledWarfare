@@ -172,6 +172,129 @@ class HexGrid {
   // Pfadfindung / Freie Felder
   // ──────────────────────────────────────────────
 
+  /// Findet einen Pfad von (startX, startY) nach (targetX, targetY)
+  /// mittels A*-Suche.
+  ///
+  /// Berücksichtigt:
+  /// - [blocked]: Menge unpassierbarer Hex-Keys (Kollisionstiles + Token)
+  /// - [movementCost]: Optionale Funktion, die pro Ziel-Hex die Bewegungskosten
+  ///   (>= 1.0) zurückgibt. Wenn `null`, werden einheitliche Kosten von 1.0
+  ///   angenommen (klassisches BFS-Verhalten).
+  ///
+  /// Gibt eine Liste von Hex-Keys zurück, die den Pfad inklusive Start- und
+  /// Ziel-Hex beschreibt. Wenn kein Pfad existiert, wird eine leere Liste
+  /// zurückgegeben.
+  ///
+  /// Die Suche bricht ab, wenn `maxIterations` erreicht wird (Sicherheits-
+  /// grenze für sehr große Karten; Default: 10.000).
+  List<int> findPath({
+    required int startX,
+    required int startY,
+    required int targetX,
+    required int targetY,
+    required Set<int> blocked,
+    double Function(int x, int y)? movementCost,
+    int maxIterations = 10000,
+  }) {
+    final startKey = hexKey(startX, startY);
+    final goalKey = hexKey(targetX, targetY);
+
+    // Ziel == Start → nur das Start-Hex
+    if (startKey == goalKey) return [startKey];
+
+    // Falls das Ziel blockiert ist, gibt es keinen Pfad
+    if (blocked.contains(goalKey)) return [];
+
+    // A*-Datenstrukturen
+    final openSet = <int>{startKey};
+    final cameFrom = <int, int>{};
+    final gScore = <int, double>{startKey: 0};
+    // fScore = gScore + Heuristik (Cube-Distanz)
+    final fScore = <int, double>{startKey: _heuristic(startX, startY, targetX, targetY).toDouble()};
+
+    var iterations = 0;
+
+    while (openSet.isNotEmpty) {
+      if (++iterations > maxIterations) return [];
+
+      // Knoten mit niedrigstem fScore wählen
+      int? current;
+      double? bestF;
+      for (final key in openSet) {
+        final s = fScore[key] ?? double.infinity;
+        if (bestF == null || s < bestF) {
+          bestF = s;
+          current = key;
+        }
+      }
+      if (current == null) return [];
+
+      // Ziel erreicht → Pfad rekonstruieren
+      if (current == goalKey) {
+        return _reconstructPath(cameFrom, startKey, goalKey);
+      }
+
+      openSet.remove(current);
+
+      final currentHex = hexFromKey(current);
+
+      for (final offset in neighborOffsets(currentHex.y)) {
+        final nx = currentHex.x + offset.dx;
+        final ny = currentHex.y + offset.dy;
+        if (!isInBounds(nx, ny)) continue;
+
+        final nKey = hexKey(nx, ny);
+        if (blocked.contains(nKey)) continue;
+
+        final cost = movementCost?.call(nx, ny) ?? 1.0;
+        if (cost < 1.0) continue; // Unpassierbar (z. B. impassable Terrain)
+
+        final tentativeG = (gScore[current] ?? double.infinity) + cost;
+        if (tentativeG < (gScore[nKey] ?? double.infinity)) {
+          cameFrom[nKey] = current;
+          gScore[nKey] = tentativeG;
+          final h = _heuristic(nx, ny, targetX, targetY).toDouble();
+          fScore[nKey] = tentativeG + h;
+          openSet.add(nKey);
+        }
+      }
+    }
+
+    return []; // Kein Pfad gefunden
+  }
+
+  /// Rekonstruiert den Pfad von [startKey] nach [goalKey] aus der
+  /// cameFrom-Tabelle.
+  List<int> _reconstructPath(
+    Map<int, int> cameFrom,
+    int startKey,
+    int goalKey,
+  ) {
+    final path = <int>[goalKey];
+    var current = goalKey;
+    while (current != startKey) {
+      final prev = cameFrom[current];
+      if (prev == null) return []; // Defensive Absicherung
+      path.insert(0, prev);
+      current = prev;
+    }
+    return path;
+  }
+
+  /// Heuristik für A*: Cube-Distanz zwischen zwei Hex-Feldern.
+  int _heuristic(int x1, int y1, int x2, int y2) {
+    return distance(x1: x1, y1: y1, x2: x2, y2: y2);
+  }
+
+  /// Rechnet einen Hex-Key zurück in (x, y)-Koordinaten.
+  ///
+  /// Nützlich, um Pfad-Ergebnisse aus [findPath] in Koordinaten umzurechnen.
+  ({int x, int y}) hexFromKey(int key) {
+    final x = key % mapWidth;
+    final y = key ~/ mapWidth;
+    return (x: x, y: y);
+  }
+
   /// Findet ein freies Hex-Feld in der Nähe eines Ausgangs-Hex.
   /// Durchsucht spiralförmig beginnend beim Start-Hex, bis ein freies Feld
   /// gefunden wird oder der maximale Radius erreicht ist.

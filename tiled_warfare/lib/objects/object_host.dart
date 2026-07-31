@@ -8,6 +8,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:random_name_generator/random_name_generator.dart';
 
@@ -172,6 +173,17 @@ class ObjectHost {
     _collisionSet = tiles;
   }
 
+  /// Optionaler TerrainService für Bewegungskosten-Berechnung.
+  ///
+  /// Wird von [ScreenMain] nach dem Laden der Karte gesetzt, falls
+  /// Geländeinformationen verfügbar sind.
+  TerrainService? terrainService;
+
+  /// Setzt den TerrainService für Bewegungskosten-Berechnung.
+  void setTerrainService(TerrainService service) {
+    terrainService = service;
+  }
+
   /// Zufälliger Name für den Host.
   String name = RandomNames(Zone.us).fullName();
 
@@ -280,12 +292,17 @@ class ObjectHost {
       ObjectDoughZombie zombie, List<ObjectApprentice> targets) {
     if (targets.isEmpty) return;
 
-    // Nächstgelegenes Ziel finden
+    // Nächstgelegenes Ziel finden (Hex-Distanz statt Pixel-Distanz)
+    final zombieHex0 = _pixelToHex(zombie.position);
     ObjectApprentice? nearestTarget;
-    double nearestDistance = double.infinity;
+    int nearestDistance = 999999;
 
     for (final target in targets) {
-      final distance = (zombie.position - target.position).distance;
+      final targetHex0 = _pixelToHex(target.position);
+      final distance = hexGrid.distance(
+        x1: zombieHex0.x, y1: zombieHex0.y,
+        x2: targetHex0.x, y2: targetHex0.y,
+      );
       if (distance < nearestDistance) {
         nearestDistance = distance;
         nearestTarget = target;
@@ -312,52 +329,79 @@ class ObjectHost {
     // von seinem eigenen Feld wegbewegen kann
     occupied.remove(hexGrid.hexKey(zombieHex.x, zombieHex.y));
 
-    // Schrittweite = min(1, movementValue) Hex-Felder
-    // Zombies movementValue = 1, also genau 1 Schritt
-    final steps = zombie.movementValue.clamp(1, 100);
+    // A*-Pfadfindung: Zombie navigiert um Hindernisse herum.
+    // Der Ziel-Hex des Spielers ist belegt (vom Ziel selbst), daher suchen
+    // wir einen Pfad zum Nachbar-Hex des Ziels, das am nächsten ist.
+    
+    // Bewegungskosten-Funktion (falls TerrainService verfügbar)
+    double Function(int, int)? costFn;
+    if (terrainService != null) {
+      costFn = (x, y) {
+        final config = terrainService!.configAt(x, y);
+        return config.impassable ? 0.0 : config.movementCostMultiplier;
+      };
+    }
+    
+    // Ziel-Hex des Spielers ist belegt – suche einen Pfad zur Nachbarschaft
+    // des Ziels. Wir versuchen zuerst das Ziel selbst, und wenn es belegt ist
+    // (was es immer ist, da dort der Spieler steht), suchen wir den Pfad zum
+    // nächstgelegenen freien Nachbarn.
+    var pathTargetX = targetHex.x;
+    var pathTargetY = targetHex.y;
+    
+    // Ziel ist durch den Spieler belegt → wähle den freien Nachbarn,
+    // der am nächsten zum Zombie liegt (nicht den ersten in der Liste)
+    if (occupied.contains(hexGrid.hexKey(targetHex.x, targetHex.y))) {
+      var foundNeighbor = false;
+      var bestNeighborDist = 999999;
 
-    // Hex-Richtung wählen: bevorzuge die Achse mit der größten Differenz
-    int newHexX = zombieHex.x;
-    int newHexY = zombieHex.y;
-
-    for (int step = 0; step < steps; step++) {
-      // Nächsten Schritt bestimmen:
-      // Wir bewegen uns in eine der 6 Hex-Richtungen (odd-r).
-      // Bevorzuge die Richtung, die uns dem Ziel am nächsten bringt.
-      final currentX = newHexX;
-      final currentY = newHexY;
-
-      // Den Nachbarn mit der geringsten Entfernung zum Ziel wählen,
-      // der nicht belegt ist
-      ({int dx, int dy}) bestNeighbor = (dx: 0, dy: 0);
-      int bestDistance = 999999;
-
-      for (final offset in hexGrid.neighborOffsets(currentY)) {
-        final nx = currentX + offset.dx;
-        final ny = currentY + offset.dy;
+      for (final offset in hexGrid.neighborOffsets(targetHex.y)) {
+        final nx = targetHex.x + offset.dx;
+        final ny = targetHex.y + offset.dy;
         if (!hexGrid.isInBounds(nx, ny)) continue;
-
-        // Belegte Felder überspringen (Kollisionsvermeidung)
         if (occupied.contains(hexGrid.hexKey(nx, ny))) continue;
 
-        final dist = hexGrid.distance(
+        final distToZombie = hexGrid.distance(
           x1: nx, y1: ny,
-          x2: targetHex.x, y2: targetHex.y,
+          x2: zombieHex.x, y2: zombieHex.y,
         );
-        if (dist < bestDistance) {
-          bestDistance = dist;
-          bestNeighbor = (dx: offset.dx, dy: offset.dy);
+        if (distToZombie < bestNeighborDist) {
+          bestNeighborDist = distToZombie;
+          pathTargetX = nx;
+          pathTargetY = ny;
+          foundNeighbor = true;
         }
       }
-
-      if (bestNeighbor.dx == 0 && bestNeighbor.dy == 0) break;
-
-      newHexX += bestNeighbor.dx;
-      newHexY += bestNeighbor.dy;
+      if (!foundNeighbor) {
+        // Kein freier Nachbar – nichts tun
+        return;
+      }
     }
-
+    
+    // A*-Pfad vom Zombie zum Ziel (bzw. dessen freien Nachbarn)
+    final path = hexGrid.findPath(
+      startX: zombieHex.x,
+      startY: zombieHex.y,
+      targetX: pathTargetX,
+      targetY: pathTargetY,
+      blocked: occupied,
+      movementCost: costFn,
+    );
+    
+    // Kein Pfad gefunden → nicht bewegen
+    if (path.length < 2) return;
+    
+    // Der Zombie bewegt sich um min(movementValue, 1) Schritte entlang des Pfads
+    // Zombies haben movementValue = 1, also genau 1 Schritt
+    final steps = zombie.movementValue.clamp(1, 100);
+    final stepsToTake = min(steps, path.length - 1);
+    
+    // Nächstes Hex auf dem Pfad bestimmen
+    final nextKey = path[stepsToTake];
+    final nextHex = hexGrid.hexFromKey(nextKey);
+    
     // Auf Hex-Zentrum setzen – nutze targetPosition für sanfte Animation
-    final targetPixel = _hexToPixel(x: newHexX, y: newHexY);
+    final targetPixel = _hexToPixel(x: nextHex.x, y: nextHex.y);
     zombie.targetPosition = targetPixel;
   }
 
@@ -416,13 +460,18 @@ class ObjectHost {
     final newDumpsters = <ObjectDoughDumpster>[];
 
     for (final zombie in availableZombies) {
-      final distance = (zombie.position - target.position).distance;
+      // Hex-Distanz für performAction verwenden (statt Pixel-Distanz)
+      final zombieHexF = _pixelToHex(zombie.position);
+      final hexDist = hexGrid.distance(
+        x1: zombieHexF.x, y1: zombieHexF.y,
+        x2: targetHex.x, y2: targetHex.y,
+      );
 
       final result = player.performAction(
         action: CombatAction.melee,
         attacker: zombie,
         defender: target,
-        distance: distance.round(),
+        distance: hexDist,
       );
 
       zombie.hasActed = true;
@@ -515,24 +564,22 @@ class ObjectHost {
       for (final zombie in dumpster.zombieList) {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
         // Einträge entfernen müssen
-        for (final cook in player.unitList.toList()) {
+      for (final cook in player.unitList.toList()) {
           // Hex-Entfernung zwischen Zombie und Ziel ermitteln
           final zombieHex = _pixelToHex(zombie.position);
           final cookHex = _pixelToHex(cook.position);
-        final hexDistance = hexGrid.distance(
-          x1: zombieHex.x, y1: zombieHex.y,
-          x2: cookHex.x, y2: cookHex.y,
-        );
+          final hexDistance = hexGrid.distance(
+            x1: zombieHex.x, y1: zombieHex.y,
+            x2: cookHex.x, y2: cookHex.y,
+          );
 
           // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
           if (hexDistance <= zombie.rangeValue + 1) {
-              final distance = (zombie.position - cook.position).distance;
-
               final result = player.performAction(
                 action: CombatAction.melee,
                 attacker: zombie,
                 defender: cook,
-                distance: distance.round(),
+                distance: hexDistance,
               );
 
               // Log-Nachricht für diesen Angriff erstellen

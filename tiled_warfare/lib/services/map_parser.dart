@@ -173,29 +173,13 @@ class TmxParser implements MapParser {
       final firstGid = int.parse(tsElement.getAttribute('firstgid') ?? '1');
       final source = tsElement.getAttribute('source');
 
-      if (source != null) {
-        // Externer TSX-Tileset
-        tilesets.add(_parseExternalTileset(tsElement, firstGid, source, basePath));
-      } else {
-        // Inline-Tileset
-        tilesets.add(_parseInlineTileset(tsElement, firstGid));
-      }
+      // Einheitliche Methode für inline und externe TSX-Tilesets.
+      // Externe Tilesets speichern nur die `source`-Referenz; die Bild-
+      // Metadaten werden asynchron in WidgetMapLoader._resolveExternalTilesetSource()
+      // nachgeladen.
+      tilesets.add(_parseTilesetElement(tsElement, firstGid, source: source));
     }
     return tilesets;
-  }
-
-  /// Parst ein `<tileset>`-Element mit externem `source`.
-  ///
-  /// Da die TSX-Details nur async geladen werden können, wird hier nur
-  /// die `source`-Referenz gespeichert. Der spätere async-Schritt
-  /// [loadExternalTileset] lädt die vollständigen Metadaten nach.
-  TilesetInfo _parseExternalTileset(
-    XmlElement tsElement,
-    int firstGid,
-    String source,
-    String basePath,
-  ) {
-    return _parseTilesetElement(tsElement, firstGid, source: source);
   }
 
   /// Lädt und parst eine TSX-Datei asynchron.
@@ -227,10 +211,6 @@ class TmxParser implements MapParser {
       imageWidth: int.tryParse(imageElement?.getAttribute('width') ?? ''),
       imageHeight: int.tryParse(imageElement?.getAttribute('height') ?? ''),
     );
-  }
-
-  TilesetInfo _parseInlineTileset(XmlElement tsElement, int firstGid) {
-    return _parseTilesetElement(tsElement, firstGid);
   }
 
   TilesetInfo _parseTilesetElement(
