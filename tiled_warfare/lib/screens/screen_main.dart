@@ -16,7 +16,6 @@ class ScreenMain extends StatefulWidget {
 
   /// Extrahiert den Kartennamen aus dem Pfad für die Match-Historie.
   static String mapNameFromPath(String path) {
-    // Z. B. "assets/maps/map0/street_battle.tmx" → "Street Battle"
     final filename = path.split('/').last.replaceAll('.tmx', '');
     return filename
         .split('_')
@@ -31,38 +30,19 @@ class ScreenMain extends StatefulWidget {
 
 class _ScreenMainState extends State<ScreenMain>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
-  /// Wird erstellt, sobald die Kartendaten geladen sind.
   HexGrid? _hexGrid;
-
-  /// Der [TransformationController] des [InteractiveViewer] der Karte,
-  /// der vom [WidgetMapLoader] bereitgestellt wird.
   TransformationController? _mapTransformationController;
-
-  /// Die geparsten Spawnpunkte aus der Map.
   List<({String name, double x, double y})> _spawnPoints = [];
-
-  /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der geladenen Karte.
   Set<int> _collisionSet = {};
-
-  /// Flag, ob die Karte bereits einmal zentriert wurde.
-  /// Verhindert, dass _centerMap() bei jedem Build erneut aufgerufen wird
-  /// (was die Benutzer-Interaktion mit der Karte stören würde).
   bool _mapCentered = false;
-
-  /// Flag, ob die Karte tatsächlich geladen wurde (Daten von WidgetMapLoader
-  /// empfangen). Verhindert, dass _centerMap() vor dem ersten Map-Load mit
-  /// den Default-Werten (30×30, 32×32) läuft.
   bool _mapDataReady = false;
-
-  /// Aktueller Kamera-Fokus-AnimationController, der bei jedem
-  /// Aufruf von [_focusCameraOn] neu erstellt wird. Muss disposed
-  /// werden, um Memory Leaks zu vermeiden.
   AnimationController? _focusAnimationController;
-
-  /// Letzte bekannte Bildschirmgröße. Wird verwendet, um unnötige
-  /// Neu-Zentrierungen bei unwesentlichen Größenänderungen zu vermeiden.
   Size? _lastScreenSize;
+
+  /// Letzte Layout-Constraints des [LayoutBuilder] (verfügbarer Platz für
+  /// die Karte). Wird für die Zentrierung verwendet, damit der weiße Balken
+  /// unten nicht entsteht.
+  BoxConstraints? _lastConstraints;
 
   @override
   void initState() {
@@ -77,52 +57,30 @@ class _ScreenMainState extends State<ScreenMain>
     super.dispose();
   }
 
-  /// Wird bei Fenster-Größenänderungen (z.B. Maximieren/Ziehen) aufgerufen.
-  /// Zentriert die Karte neu, wenn sich die Fenstergröße wesentlich geändert hat,
-  /// damit die Karte nicht abgeschnitten wird (Bugfix: "Unterer Teil der Karte
-  /// wird nicht gezeichnet, wenn Fenster größer wird").
+  /// Wird bei Fenster-Größenänderungen aufgerufen. Zentriert die Karte neu.
+  ///
+  /// Immer neu zentrieren (kein Zoom-Check), damit die Karte bei jeder
+  /// Fenstergrößenänderung vollständig sichtbar bleibt – kein weißer Balken.
   @override
   void didChangeMetrics() {
-    if (_mapDataReady && _hexGrid != null) {
-      // Kurze Verzögerung, damit MediaQuery.of(context) die neue Größe hat
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          // Prüfen, ob sich die Größe relevant geändert hat (mehr als 20px)
-          final newSize = MediaQuery.of(context).size;
-          if (_lastScreenSize != null) {
-            final deltaH = (newSize.height - _lastScreenSize!.height).abs();
-            final deltaW = (newSize.width - _lastScreenSize!.width).abs();
-            if (deltaH < 20 && deltaW < 20) return;
-          }
-          _lastScreenSize = newSize;
-          // Nur bei nicht-triviale Zoomstufe neu zentrieren
-          // (bei Scale > 1.1 hat der Benutzer manuell gezoomt, dann nicht stören)
-          final controller = _mapTransformationController;
-          if (controller != null) {
-            final scale = controller.value.getMaxScaleOnAxis();
-            final baseScale = _computeFitToScreenScale();
-            // Nur neu zentrieren, wenn der Zoom nahe an der "Fit-to-Screen"-Skala liegt
-            if ((scale - baseScale).abs() < 0.15) {
-              _centerMap();
-            }
-          }
-        }
-      });
-    }
+    if (!_mapDataReady || _hexGrid == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final newSize = MediaQuery.of(context).size;
+      if (_lastScreenSize != null) {
+        final deltaH = (newSize.height - _lastScreenSize!.height).abs();
+        final deltaW = (newSize.width - _lastScreenSize!.width).abs();
+        if (deltaH < 20 && deltaW < 20) return;
+      }
+      _lastScreenSize = newSize;
+
+      // Immer neu zentrieren, unabhängig vom aktuellen Zoom
+      _centerMap();
+    });
   }
 
-  /// Berechnet die Skalierung, die nötig ist, damit die Karte auf den Bildschirm passt.
-  double _computeFitToScreenScale() {
-    if (_hexGrid == null) return 1.0;
-    final screenSize = MediaQuery.of(context).size;
-    final availableHeight = screenSize.height - kToolbarHeight;
-    final scaleX = screenSize.width / _hexGrid!.mapPixelWidth;
-    final scaleY = availableHeight / _hexGrid!.mapPixelHeight;
-    return (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
-  }
-
-  /// Wird aufgerufen, wenn das Spiel vorbei ist (über den onGameOver-Callback).
-  /// Navigiert zum Ergebnis-Bildschirm, der XP verteilt und speichert.
   void _onGameOver(bool playerWon) {
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -136,63 +94,42 @@ class _ScreenMainState extends State<ScreenMain>
     );
   }
 
-  /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Karte geladen wurde,
-  /// um die Kartendimensionen an den [WidgetCaretaker] weiterzugeben.
   void _onMapLoaded({
     required int tileWidth,
     required int tileHeight,
     required int mapWidth,
     required int mapHeight,
   }) {
-    // HexGrid-Instanz erstellen und an alle Konsumenten weitergeben
     final hexGrid = HexGrid(
       tileWidth: tileWidth,
       tileHeight: tileHeight,
       mapWidth: mapWidth,
       mapHeight: mapHeight,
     );
-    
-    // HexGrid an den ObjectHost-Singleton übergeben
+
     ObjectHost().hexGrid = hexGrid;
-    
+
     setState(() {
       _hexGrid = hexGrid;
-      // Karten-Daten sind jetzt bereit
       _mapDataReady = true;
-      // Zentriere die Karte im ersten Frame (nicht erst NACH dem ersten
-      // Frame). Der alte Ansatz mit addPostFrameCallback in build() erzeugte
-      // einen sichtbaren Frame, in dem die Karte unzentriert am linken Rand
-      // klebte (Bugfix: "Inhalt drängt sich an den linken Rand").
-      // _mapCentered wird hier bereits auf true gesetzt, damit build()
-      // keinen weiteren PostFrameCallback hinzufügt.
       _mapCentered = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _centerMap());
   }
 
-  /// Wird vom [WidgetMapLoader] aufgerufen, sobald der
-  /// [TransformationController] erstellt wurde.
   void _onTransformationControllerCreated(TransformationController controller) {
     _mapTransformationController = controller;
   }
 
-  /// Wird vom [WidgetMapLoader] aufgerufen, sobald die Spawnpunkte aus der
-  /// Map geparst wurden.
   void _onSpawnPointsParsed(List<({String name, double x, double y})> spawnPoints) {
     setState(() {
       _spawnPoints = spawnPoints;
     });
   }
 
-  /// Wird vom [WidgetMapLoader] aufgerufen, sobald Terrain- und
-  /// Kollisionsdaten aus der Map geparst wurden.
   void _onTerrainParsed(Map<int, TerrainType> terrainMap, Set<int> collisionSet) {
-    // Kollisionsdaten auch an den ObjectHost weitergeben,
-    // damit Host-Tokens (Zombies) nicht durch Wände laufen können.
     ObjectHost().collisionSet = collisionSet;
 
-    // TerrainService erstellen und an den ObjectHost übergeben,
-    // damit Zombies Geländekosten bei der Bewegung berücksichtigen.
     if (_hexGrid != null) {
       ObjectHost().setTerrainService(TerrainService(
         terrainMap: terrainMap,
@@ -207,8 +144,6 @@ class _ScreenMainState extends State<ScreenMain>
     });
   }
 
-  /// Zeigt einen Bestätigungsdialog, bevor das Spiel vorzeitig beendet wird.
-  /// Bei Bestätigung wird es als Sieg für den Host (Niederlage für den Spieler) gewertet.
   Future<bool> _confirmExit() async {
     final result = await showDialog<bool>(
       context: context,
@@ -234,8 +169,6 @@ class _ScreenMainState extends State<ScreenMain>
     return result ?? false;
   }
 
-  /// Behandelt das vorzeitige Verlassen des Spiels (Back-Button).
-  /// Zeigt einen Bestätigungsdialog und wertet es als Niederlage für den Spieler.
   Future<void> _handleExitGame() async {
     final confirmed = await _confirmExit();
     if (!confirmed || !mounted) return;
@@ -251,39 +184,28 @@ class _ScreenMainState extends State<ScreenMain>
     );
   }
 
-  /// Fokussiert die Kamera auf eine bestimmte Karten-Position (sanftes Scrollen).
-  /// Zentriert die übergebene Karten-Position in der Mitte des Bildschirms.
-  ///
-  /// Vorherige Animation-Controller werden korrekt disposed, um Memory Leaks
-  /// zu vermeiden.
   void _focusCameraOn(Offset mapPosition) {
     final controller = _mapTransformationController;
     if (controller == null) return;
 
     final screenSize = MediaQuery.of(context).size;
-    final appBarHeight = kToolbarHeight;
-    final availableHeight = screenSize.height - appBarHeight;
+    final availableHeight =
+        _lastConstraints?.maxHeight ?? screenSize.height - kToolbarHeight;
 
     final currentScale = controller.value.getMaxScaleOnAxis();
     if (currentScale <= 0) return;
 
-    // Ziel-Position in Bildschirm-Koordinaten umrechnen:
-    // Bildschirmmitte = (screenSize.width / 2, availableHeight / 2)
-    // Wir müssen die Matrix so setzen, dass mapPosition auf die Bildschirmmitte fällt
     final targetDx = screenSize.width / 2 - mapPosition.dx * currentScale;
     final targetDy = availableHeight / 2 - mapPosition.dy * currentScale;
 
-    // Sanfte Animation zur Ziel-Position
     final currentTranslation = Offset(
       controller.value.getTranslation().x,
       controller.value.getTranslation().y,
     );
     final targetTranslation = Offset(targetDx, targetDy);
 
-    // Nur animieren, wenn die Entfernung signifikant ist (> 50 Pixel)
     if ((currentTranslation - targetTranslation).distance <= 50) return;
 
-    // Vorherigen AnimationController disposten, um Memory Leaks zu vermeiden
     _focusAnimationController?.dispose();
 
     final animationController = AnimationController(
@@ -320,29 +242,29 @@ class _ScreenMainState extends State<ScreenMain>
     animationController.forward();
   }
 
-  /// Zentriert die Karte nach dem Laden in der Bildschirmmitte.
+  /// Zentriert die Karte nach dem Laden.
+  ///
+  /// Verwendet die [LayoutBuilder]-Constraints (_lastConstraints) für die
+  /// tatsächlich verfügbare Höhe. Dadurch entsteht kein weißer Balken unten,
+  /// auch wenn das Fenster verkleinert wird.
   void _centerMap() {
     final controller = _mapTransformationController;
     final hexGrid = _hexGrid;
     if (controller == null || hexGrid == null) return;
 
     final screenSize = MediaQuery.of(context).size;
-    final appBarHeight = kToolbarHeight;
-    final availableHeight = screenSize.height - appBarHeight;
 
-    // Karten-Mitte in Pixeln berechnen (mittels HexGrid)
+    final availableHeight =
+        _lastConstraints?.maxHeight ?? screenSize.height - kToolbarHeight;
+
     final mapCenterY = hexGrid.mapPixelHeight / 2;
 
-    // Passenden Zoom wählen, damit die gesamte Karte sichtbar ist
     final mapWidthPx = hexGrid.mapPixelWidth;
     final mapHeightPx = hexGrid.mapPixelHeight;
     final scaleX = screenSize.width / mapWidthPx;
     final scaleY = availableHeight / mapHeightPx;
     final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
 
-    // Matrix setzen: Karte linksbündig ausrichten
-    // translateX = 0 → Karte beginnt am linken Bildschirmrand
-    // Vertikal bleibt die Karte zentriert
     final translateX = 0.0;
     final translateY = availableHeight / 2 - mapCenterY * scale;
 
@@ -354,13 +276,6 @@ class _ScreenMainState extends State<ScreenMain>
 
   @override
   Widget build(BuildContext context) {
-    // Zentriere die Karte NUR wenn die Karte geladen ist und noch nicht
-    // zentriert wurde. Das _mapCentered-Flag verhindert, dass _centerMap()
-    // bei jedem setState() erneut aufgerufen wird, was die Benutzer-
-    // Interaktion (Scrollen/Zoomen) stören würde.
-    // Wichtig: Warte auf _mapDataReady, damit _centerMap() nicht mit den
-    // Default-Dimensionen (30×30, 32×32) läuft, bevor die tatsächlichen
-    // Kartendaten vom WidgetMapLoader geladen wurden.
     if (_mapDataReady && !_mapCentered) {
       _mapCentered = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _centerMap());
@@ -405,47 +320,44 @@ class _ScreenMainState extends State<ScreenMain>
           ],
         ),
         body: LayoutBuilder(
-          builder: (context, constraints) => Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              // SizedBox.expand() als nicht-positioniertes Child, das den Stack
-              // auf die volle verfügbare Größe zwingt. Ohne dies sized sich der
-              // Stack auf die Kartenmaße (~976×728px), nicht auf die Fensterbreite,
-              // was einen Spalt zwischen Stack-rechts und Fensterrand verursacht.
-              // (Bugfix: "Spalt zwischen Stack und rechtem Fensterrand")
-              const SizedBox.expand(),
-              // Karte im Hintergrund – als Positioned.fill, damit der Stack
-              // nicht auf Kartenmaße geschrumpft wird (Bugfix: Spalt rechts)
-              Positioned.fill(
-                child: WidgetMapLoader(
-                  hexGrid: _hexGrid ?? const HexGrid(
-                    tileWidth: 32,
-                    tileHeight: 32,
-                    mapWidth: 30,
-                    mapHeight: 30,
-                  ),
-                  mapPath: widget.mapPath,
-                  onMapLoaded: _onMapLoaded,
-                  onTransformationControllerCreated:
-                      _onTransformationControllerCreated,
-                  onSpawnPointsParsed: _onSpawnPointsParsed,
-                  onTerrainParsed: _onTerrainParsed,
-                ),
-              ),
-              // Token-Overlay im Vordergrund (erst anzeigen, wenn Karte geladen ist)
-              if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
+          builder: (context, constraints) {
+            // Aktuelle Constraints speichern (für korrekte Zentrierung bei
+            // Fenster-Größenänderungen)
+            _lastConstraints = constraints;
+            return Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                const SizedBox.expand(),
                 Positioned.fill(
-                  child: WidgetCaretaker(
-                    hexGrid: _hexGrid!,
-                    transformationController: _mapTransformationController!,
-                    spawnPoints: _spawnPoints,
-                    collisionSet: _collisionSet,
-                    onGameOver: _onGameOver,
-                    onRequestCameraFocus: _focusCameraOn,
+                  child: WidgetMapLoader(
+                    hexGrid: _hexGrid ?? const HexGrid(
+                      tileWidth: 32,
+                      tileHeight: 32,
+                      mapWidth: 30,
+                      mapHeight: 30,
+                    ),
+                    mapPath: widget.mapPath,
+                    onMapLoaded: _onMapLoaded,
+                    onTransformationControllerCreated:
+                        _onTransformationControllerCreated,
+                    onSpawnPointsParsed: _onSpawnPointsParsed,
+                    onTerrainParsed: _onTerrainParsed,
                   ),
                 ),
-            ],
-          ),
+                if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
+                  Positioned.fill(
+                    child: WidgetCaretaker(
+                      hexGrid: _hexGrid!,
+                      transformationController: _mapTransformationController!,
+                      spawnPoints: _spawnPoints,
+                      collisionSet: _collisionSet,
+                      onGameOver: _onGameOver,
+                      onRequestCameraFocus: _focusCameraOn,
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

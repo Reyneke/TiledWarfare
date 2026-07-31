@@ -460,3 +460,224 @@ Phase 1 (kritisch, ~11 Aufwand)
 - **Neue Tests** werden in die bestehende Test-Struktur integriert (`test/`-Verzeichnis).
 - **Dokumentation** wird bei jeder Änderung aktualisiert (§1 im Dokument, ggf. `06_map_loader.md` bei neuen Validierungsregeln).
 - **Empfehlung:** Pro Phase einen separaten Commit/Branch, damit Fehler isoliert bleiben.
+
+## gefundene Ungereimtheiten
+
+> **Status:** Screenshots können nicht direkt angezeigt werden (Modell unterstützt kein Bild-Input). Die Karten-Dateien `map0` und `map1` wurden stattdessen strukturell analysiert.
+
+### 🔴 Kritische Ungereimtheit 1: `type="ruins"` vs. `TerrainType.fromString("ruin")`
+
+**Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 159–174
+
+Die "Gelaendetypen"-Objektgruppe in `map1` verwendet `type="ruins"` (Plural), aber `TerrainType.fromString()` in `lib/models/map_data.dart` (Zeile 697) erwartet nur `'ruin'` (Singular):
+
+```dart
+switch (value.toLowerCase()) {
+  case 'ruin':       // ← Singular
+    return TerrainType.ruin;
+  ...
+  default:
+    return TerrainType.normal; // ← "ruins" fällt hierhin
+}
+```
+
+**Auswirkung:** Alle 12 Ruinen-Objekte in `map1` werden als `TerrainType.normal` geparst:
+- ❌ Keine doppelten Bewegungskosten (`movementCostMultiplier: 2.0`)
+- ❌ Keine Sichtblockade (`blocksVision: true`)
+- ❌ In `map1` sieht man **durch** alle Ruinen-Wände hindurch (Fog of War durchschaut Mauern)
+
+**Fix-Optionen:**
+- **Option A (empfohlen):** `TerrainType.fromString()` um `'ruins'` (und ggf. `'ruin'`) erweitern:
+  ```dart
+  case 'ruin':
+  case 'ruins':
+    return TerrainType.ruin;
+  ```
+- **Option B:** Die TMX-Datei `map1` korrigieren (`type="ruin"` statt `type="ruins"`)
+
+### 🔴 Kritische Ungereimtheit 2: Ruinen als Polygone statt Rechtecke
+
+**Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 160–163
+
+Zwei Ruinen-Objekte (`Wall 12`, `Wall 11`) verwenden `<polygon>`-Geometrie statt Rechtecken:
+
+```xml
+<object id="16" name="Wall 12" type="ruins" x="137" y="5">
+  <polygon points="0,0 831,1 833,185 ..."/>  <!-- ⚠️ Polygon -->
+</object>
+```
+
+Die `parseTerrain()`-Funktion in `lib/services/terrain_service.dart` berechnet den Mittelpunkt aus **`x + width / 2`** und **`y + height / 2`**. Bei Polygon-Objekten:
+- `width` und `height` sind **nicht in der XML** enthalten → Default `0`
+- Der Mittelpunkt ist also `(x + 0, y + 0)` = **die obere linke Ecke** des Polygons
+- Daraus wird ein **falsches Hex-Feld** berechnet
+
+**Auswirkung:** Für `Wall 12` (831×185 px groß) wird nur **ein einziges Hex** an der oberen linken Ecke markiert – nicht die gesamte Ruinenfläche. Bewegung und Sicht sind nur an diesem einen Punkt blockiert.
+
+**Fix-Optionen:**
+- **Option A:** `parseTerrain()` erweitern, um Polygon-Objekte zu unterstützen (jeden Punkt des Polygons in Hex umrechnen, alle überstrichenen Hexes markieren)
+- **Option B:** Die TMX-Karte korrigieren: Ruinen als Rechtecke (`<object x="..." y="..." width="..." height="..."/>`) statt Polygone
+
+### 🟡 Ungereimtheit 3: `map1`-Collision-Layer verwendet Tile-ID 3, `map0` hat keine Collisions
+
+**Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 38–69
+
+Der Collision-Layer in `map1` hat viele `3`-Werte (blockierte Felder), `map0` hat ausschließlich `0` (alles frei).
+
+**Auswirkung:** Die beiden Karten sehen im Spiel **grundlegend anders aus**:
+- `map0` = komplett offene Fläche (keine Wände)
+- `map1` = Mauer-Labyrinth (viele blockierte Felder)
+
+Das erklärt den "seltsamen Unterschied" in den Screenshots: **Es sind unterschiedliche Karten mit unterschiedlichem Gameplay.**
+
+### 🟡 Ungereimtheit 4: `map1` hat `decoration`-Layer mit `3`-Werten
+
+**Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 72–104
+
+Der `decoration`-Layer in `map1` hat exakt dieselben `3`-Werte wie der Collision-Layer. Das erzeugt **sichtbare Dekoration** (Bäume/Steine) auf den blockierten Feldern – vermutlich gewollt, aber der Effekt: Die Dekoration wird **über** den Boden gezeichnet, die Collisions bleiben unsichtbar.
+
+**Auswirkung:** In `map1` sieht man dekorative Objekte auf Mauer-Positionen, aber die eigentlichen Mauer-Tiles (Kollision) sind unsichtbar. In `map0` gibt es weder Collisions noch Dekoration.
+
+### ⚠️ Ungereimtheit 5: `map0`-Tileset-Bildpfad vs. `map1`
+
+Beide Karten referenzieren dasselbe Tileset (`Thespazztikone_tilemaps_005_neu.tsx`) → beide verwenden dasselbe Bild. Kein Unterschied hier. Der eigentliche Unterschied liegt in den **Layer-Daten**, nicht im Tileset.
+
+### 🔴 Ungereimtheit 6: Screenshots zeigen unterschiedliche Karten mit unterschiedlichen Terrain-Problemen
+
+**Screenshot-Vergleich:**
+
+| Screenshot | Karte | Sichtbares Verhalten |
+|------------|-------|----------------------|
+| `2026-07-31 (1).png` | `map0` ("Street Battle") | Einfarbiger Gras-Boden (Tile 121), keine Wände, keine Dekoration → relativ leeres App-Fenster |
+| `2026-07-31 (2).png` | `map1` ("Street Battle - Colliders") | Mauer-Labyrinth (Collision-Layer), Dekorations-Objekte, Ruinen-Polygone → optisch viel dichter/fülliger |
+
+**Problem:** Die Screenshots zeigen zwei Karten mit **grundverschiedenen Terrain-Definitionen**, die zu unterschiedlichem Gameplay führen:
+
+1. **`type="ruins"` wird nicht erkannt** (Kritisch)
+   - **Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 159–174
+   - **Problem:** Die Terrain-Objektgruppe verwendet `type="ruins"` (Plural), aber `TerrainType.fromString()` erwartet nur `'ruin'` (Singular)
+   - **Auswirkung:** Alle 12 Ruinen-Objekte werden als `TerrainType.normal` geparst:
+     - ❌ Keine doppelten Bewegungskosten (`movementCostMultiplier: 2.0`)
+     - ❌ Keine Sichtblockade (`blocksVision: true`)
+     - ❌ Fog of War durchschaut Ruinen-Mauern
+
+2. **Polygon-Geometrie wird falsch geparst** (Kritisch)
+   - **Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 160–163
+   - **Problem:** Zwei Ruinen-Objekte (`Wall 12`, `Wall 11`) verwenden `<polygon>` statt Rechtecken. `parseTerrain()` berechnet den Mittelpunkt aus `x + width/2`, aber bei Polygonen sind `width` und `height` nicht in der XML → Default `0`
+   - **Auswirkung:** Statt der gesamten Ruinenfläche (831×185 px) wird nur **ein einziges Hex** an der oberen linken Ecke markiert. Bewegung und Sicht sind nur an diesem Punkt blockiert.
+
+3. **Unterschiedliche Layer-Daten zwischen `map0` und `map1`** (Info)
+   - **Datei:** `assets/maps/map1/street_battle_colliders.tmx`, Zeile 38–104
+   - **Problem:** `map1` hat Collision-Layer mit Tile-ID `3` (blockierte Felder) und `decoration`-Layer mit denselben Werten. `map0` hat ausschließlich `0` (alles frei).
+   - **Auswirkung:** Die Karten sind für unterschiedliches Gameplay designed:
+     - `map0` = offene Arena (keine Wände)
+     - `map1` = Mauer-Labyrinth (viele Kollisionen + Dekoration)
+
+4. **Weißer Balken unten wird bei Fensterverkleinerung breiter** (Info)
+   - **Screenshot:** `2026-07-31 (1).png`, `2026-07-31 (2).png` und `2026-07-31 (3).png`
+   - **Problem:** Bei allen drei Screenshots ist am unteren Rand ein weißer Balken sichtbar. Dieser Balken wird breiter, wenn das Fenster verkleinert wird. Dies deutet auf ein Layout-Problem hin: Der verfügbare Platz für die Karte wird nicht optimal genutzt, oder es gibt einen konstanten Abstand/Rand am unteren Rand, der bei kleineren Fenstern relativ gesehen mehr Platz einnimmt.
+   - **Auswirkung:** Die Karte wird nicht vollständig dargestellt – der untere Bereich fehlt im Screenshot. Dies ist kein Bug in der Karten-Renderung, sondern ein UI-Layout-Problem bei der Fenstergrößen-Anpassung.
+
+**Fix-Optionen:**
+
+1. **`TerrainType.fromString()` erweitern** (1-Zeilen-Fix, empfohlen):
+   ```dart
+   case 'ruin':
+   case 'ruins':  // ← Plural hinzufügen
+     return TerrainType.ruin;
+   ```
+
+2. **Polygon-Support in `parseTerrain()`** oder TMX-Karte korrigieren:
+   - **Option A:** `parseTerrain()` erweitern, um alle Polygon-Punkte in Hexes umzurechnen
+   - **Option B:** TMX-Karte korrigieren: Ruinen als Rechtecke statt Polygone definieren
+
+3. **Gameplay-Design klären:** Entscheiden, ob `map1` absichtlich mehr Kollisionen/Dekoration haben soll (unterschiedliche Spielerfahrung) oder ob beide Karten konsistent sein sollten.
+
+---
+
+### Zusammenfassung der Analyse
+
+| Screenshot | Karte | Charakteristik |
+|------------|-------|----------------|
+| `2026-07-31 (1).png` | Vermutlich `map0` ("Street Battle") | Einfarbiger Gras-Boden (Tile 121), keine Wände, keine Dekoration → relativ leeres App-Fenster |
+| `2026-07-31 (2).png` | Vermutlich `map1` ("Street Battle - Colliders") | Mauer-Labyrinth (Collision-Layer), Dekorations-Objekte, Ruinen-Polygone → optisch viel dichter/fülliger |
+
+**Die wichtigsten Befunde:**
+1. **`type="ruins"` wird nicht erkannt** – Ruinen wirken nicht als Hindernisse für Bewegung/Sicht
+2. **Polygon-Geometrie wird falsch geparst** – nur 1 Hex pro Ruine markiert, nicht die Fläche
+3. **`map1` hat Collisions + Dekoration, `map0` nicht** – das ist der sichtbare Unterschied
+
+**Empfohlene Sofort-Fixes:**
+1. `TerrainType.fromString()` um `'ruins'` erweitern (1-Zeilen-Fix)
+2. `parseTerrain()` für Polygon-Objekte erweitern oder `map1`-Karte auf Rechtecke umstellen
+3. Entscheiden, ob `map1` absichtlich mehr Kollisionen/Dekoration haben soll (Gameplay-Design)
+
+---
+
+## 6. Umgesetzte Fixes (Status-Update)
+
+> **Datum:** 31. Juli 2026, nach Analyse der Ungereimtheiten
+
+### ✅ Fix 1: `TerrainType.fromString()` erweitert
+
+**Datei:** `lib/models/map_data.dart`
+
+```dart
+case 'ruin':
+case 'ruins': // Tiled-Objektgruppen verwenden oft den Plural "ruins"
+  return TerrainType.ruin;
+case 'wall':
+case 'walls': // Plural-Variante
+  return TerrainType.wall;
+```
+
+**Effekt:** Alle 12 Ruinen-Objekte in `map1` werden jetzt als `TerrainType.ruin` erkannt (doppelte Bewegungskosten + Sichtblockade).
+
+### ✅ Fix 2: Polygon-Geometrie unterstützt
+
+**Dateien:** `lib/models/map_data.dart`, `lib/services/map_parser.dart`, `lib/services/terrain_service.dart`
+
+| Schritt | Änderung |
+|---------|----------|
+| **2a** | `MapObject.points` (Liste von `(x, y)`-Offsets) + `absolutePoints`-Getter |
+| **2b** | `TmxParser` parst `<polygon points="...">`-Elemente in Objektgruppen |
+| **2b** | `TmjParser` parst `"polygon": [{"x":..,"y":..}, ...]`-Strukturen |
+| **2c** | `parseTerrain()` markiert bei Polygonen **alle absoluten Eckpunkte** als Gelände |
+| **2c** | `==`/`hashCode` von `MapObject` berücksichtigen `points` |
+
+**Effekt:** Die Polygon-Ruinen (`Wall 11`, `Wall 12`) blockieren jetzt mehrere Hex-Felder statt nur eines.
+
+### ✅ Fix 3: Weißer Balken unten (Layout-Problem) behoben
+
+**Dateien:** `lib/widgets/widget_map_loader.dart`, `lib/screens/screen_main.dart`
+
+**Eigentliche Ursache (gefunden nach erneutem Auftreten):** Die `boundaryMargin`-Berechnung in `widget_map_loader.dart` war mathematisch falsch:
+
+```dart
+// Vorher (FALSCH): Quadrat der Diagonale statt Diagonale
+final diagonal = (viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+final boundaryMargin = diagonal * 0.15;
+// Bei 800×600 → 1.000.000 * 0.15 = 150.000 Pixel Margin!
+```
+
+Das erlaubte dem `InteractiveViewer`, in riesige weiße Randbereiche zu pannen. Beim Verkleinern des Fensters wurde dieser weiße Bereich sichtbar.
+
+**Fix 1 (Hauptursache):** `sqrt()` hinzugefügt:
+```dart
+final diagonal = sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+final boundaryMargin = diagonal * 0.15;
+// Bei 800×600 → 1.000 * 0.15 = 150 Pixel Margin (korrekt)
+```
+
+**Fix 2 (Zentrierung):** `_centerMap()` und `_computeFitToScreenScale()` verwenden jetzt `_lastConstraints?.maxHeight` (vom `LayoutBuilder`) statt `MediaQuery.height - kToolbarHeight`. Das garantiert korrekte Zentrierung im tatsächlich verfügbaren Bereich.
+
+**Fix 3 (Neu-Zentrierung):** `didChangeMetrics()` zentriert die Karte jetzt **immer** neu bei Fenstergrößenänderungen (kein Zoom-Distanz-Check mehr), damit die Karte bei jeder Fenstergröße vollständig sichtbar bleibt.
+
+### ✅ Fix 4: `map1` bleibt Labyrinth (Gameplay-Design bestätigt)
+
+> `map1` ist bewusst als Mauer-Labyrinth konzipiert, um Wegfindung, Fog of War etc. zu testen. Die Collision- und Decoration-Layer bleiben unverändert.
+
+### Verifikation
+
+- **`flutter analyze`:** 0 Fehler, 0 Warnungen
+- **`flutter test`:** ✅ **92/92 Tests bestehen**

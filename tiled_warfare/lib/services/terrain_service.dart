@@ -6,9 +6,12 @@ import 'package:tiled_warfare/utils/hex_grid.dart';
 
 /// Parst die "Gelaendetypen"-Objektgruppe.
 ///
-/// Erwartet Rechteck-Objekte (x, y, width, height) pro Geländebereich.
-/// Der Mittelpunkt jedes Rechtecks wird in Hex-Koordinaten umgerechnet
-/// und als Geländetyp in der Map gespeichert.
+/// Unterstützt:
+/// - Rechteck-Objekte (x, y, width, height) → Mittelpunkt wird markiert
+/// - Polygon-Objekte (`points`) → alle Ecken werden als Gelände markiert
+///
+/// Für Polygone wird jeder absolute Punkt in Hex-Koordinaten umgerechnet
+/// und als Geländetyp gespeichert.
 ///
 /// [terrainGroup] – Die Objektgruppe mit dem Namen "Gelaendetypen".
 ///                  Kann `null` sein (→ leere Map).
@@ -21,11 +24,21 @@ Map<int, TerrainType> parseTerrain(ObjectGroup? terrainGroup, HexGrid hexGrid) {
 
   for (final obj in terrainGroup.objects) {
     final type = TerrainType.fromString(obj.type);
-    // Rechteck-Mittelpunkt in Hex-Koordinaten umrechnen
-    final centerX = obj.x + obj.width / 2;
-    final centerY = obj.y + obj.height / 2;
-    final hex = hexGrid.pixelToHex(Offset(centerX, centerY));
-    result[hexGrid.hexKey(hex.x, hex.y)] = type;
+
+    if (obj.points.isNotEmpty) {
+      // Polygon-Objekt: Alle absoluten Eckpunkte in Hex umrechnen
+      final absolutePoints = obj.absolutePoints;
+      for (final point in absolutePoints) {
+        final hex = hexGrid.pixelToHex(Offset(point.x, point.y));
+        result[hexGrid.hexKey(hex.x, hex.y)] = type;
+      }
+    } else {
+      // Rechteck/Punkt-Objekt: Mittelpunkt in Hex-Koordinaten umrechnen
+      final centerX = obj.x + (obj.width > 0 ? obj.width / 2 : 0);
+      final centerY = obj.y + (obj.height > 0 ? obj.height / 2 : 0);
+      final hex = hexGrid.pixelToHex(Offset(centerX, centerY));
+      result[hexGrid.hexKey(hex.x, hex.y)] = type;
+    }
   }
   return result;
 }

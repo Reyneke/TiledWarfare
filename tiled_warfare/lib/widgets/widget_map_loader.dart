@@ -1,5 +1,5 @@
 import 'dart:collection';
-import 'dart:math' show max, min;
+import 'dart:math' show max, min, sqrt;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -426,7 +426,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     // - Karten-unabhängig: gleicher Puffer für 30×30 oder 200×200 Tiles
     final viewportWidth = MediaQuery.of(context).size.width;
     final viewportHeight = MediaQuery.of(context).size.height;
-    final diagonal = (viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+    final diagonal = sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
     final boundaryMargin = diagonal * 0.15;
 
     return RepaintBoundary(

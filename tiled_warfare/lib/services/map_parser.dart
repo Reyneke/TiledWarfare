@@ -253,6 +253,23 @@ class TmxParser implements MapParser {
           }
         }
 
+        // Polygon-Punkte parsen (relativ zu x/y)
+        List<({double x, double y})> polygonPoints = const [];
+        final polygonElement = objElement.findElements('polygon').firstOrNull;
+        if (polygonElement != null) {
+          final pointsAttr = polygonElement.getAttribute('points') ?? '';
+          polygonPoints = pointsAttr
+              .split(' ')
+              .where((s) => s.trim().isNotEmpty)
+              .map((pair) {
+            final parts = pair.split(',');
+            return (
+              x: double.tryParse(parts[0]) ?? 0.0,
+              y: parts.length > 1 ? double.tryParse(parts[1]) ?? 0.0 : 0.0,
+            );
+          }).toList();
+        }
+
         objects.add(MapObject(
           id: int.parse(objElement.getAttribute('id') ?? '0'),
           name: objElement.getAttribute('name') ?? '',
@@ -264,6 +281,7 @@ class TmxParser implements MapParser {
           rotation: double.parse(objElement.getAttribute('rotation') ?? '0'),
           visible: objElement.getAttribute('visible') != '0',
           properties: properties,
+          points: polygonPoints,
         ));
       }
 
@@ -426,6 +444,20 @@ class TmjParser implements MapParser {
           }
         }
 
+        // Polygon-Punkte aus JSON parsen (Tiled: "polygon": [{"x":..,"y":..}, ...])
+        List<({double x, double y})> parsedPoints = const [];
+        final rawPolygon = objJson['polygon'];
+        if (rawPolygon is List) {
+          parsedPoints = [
+            for (final raw in rawPolygon)
+              if (raw is Map)
+                (
+                  x: ((raw['x'] as num?)?.toDouble() ?? 0),
+                  y: ((raw['y'] as num?)?.toDouble() ?? 0),
+                ),
+          ];
+        }
+
         objects.add(MapObject(
           id: objJson['id'] as int? ?? 0,
           name: objJson['name'] as String? ?? '',
@@ -437,6 +469,7 @@ class TmjParser implements MapParser {
           rotation: (objJson['rotation'] as num?)?.toDouble() ?? 0,
           visible: objJson['visible'] as bool? ?? true,
           properties: properties,
+          points: parsedPoints,
         ));
       }
 

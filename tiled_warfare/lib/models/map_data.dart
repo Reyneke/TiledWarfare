@@ -604,6 +604,12 @@ class MapObject {
   final bool visible;
   final Map<String, dynamic> properties;
 
+  /// Polygon-Punkte (relativ zu [x], [y]) für `<polygon>`-Objekte.
+  ///
+  /// Jeder Punkt ist ein `(x, y)`-Offset. Leer, wenn das Objekt kein
+  /// Polygon ist (z. B. Rechteck oder Punkt).
+  final List<({double x, double y})> points;
+
   const MapObject({
     required this.id,
     this.name = '',
@@ -615,7 +621,13 @@ class MapObject {
     this.rotation = 0,
     this.visible = true,
     this.properties = const {},
+    this.points = const [],
   });
+
+  /// Gibt die absoluten Polygon-Punkte zurück (Offset + Objekt-Position).
+  List<({double x, double y})> get absolutePoints => [
+        for (final p in points) (x: x + p.x, y: y + p.y),
+      ];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -628,21 +640,39 @@ class MapObject {
         'rotation': rotation,
         'visible': visible,
         'properties': Map<String, dynamic>.from(properties),
+        if (points.isNotEmpty)
+          'points': [for (final p in points) [p.x, p.y]],
       };
 
-  factory MapObject.fromJson(Map<String, dynamic> json) => MapObject(
-        id: json['id'] as int,
-        name: json['name'] as String? ?? '',
-        type: json['type'] as String? ?? '',
-        x: (json['x'] as num?)?.toDouble() ?? 0,
-        y: (json['y'] as num?)?.toDouble() ?? 0,
-        width: (json['width'] as num?)?.toDouble() ?? 0,
-        height: (json['height'] as num?)?.toDouble() ?? 0,
-        rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
-        visible: json['visible'] as bool? ?? true,
-        properties: Map<String, dynamic>.from(
-            json['properties'] as Map<String, dynamic>? ?? {}),
-      );
+  factory MapObject.fromJson(Map<String, dynamic> json) {
+    // Polygon-Punkte aus JSON parsen (Liste von [x, y]-Paaren)
+    List<({double x, double y})> parsedPoints = const [];
+    final rawPoints = json['points'];
+    if (rawPoints is List) {
+      parsedPoints = [
+        for (final raw in rawPoints)
+          if (raw is List && raw.length >= 2)
+            (
+              x: (raw[0] as num).toDouble(),
+              y: (raw[1] as num).toDouble(),
+            ),
+      ];
+    }
+    return MapObject(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      x: (json['x'] as num?)?.toDouble() ?? 0,
+      y: (json['y'] as num?)?.toDouble() ?? 0,
+      width: (json['width'] as num?)?.toDouble() ?? 0,
+      height: (json['height'] as num?)?.toDouble() ?? 0,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
+      visible: json['visible'] as bool? ?? true,
+      properties: Map<String, dynamic>.from(
+          json['properties'] as Map<String, dynamic>? ?? {}),
+      points: parsedPoints,
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -657,11 +687,13 @@ class MapObject {
           height == other.height &&
           rotation == other.rotation &&
           visible == other.visible &&
+          listEquals(points, other.points) &&
           mapEquals(properties, other.properties);
 
   @override
   int get hashCode => Object.hash(
-      id, name, type, x, y, width, height, rotation, visible, properties);
+      id, name, type, x, y, width, height, rotation, visible,
+      Object.hashAll(points), properties);
 }
 
 // ──────────────────────────────────────────────
@@ -695,12 +727,14 @@ enum TerrainType {
   static TerrainType fromString(String value) {
     switch (value.toLowerCase()) {
       case 'ruin':
+      case 'ruins': // Tiled-Objektgruppen verwenden oft den Plural "ruins"
         return TerrainType.ruin;
       case 'forest':
         return TerrainType.forest;
       case 'water':
         return TerrainType.water;
       case 'wall':
+      case 'walls': // Plural-Variante
         return TerrainType.wall;
       case 'open_ground':
         return TerrainType.openGround;
