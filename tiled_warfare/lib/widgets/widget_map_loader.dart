@@ -419,20 +419,13 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     final mapPixelWidth = widget.hexGrid.mapPixelWidth;
     final mapPixelHeight = widget.hexGrid.mapPixelHeight;
 
-    // Dynamische boundaryMargin: 30% der Bildschirmdiagonale als Puffer.
-    // - Nicht zu groß (verhindert den "breiten Streifen unterhalb der Karte")
-    // - Nicht zu klein (ermöglicht Scrollen zum Kartenrand bei kleinen Fenstern)
-    // - Passt sich jeder Fenstergröße an (Maximieren vs. Fenstermodus)
-    // - Karten-unabhängig: gleicher Puffer für 30×30 oder 200×200 Tiles
-    final viewportWidth = MediaQuery.of(context).size.width;
-    final viewportHeight = MediaQuery.of(context).size.height;
-    final diagonal = sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
-    final boundaryMargin = diagonal * 0.15;
-
+    // Keine boundaryMargin: Der InteractiveViewer darf nicht in weiße
+    // Bereiche scrollen. Die Karte wird durch _centerMap() zentriert.
+    // boundaryMargin = 0 verhindert den weißen Balken unten.
     return RepaintBoundary(
       child: InteractiveViewer(
         transformationController: _transformationController,
-        boundaryMargin: EdgeInsets.all(boundaryMargin),
+        boundaryMargin: EdgeInsets.zero,
         minScale: 0.25,
         maxScale: 4.0,
         child: SizedBox(

@@ -59,11 +59,17 @@ class _ScreenMainState extends State<ScreenMain>
 
   /// Wird bei Fenster-Größenänderungen aufgerufen. Zentriert die Karte neu.
   ///
-  /// Immer neu zentrieren (kein Zoom-Check), damit die Karte bei jeder
-  /// Fenstergrößenänderung vollständig sichtbar bleibt – kein weißer Balken.
+  /// Der [LayoutBuilder] muss vor der Zentrierung seine Constraints aktualisieren,
+  /// sonst verwendet `_centerMap()` die alte (falsche) Höhe → weißer Balken.
+  /// Deshalb: 1) setState → LayoutBuilder rebuildet → 2) addPostFrameCallback →
+  /// 3) _centerMap() mit korrekten Constraints.
   @override
   void didChangeMetrics() {
     if (!_mapDataReady || _hexGrid == null) return;
+
+    // setState erzwingt einen Neubau des LayoutBuilder. Dadurch werden
+    // _lastConstraints aktualisiert, bevor _centerMap() ausgeführt wird.
+    setState(() {});
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -76,7 +82,7 @@ class _ScreenMainState extends State<ScreenMain>
       }
       _lastScreenSize = newSize;
 
-      // Immer neu zentrieren, unabhängig vom aktuellen Zoom
+      // Karte mit nun aktuellen _lastConstraints zentrieren
       _centerMap();
     });
   }
