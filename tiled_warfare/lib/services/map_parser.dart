@@ -211,10 +211,13 @@ class TmxParser implements MapParser {
   }
 
   /// Parst ein `<tileset>`-Element aus XML und gibt die Metadaten zurück.
-  TilesetInfo _parseTilesetElementFromXml(XmlElement element) {
+  ///
+  /// [firstGid] muss vom Aufrufer übergeben werden, da es aus dem
+  /// `<tileset>`-Attribut der TMX-Datei stammt (nicht aus der TSX-Datei).
+  TilesetInfo _parseTilesetElementFromXml(XmlElement element, {int firstGid = 1}) {
     final imageElement = element.findElements('image').firstOrNull;
     return TilesetInfo(
-      firstGid: 1, // firstGid wird vom aufrufenden Kontext gesetzt
+      firstGid: firstGid,
       name: element.getAttribute('name'),
       tileWidth: int.tryParse(element.getAttribute('tilewidth') ?? ''),
       tileHeight: int.tryParse(element.getAttribute('tileheight') ?? ''),

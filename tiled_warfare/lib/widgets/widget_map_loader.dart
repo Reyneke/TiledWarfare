@@ -17,6 +17,15 @@ class MapLoadConfig {
   /// Name der Objektgruppe für Spawnpunkte.
   final String spawnGroupName;
 
+  /// Steuert, ob das `visible`-Flag von Tiled-Layern respektiert wird.
+  ///
+  /// - `true` (Default): Layer mit `visible = false` in Tiled werden nicht
+  ///   gezeichnet. Mapper können Layer gezielt ausblenden.
+  /// - `false`: Das `visible`-Flag wird ignoriert – alle Layer werden
+  ///   gezeichnet, unabhängig vom Tiled-Status. Nützlich, wenn Layer zur
+  ///   Laufzeit dynamisch ein-/ausgeblendet werden sollen.
+  final bool respectLayerVisibility;
+
   /// Benutzerdefinierte Zuordnung von [LayerPurpose] zu Layer-Namen.
   ///
   /// Überschreibt die Standard-Namen aus [LayerPurpose.defaultLayerNames].
@@ -49,6 +58,7 @@ class MapLoadConfig {
 
   const MapLoadConfig({
     this.spawnGroupName = 'Spawns',
+    this.respectLayerVisibility = true,
     this.layerNameOverrides = const {},
   });
 }
@@ -495,12 +505,6 @@ class _HexMapPainter extends CustomPainter {
   /// Vorberechnete Pixel-Positionen für jedes Hex-Feld.
   final List<List<Offset>> _pixelPositions;
 
-  /// Vorberechnete Tileset-Lookup-Tabelle: firstGid → (Bild, Spalten).
-  ///
-  /// Wandelt die [_tilesetImages]-Map in eine Liste um, damit der Zugriff
-  /// in [_drawLayer] ohne Map-Lookup pro Tile erfolgt.
-  final Map<int, ({ui.Image image, int columns})> _tilesetLookup;
-
   _HexMapPainter({
     required this.tilesetImages,
     required this.tilesets,
@@ -510,8 +514,7 @@ class _HexMapPainter extends CustomPainter {
     required this.hexGrid,
     required this.config,
   })  : _effectiveNames = config.effectiveLayerNames,
-        _pixelPositions = _computePositions(mapData, hexGrid),
-        _tilesetLookup = tilesetImages;
+        _pixelPositions = _computePositions(mapData, hexGrid);
 
   /// Berechnet alle Pixel-Positionen einmal vor, statt sie jedes Frame neu zu berechnen.
   static List<List<Offset>> _computePositions(
@@ -529,22 +532,26 @@ class _HexMapPainter extends CustomPainter {
 
   /// Gibt die Layer zum Zeichnen in der richtigen Reihenfolge zurück.
   ///
-  /// Zeichnet nur Layer, die in der Map existieren (nicht-null).
-  /// Die `visible`-Eigenschaft wird ignoriert, da Tiled-Layer als
-  /// unsichtbar markiert sein können, aber dennoch gezeichnet werden
-  /// sollen (z. B. zur Laufzeit eingeblendet werden).
+  /// Berücksichtigt die [MapLoadConfig.respectLayerVisibility]-Einstellung:
+  /// - Wenn `true` (Default): Layer mit `visible = false` in Tiled werden
+  ///   nicht gezeichnet.
+  /// - Wenn `false`: Alle Layer werden gezeichnet, unabhängig vom `visible`-Flag.
   Iterable<TileLayer> _getVisibleLayers() sync* {
-    // Boden: immer vorhanden
     final ground = _layerByPurpose(LayerPurpose.ground);
-    if (ground != null) yield ground;
+    if (ground != null && _isLayerVisible(ground)) yield ground;
 
-    // Dekoration (optional)
     final decor = _layerByPurpose(LayerPurpose.decorative);
-    if (decor != null) yield decor;
+    if (decor != null && _isLayerVisible(decor)) yield decor;
 
-    // Obere Dekoration (optional)
     final decorUpper = _layerByPurpose(LayerPurpose.decorativeUpper);
-    if (decorUpper != null) yield decorUpper;
+    if (decorUpper != null && _isLayerVisible(decorUpper)) yield decorUpper;
+  }
+
+  /// Prüft, ob ein Layer gezeichnet werden soll.
+  /// Berücksichtigt die [config.respectLayerVisibility]-Konfiguration.
+  bool _isLayerVisible(TileLayer layer) {
+    if (!config.respectLayerVisibility) return true;
+    return layer.visible;
   }
 
   /// Findet einen Layer anhand des Purpose unter Berücksichtigung
@@ -639,7 +646,7 @@ class _HexMapPainter extends CustomPainter {
         final tilesetInfo = findTileset(tileId, tilesets);
         if (tilesetInfo == null) continue;
 
-        final tilesetEntry = _tilesetLookup[tilesetInfo.firstGid];
+        final tilesetEntry = tilesetImages[tilesetInfo.firstGid];
         if (tilesetEntry == null) continue;
 
         // Lokale ID innerhalb des Tilesets (0-basiert)

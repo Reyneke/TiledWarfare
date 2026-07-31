@@ -142,7 +142,7 @@ Initiative würfeln → Wer gewinnt, fängt an
 
 ## 🔍 Debug-Tipps
 
-1. **Karte lädt nicht** → Prüfe `assets/maps/street_battle.tmx` (oder .tmj) und Tileset-Pfad. Validiere das Format mit `MapParser.forPath()`.
+1. **Karte lädt nicht** → Prüfe die ausgewählte `.tmx`/`.tmj`-Datei in `assets/maps/` und den Tileset-Pfad. Validiere das Format mit `MapParser.forPath()`.
 2. **Tokens unsichtbar** → Prüfe Viewport-Culling in `_getVisibleMapRect()` oder Fog-of-War-Status
 3. **Bewegung funktioniert nicht** → Prüfe `_snapToNearestFreeHex()` und BFS-Logik im `TerrainService`
 4. **Kampf-Logik falsch** → Prüfe `performAction()` in `object_player.dart`

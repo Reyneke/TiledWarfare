@@ -152,7 +152,7 @@ class _ScreenMainState extends State<ScreenMain>
     );
     
     // HexGrid an den ObjectHost-Singleton übergeben
-    ObjectHost().setHexGrid(hexGrid);
+    ObjectHost().hexGrid = hexGrid;
     
     setState(() {
       _hexGrid = hexGrid;

@@ -201,7 +201,7 @@
 | `Aggressiveness` | Fuzzy-Variable (0–100) |
 | `RiskTolerance` | Fuzzy-Variable (0–100) |
 | `TacticalComplexity` | Fuzzy-Variable (0–100) |
-| `_HexUtils` | Hex-Gitter-Hilfsfunktionen (odd-r) |
+| `HexGrid` | Zentrale Hex-Gitter-Utility (odd-r) in `lib/utils/hex_grid.dart` |
 | `_BfsVisitedSet` | Optimiertes Set für BFS-Besuchsmarkierungen |
 | `_TokenRenderInfo` | Kapselt Token + Metadaten für Darstellung |
 | `_TokenWidget` | Widget zur Darstellung eines Tokens auf der Karte |

@@ -95,8 +95,8 @@ void main() {
     });
 
     test('two tokens share vision (union of visible hexes)', () {
-      final token1 = _makeToken(x: 0, y: 0, fieldOfView: 1);
-      final token2 = _makeToken(x: 9, y: 9, fieldOfView: 1);
+      final token1 = _makeToken(x: 5, y: 5, fieldOfView: 1);
+      final token2 = _makeToken(x: 4, y: 5, fieldOfView: 1);
 
       fog.computeVisibility(
         friendlyTokens: [token1, token2],
@@ -104,7 +104,10 @@ void main() {
         terrainConfigs: TerrainConfig.defaults,
       );
 
-      // Jeder sieht sich + max 6 Nachbarn = 7, aber Überlappungen möglich
+      // Beide sehen sich selbst + jeweils 6 Nachbarn (mitten auf der Karte),
+      // aber sie überlappen sich teilweise.
+      // Token1 bei (5,5): 7 Felder, Token2 bei (4,5): 7 Felder.
+      // Überlappung: (4,5) und (5,5) sind gegenseitige Nachbarn → 7 + 7 - 2 = 12
       expect(fog.visibleHexes.length, greaterThan(7));
     });
 

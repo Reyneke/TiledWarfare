@@ -157,16 +157,19 @@ class ObjectHost {
   }
 
   /// Die zentrale Hex-Utility-Instanz für alle Gitter-Berechnungen.
-  HexGrid? _hexGrid;
+  /// Muss gesetzt werden, bevor Hex-Berechnungen durchgeführt werden.
+  late final HexGrid hexGrid;
 
   /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der TMX-Karte.
   /// Wird von [ScreenMain] nach dem Laden der Karte gesetzt.
-  Set<int> collisionSet = {};
+  Set<int> _collisionSet = {};
 
-  /// Setzt die Hex-Utility-Instanz für diesen Host.
-  /// Muss aufgerufen werden, bevor Hex-Berechnungen durchgeführt werden.
-  void setHexGrid(HexGrid grid) {
-    _hexGrid = grid;
+  /// Die aktuellen Kollisions-Tiles (unpassierbare Felder).
+  Set<int> get collisionSet => _collisionSet;
+
+  /// Setzt die Kollisions-Tiles aus dem Karten-Layer.
+  set collisionSet(Set<int> tiles) {
+    _collisionSet = tiles;
   }
 
   /// Zufälliger Name für den Host.
@@ -260,13 +263,13 @@ class ObjectHost {
   /// (x, y) um (odd-r staggerindex="odd").
   /// Nutzt die zentrale [HexGrid]-Instanz.
   ({int x, int y}) _pixelToHex(Offset pixel) {
-    return _hexGrid!.pixelToHex(pixel);
+    return hexGrid.pixelToHex(pixel);
   }
 
   /// Rechnet Hex-Gitter-Koordinaten (x, y) in Pixel-Koordinaten um
   /// (odd-r staggerindex="odd").
   Offset _hexToPixel({required int x, required int y}) {
-    return _hexGrid!.hexToPixel(x: x, y: y);
+    return hexGrid.hexToPixel(x: x, y: y);
   }
 
   /// Bewegt einen einzelnen Zombie auf das nächste Ziel zu.
@@ -307,7 +310,7 @@ class ObjectHost {
     final occupied = _buildOccupiedHostHexes(playerUnits: targets);
     // Entferne den Zombie selbst aus der belegten-Menge, damit er sich
     // von seinem eigenen Feld wegbewegen kann
-    occupied.remove(_hexGrid!.hexKey(zombieHex.x, zombieHex.y));
+    occupied.remove(hexGrid.hexKey(zombieHex.x, zombieHex.y));
 
     // Schrittweite = min(1, movementValue) Hex-Felder
     // Zombies movementValue = 1, also genau 1 Schritt
@@ -329,15 +332,15 @@ class ObjectHost {
       ({int dx, int dy}) bestNeighbor = (dx: 0, dy: 0);
       int bestDistance = 999999;
 
-      for (final offset in _hexGrid!.neighborOffsets(currentY)) {
+      for (final offset in hexGrid.neighborOffsets(currentY)) {
         final nx = currentX + offset.dx;
         final ny = currentY + offset.dy;
-        if (!_hexGrid!.isInBounds(nx, ny)) continue;
+        if (!hexGrid.isInBounds(nx, ny)) continue;
 
         // Belegte Felder überspringen (Kollisionsvermeidung)
-        if (occupied.contains(_hexGrid!.hexKey(nx, ny))) continue;
+        if (occupied.contains(hexGrid.hexKey(nx, ny))) continue;
 
-        final dist = _hexGrid!.distance(
+        final dist = hexGrid.distance(
           x1: nx, y1: ny,
           x2: targetHex.x, y2: targetHex.y,
         );
@@ -393,7 +396,7 @@ class ObjectHost {
         if (zombie.woundValue <= 0) continue;
         if (zombie.hasActed) continue;
         final zombieHex = _pixelToHex(zombie.position);
-        final hexDistance = _hexGrid!.distance(
+        final hexDistance = hexGrid.distance(
           x1: zombieHex.x, y1: zombieHex.y,
           x2: targetHex.x, y2: targetHex.y,
         );
@@ -516,10 +519,10 @@ class ObjectHost {
           // Hex-Entfernung zwischen Zombie und Ziel ermitteln
           final zombieHex = _pixelToHex(zombie.position);
           final cookHex = _pixelToHex(cook.position);
-          final hexDistance = _hexGrid!.distance(
-            x1: zombieHex.x, y1: zombieHex.y,
-            x2: cookHex.x, y2: cookHex.y,
-          );
+        final hexDistance = hexGrid.distance(
+          x1: zombieHex.x, y1: zombieHex.y,
+          x2: cookHex.x, y2: cookHex.y,
+        );
 
           // Prüfen, ob der Line Cook in Reichweite ist (Nahkampf = benachbarte Hex-Felder)
           if (hexDistance <= zombie.rangeValue + 1) {
@@ -616,11 +619,11 @@ class ObjectHost {
     occupied.addAll(collisionSet);
     for (final dumpster in doughDumpsterList) {
       final dh = _pixelToHex(dumpster.position);
-      occupied.add(_hexGrid!.hexKey(dh.x, dh.y));
+      occupied.add(hexGrid.hexKey(dh.x, dh.y));
       for (final zombie in dumpster.zombieList) {
         if (zombie.woundValue <= 0) continue;
         final zh = _pixelToHex(zombie.position);
-        occupied.add(_hexGrid!.hexKey(zh.x, zh.y));
+        occupied.add(hexGrid.hexKey(zh.x, zh.y));
       }
     }
     // Auch Spieler-Einheiten als belegt markieren,
@@ -629,7 +632,7 @@ class ObjectHost {
       for (final unit in playerUnits) {
         if (unit.woundValue <= 0) continue;
         final uh = _pixelToHex(unit.position);
-        occupied.add(_hexGrid!.hexKey(uh.x, uh.y));
+        occupied.add(hexGrid.hexKey(uh.x, uh.y));
       }
     }
     return occupied;
@@ -646,7 +649,7 @@ class ObjectHost {
     required Set<int> occupied,
     int maxRadius = 12,
   }) {
-    return _hexGrid!.findFreeHexNear(
+    return hexGrid.findFreeHexNear(
       startX: startX,
       startY: startY,
       occupied: occupied,
@@ -685,7 +688,7 @@ class ObjectHost {
           // Neu platzierten Zombie als belegt markieren, damit nachfolgende
           // Zombies in derselben Runde nicht auf demselben Feld spawnen
           final zh = _pixelToHex(freePosition);
-          occupied.add(_hexGrid!.hexKey(zh.x, zh.y));
+          occupied.add(hexGrid.hexKey(zh.x, zh.y));
         }
       }
     }

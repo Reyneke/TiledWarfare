@@ -272,18 +272,21 @@ group('TerrainService', () {
 - [ ] Laufzeit-Validierung der Karte nach dem Laden
 - [ ] Integrationstests für den kompletten Spielfluss
 
-## 5. Offene Fragen
+## 5. Offene Fragen (beantwortet)
 
-Nach der Analyse bleiben folgende Fragen offen, die vor dem nächsten Sprint geklärt werden sollten:
+Nach der Analyse wurden alle offenen Fragen geklärt. Die Entscheidungen sind unten dokumentiert.
 
 ### 5.1 Design-Entscheidungen
 
-| # | Frage | Kontext | Optionen |
-|---|-------|---------|----------|
-| 1 | **Soll `_parseExternalTileset` async werden oder entfernt?** | Bug 1: Die Methode speichert nur die `source`-Referenz, lädt aber keine Bild-Metadaten. Die async `loadExternalTileset()` existiert parallel. | (a) `_parseExternalTileset` async machen und in den `loadFromAsset()`-Flow integrieren. (b) Die Methode entfernen und nur `loadExternalTileset()` verwenden. (c) So lassen – Workaround: nur inline-Tilesets verwenden. | => a
-| 2 | **Soll das `visible`-Flag von Tiled-Layern respektiert werden?** | `_getVisibleLayers()` ignoriert `layer.visible` – unsichtbare Layer in Tiled werden trotzdem gezeichnet. | (a) Ignorieren (aktuelles Verhalten) – Mapper müssen wissen, dass `visible` in Tiled ignoriert wird. (b) Respektieren – unsichtbare Layer nicht zeichnen. (c) Konfigurierbar via `MapLoadConfig`. | => Siehe 5.1.2 für eine konkrete Lösungsskizze zu (c) |
+| # | Frage | Entscheidung | Begründung |
+|---|-------|-------------|------------|
+| 1 | **Soll `_parseExternalTileset` async werden oder entfernt?** | **Option (a):** `_parseExternalTileset` async machen und in den `loadFromAsset()`-Flow integrieren. | Externe TSX-Tilesets müssen korrekt geladen werden können. Die async-Infrastruktur (`loadExternalTileset()`) existiert bereits – sie muss nur in den normalen Flow eingebunden werden. |
+| 2 | **Soll das `visible`-Flag von Tiled-Layern respektiert werden?** | **Option (c):** Konfigurierbar via `MapLoadConfig.respectLayerVisibility` (Default: `true`). | Siehe Lösungsskizze unten. Bietet maximale Flexibilität: Mapper können Layer in Tiled ausblenden, Entwickler können das Verhalten per Code überschreiben. |
+| 3 | **Sollen Zombies Geländekosten berücksichtigen?** | **Option (a):** Ja – Zombies sollen wie Spieler-Einheiten Geländekosten haben. | Einheitliches Gameplay. `TerrainService` in `ObjectHost` integrieren. |
+| 4 | **Ist A*-Pfadfindung für Zombies ein Blocker?** | **Option (a):** Ja – Zombies müssen um Hindernisse navigieren können. | Aktuelle gradlinige Bewegung bleibt an Wänden hängen. A* oder BFS aus `TerrainService` als Grundlage. |
+| 5 | **Sollen Vorschaubilder für Karten erstellt werden?** | **Option (a):** Ja – PNG-Vorschaubilder für `map0` und `map1` erstellen. | Verbessert die Benutzererfahrung in der Kartenauswahl. |
 
-**👉 Konkrete Lösungsskizze für Option (c) – Konfigurierbar via `MapLoadConfig`:**
+**👉 Konkrete Lösungsskizze für Frage 2 (Option c) – `respectLayerVisibility` in `MapLoadConfig`:**
 
 ```dart
 // In MapLoadConfig (lib/widgets/widget_map_loader.dart):
@@ -324,58 +327,45 @@ bool _isLayerVisible(TileLayer layer) {
 }
 ```
 
-**Vorteile dieser Lösung:**
-- **Rückwärtskompatibel**: `respectLayerVisibility = true` ist der Default – bestehende Karten verhalten sich wie erwartet (unsichtbare Layer werden nicht gezeichnet).
-- **Flexibel**: Wer das alte Verhalten braucht (alle Layer zeichnen), setzt `respectLayerVisibility = false`.
-- **Einfach**: Nur 1 neues Boolean-Feld + 1 Hilfsmethode. Keine Änderung an der Painter-Logik nötig.
-- **Dokumentierbar**: Der Mapper-Guide (`06_map_loader.md`) kann erklären, dass `visible` in Tiled standardmäßig respektiert wird, aber per Code-Konfiguration überschrieben werden kann.
-
-=> Klingt gut. Machen wir es so.
-| 3 | **Sollen Zombies Geländekosten berücksichtigen?** | `ObjectHost` hat kein `TerrainService`-Integration. Zombies ignorieren Wälder, Sümpfe, Ruinen. | (a) Ja – Zombies sollen wie Spieler-Einheiten Geländekosten haben. (b) Nein – Zombies ignorieren Gelände (einfachere KI, gameplay-technisch gewollt). (c) Nur Kollisions-Tiles, aber keine Bewegungskosten-Multiplikatoren. | => a
-| 4 | **Ist A*-Pfadfindung für Zombies ein Blocker?** | Aktuelle gradlinige Bewegung bleibt an Wänden hängen. | (a) Blocker – Zombies müssen um Hindernisse navigieren können. (b) Nice-to-have – aktuelle Karten haben kaum Hindernisse. (c) Reicht BFS aus `TerrainService`? | => a
-| 5 | **Sollen Vorschaubilder für Karten erstellt werden?** | Beide `maps.json`-Einträge haben `previewPath: null`. | (a) Ja – PNG-Vorschaubilder für `map0` und `map1` erstellen. (b) Nein – Icon reicht für den Prototypen. (c) Automatisch generieren (aufwändig). | => a
-
 ### 5.2 Technische Fragen
 
-| # | Frage | Kontext |
-|---|-------|---------|
-| 6 | **Wie priorisieren wir die fehlenden Tests?** | 4 Komponenten mit 🔴-Priorität (HexGrid, TmxParser, TmjParser, TerrainService) haben 0 Tests. Sollen alle 4 parallel geschrieben werden oder nacheinander? | => nacheinander
-| 7 | **Welche Test-Art für Laufzeittests?** | Widget-Tests, Golden Tests oder Integrationstests? Die Analyse empfiehlt Widget-Tests als ersten Schritt. | => Vorerst Widget und Intergrationstests
-| 8 | **Soll der LRU-Cache für Tileset-Bilder jetzt implementiert werden?** | Bei nur 2 Karten ist der Performance-Gewinn gering. Aber die Architektur wäre zukunftssicher. | => Ja
-| 9 | **Soll die Laufzeit-Validierung der Karte Fehler oder Warnungen produzieren?** | Fehlende `ground`-Layer: Soll die Karte gar nicht geladen werden (Fehler) oder nur eine Warnung im Log erscheinen? | => Fehler
-| 10 | **Sollen die 3 Dokumentations-Lücken jetzt gefixt werden?** | `01_class_diagram.md` (Zeile 204: `_HexUtils`), `04_cliffnotes.md` (Zeile 145: hardcodierter TMX-Pfad), `05_new_employee_guide.md` (Zeile 268: hardcodierter TMX-Pfad). | => Ja
+| # | Frage | Entscheidung | Begründung |
+|---|-------|-------------|------------|
+| 6 | **Wie priorisieren wir die fehlenden Tests?** | **Nacheinander:** HexGrid → TmxParser → TmjParser → TerrainService. | Fokussierte Arbeit pro Komponente. HexGrid zuerst, da es die Basis für alle anderen ist. |
+| 7 | **Welche Test-Art für Laufzeittests?** | **Widget-Tests + Integrationstests.** | Widget-Tests für isolierte UI-Komponenten (z. B. `WidgetMapLoader`), Integrationstests für den kompletten Spielfluss. Golden Tests vorerst zurückgestellt. |
+| 8 | **Soll der LRU-Cache für Tileset-Bilder jetzt implementiert werden?** | **Ja.** | Zukunftssicher. Auch bei 2 Karten vermeidet er wiederholte Ladevorgänge beim Kartenwechsel. |
+| 9 | **Soll die Laufzeit-Validierung der Karte Fehler oder Warnungen produzieren?** | **Fehler.** | Fehlende `ground`-Layer sind ein schwerwiegendes Problem – die Karte kann nicht korrekt dargestellt werden. Ein Fehler ist klarer als eine Warnung. |
+| 10 | **Sollen die 3 Dokumentations-Lücken jetzt gefixt werden?** | **Ja.** | Geringer Aufwand (1), klarer Nutzen (aktuelle Dokumentation). |
 
 ### 5.3 Refactoring-Fragen
 
-| # | Frage | Kontext |
-|---|-------|---------|
-| 11 | **Soll `ObjectHost._hexGrid!` durch eine defensive Prüfung ersetzt werden?** | Aktuell `HexGrid?` mit `!`-Assertion. Alternative: `late final HexGrid hexGrid` (wird einmal gesetzt, dann nicht-null). | => Ja
-| 12 | **Soll `ObjectHost.collisionSet` gekapselt werden?** | Aktuell `Set<int> collisionSet` (public mutable). Alternative: privates Feld mit Setter + Getter. | => Ja
-| 13 | **Soll `_tilesetLookup` in `_HexMapPainter` entfernt werden?** | Ist eine exakte Referenz-Kopie von `tilesetImages`. Alternative: direkt `tilesetImages` im Painter verwenden. | => Ja
-| 14 | **Soll `ObjectHost` die Pixel-Distanz durch Hex-Distanz ersetzen?** | 3 Stellen verwenden `(a.position - b.position).distance` statt `hexGrid.distance()`. Derzeit niedriges Risiko, da `rangeValue` meist 0 ist. | => Ja
+| # | Frage | Entscheidung | Begründung |
+|---|-------|-------------|------------|
+| 11 | **Soll `ObjectHost._hexGrid!` durch eine defensive Prüfung ersetzt werden?** | **Ja – `late final HexGrid hexGrid`.** | Wird einmal gesetzt, dann nicht-null. Kein `!`-Assertion mehr nötig. Null-Sicherheit zur Compile-Zeit. |
+| 12 | **Soll `ObjectHost.collisionSet` gekapselt werden?** | **Ja – privates Feld mit Setter + Getter.** | Verhindert unbeabsichtigte Mutationen von außen. |
+| 13 | **Soll `_tilesetLookup` in `_HexMapPainter` entfernt werden?** | **Ja – direkt `tilesetImages` verwenden.** | Entfernt unnötige Code-Komplexität und eine redundante Referenz. |
+| 14 | **Soll `ObjectHost` die Pixel-Distanz durch Hex-Distanz ersetzen?** | **Ja – `hexGrid.distance()` an allen 3 Stellen.** | Korrekte Hex-Distanz statt Pixel-Distanz. Vermeidet potenzielle Fehler bei `rangeValue > 0`. |
 
-### 5.4 Nächste Schritte – Entscheidungsmatrix
+### 5.4 Aktualisierte Entscheidungsmatrix
 
-Die folgende Matrix bewertet die offenen Punkte nach **Aufwand** (1–5, niedrig→hoch) und **Nutzen** (1–5, niedrig→hoch):
+Nach den getroffenen Entscheidungen ergibt sich folgende priorisierte Aufgabenliste:
 
-| Punkt | Aufwand | Nutzen | Empfehlung |
-|-------|---------|--------|------------|
-| Bug 1 fixen (TSX async) | 3 | 4 | 🔴 Nächster Sprint |
-| Bug 2 fixen (firstGid) | 1 | 3 | 🔴 Nächster Sprint |
-| Bug 3 fixen (catch _) | 1 | 4 | 🔴 Nächster Sprint |
-| HexGrid-Tests | 2 | 5 | 🔴 Nächster Sprint |
-| Parser-Tests | 3 | 5 | 🔴 Nächster Sprint |
-| TerrainService-Tests | 2 | 5 | 🔴 Nächster Sprint |
-| Pixel→Hex-Distanz (ObjectHost) | 2 | 3 | 🟡 Nächster Sprint |
-| `_hexGrid!` → `late final` | 1 | 3 | 🟡 Nächster Sprint |
-| `collisionSet` kapseln | 1 | 2 | 🟡 Nächster Sprint |
-| `_tilesetLookup` entfernen | 1 | 1 | 🟢 Bei Gelegenheit |
-| A*-Pfadfindung | 5 | 4 | 🟡 Nächster Sprint |
-| TerrainService in ObjectHost | 3 | 3 | 🟡 Nächster Sprint |
-| Vorschaubilder | 2 | 3 | 🟡 Nächster Sprint |
-| LRU-Cache | 3 | 1 | 🟢 Später |
-| Laufzeit-Validierung | 2 | 3 | 🟡 Nächster Sprint |
-| Widget-Tests | 4 | 4 | 🟡 Nächster Sprint |
-| Dokumentation-Lücken fixen | 1 | 2 | 🟢 Bei Gelegenheit |
-
-**Legende:** 🔴 = kritisch, 🟡 = wichtig, 🟢 = nice-to-have
+| Priorität | Punkt | Aufwand | Sprint |
+|-----------|-------|---------|--------|
+| 🔴 Kritisch | Bug 1 fixen (TSX async) | 3 | Nächster |
+| 🔴 Kritisch | Bug 2 fixen (firstGid) | 1 | Nächster |
+| 🔴 Kritisch | Bug 3 fixen (catch _) | 1 | Nächster |
+| 🔴 Kritisch | HexGrid-Tests schreiben | 2 | Nächster |
+| 🔴 Kritisch | Parser-Tests schreiben (TMX + TMJ) | 3 | Nächster |
+| 🔴 Kritisch | TerrainService-Tests schreiben | 2 | Nächster |
+| 🟡 Wichtig | Pixel→Hex-Distanz (ObjectHost) | 2 | Nächster |
+| 🟡 Wichtig | `_hexGrid!` → `late final` | 1 | Nächster |
+| 🟡 Wichtig | `collisionSet` kapseln | 1 | Nächster |
+| 🟡 Wichtig | A*-Pfadfindung für Zombies | 5 | Nächster |
+| 🟡 Wichtig | TerrainService in ObjectHost | 3 | Nächster |
+| 🟡 Wichtig | Vorschaubilder für Karten | 2 | Nächster |
+| 🟡 Wichtig | Laufzeit-Validierung der Karte | 2 | Nächster |
+| 🟡 Wichtig | Widget-Tests + Integrationstests | 4 | Nächster |
+| 🟡 Wichtig | LRU-Cache für Tileset-Bilder | 3 | Nächster |
+| 🟢 Nice-to-have | `_tilesetLookup` entfernen | 1 | Bei Gelegenheit |
+| 🟢 Nice-to-have | Dokumentations-Lücken fixen | 1 | Bei Gelegenheit |

@@ -265,7 +265,7 @@ Tests befinden sich in `lib/fuzzy_logic/test/` sowie in `test/fog_of_war_test.da
 ## 5. Fehlerbehebung (FAQ)
 
 ### "Ich sehe die Karte nicht"
-- Prüfe, ob `assets/maps/street_battle.tmx` existiert
+- Prüfe, ob die ausgewählte `.tmx`/`.tmj`-Datei in `assets/maps/` existiert (siehe `maps.json`)
 - Prüfe, ob der Tileset-Pfad korrekt ist
 - Prüfe die Flutter-Konsole auf Fehler
 

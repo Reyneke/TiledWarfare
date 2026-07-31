@@ -264,7 +264,8 @@ class FogOfWarService {
       if (qx + qy + qz != 0) continue;
 
       // Cube → Offset-Koordinaten (odd-r)
-      final offsetX = qx + (qy & ~1) ~/ 2;
+      // offset_x = cube_x + (cube_z - (cube_z&1)) / 2
+      final offsetX = qx + (qz & ~1) ~/ 2;
       final offsetY = qz;
 
       final hexKey = hexGrid.hexKey(offsetX, offsetY);
