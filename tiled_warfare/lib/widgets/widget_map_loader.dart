@@ -1,5 +1,5 @@
 import 'dart:collection';
-import 'dart:math' show max, min, sqrt;
+import 'dart:math' show max, min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -419,6 +419,16 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
     final mapPixelWidth = widget.hexGrid.mapPixelWidth;
     final mapPixelHeight = widget.hexGrid.mapPixelHeight;
 
+    // Viewport-Größe ermitteln (verhindert weißen Balken)
+    final viewportSize = MediaQuery.of(context).size;
+
+    // Das Child des InteractiveViewer muss mindestens so groß wie der
+    // Viewport sein, damit kein weißer Raum unter der Karte entsteht.
+    // Siehe StackOverflow: "InteractiveViewer white space below child"
+    // und "flutter InteractiveViewer child smaller than parent"
+    final childWidth = [mapPixelWidth.toDouble(), viewportSize.width].reduce(max);
+    final childHeight = [mapPixelHeight.toDouble(), viewportSize.height].reduce(max);
+
     // Keine boundaryMargin: Der InteractiveViewer darf nicht in weiße
     // Bereiche scrollen. Die Karte wird durch _centerMap() zentriert.
     // boundaryMargin = 0 verhindert den weißen Balken unten.
@@ -429,8 +439,8 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
         minScale: 0.25,
         maxScale: 4.0,
         child: SizedBox(
-          width: mapPixelWidth.toDouble(),
-          height: mapPixelHeight.toDouble(),
+          width: childWidth,
+          height: childHeight,
           child: CustomPaint(
             painter: _HexMapPainter(
               tilesetImages: _tilesetImages,

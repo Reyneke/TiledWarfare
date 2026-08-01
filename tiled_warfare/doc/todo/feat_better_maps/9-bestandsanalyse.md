@@ -677,6 +677,9 @@ final boundaryMargin = diagonal * 0.15;
 
 > `map1` ist bewusst als Mauer-Labyrinth konzipiert, um Wegfindung, Fog of War etc. zu testen. Die Collision- und Decoration-Layer bleiben unverändert.
 
+### Fix 5: Fix 3 (weißer Balken) ist weiterhin persistent
+Da, auch nach mehreren Fixversuchen das Provlem bei Fix 3 weiterhin besteht, ist mir die Frage gekommen, wie man weiter danach suchen könnte? Welche Tests gibt es, um die Quelle des Problems auszumachen? Haben wir solche bereits? Könnte man das Fenster vergrößer und verkleinern zur Laufzeit simulieren und den Code beobachten, um herauszufinden, warum der Fehler austritt? Was ist miteiner vollständigen Codeanalyse inklusive Abhängigkeiten oder eine Websuche, etwa auf Stackoverflow? Bitte ausarbeiten.
+
 ### Verifikation
 
 - **`flutter analyze`:** 0 Fehler, 0 Warnungen
