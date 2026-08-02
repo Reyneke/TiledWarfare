@@ -248,36 +248,22 @@ class _ScreenMainState extends State<ScreenMain>
     animationController.forward();
   }
 
-  /// Zentriert die Karte nach dem Laden.
+  /// Setzt die initiale Karten-Transformation.
   ///
-  /// Verwendet die [LayoutBuilder]-Constraints (_lastConstraints) für die
-  /// tatsächlich verfügbare Höhe. Dadurch entsteht kein weißer Balken unten,
-  /// auch wenn das Fenster verkleinert wird.
+  /// Der [InteractiveViewer] (mit `alignment: Alignment.topLeft`) steuert
+  /// das Panning/Zoomen eigenständig. Eine initiale Translation/Skalierung
+  /// würde mit dem InteractiveViewer konkurrieren und weiße Balken erzeugen.
+  /// Daher wird [Matrix4.identity] gesetzt – die Karte beginnt oben-links
+  /// im Viewport und wird vom InteractiveViewer korrekt dargestellt.
   void _centerMap() {
     final controller = _mapTransformationController;
-    final hexGrid = _hexGrid;
-    if (controller == null || hexGrid == null) return;
+    if (controller == null) return;
 
-    final screenSize = MediaQuery.of(context).size;
+    if (_hexGrid == null) return;
 
-    final availableHeight =
-        _lastConstraints?.maxHeight ?? screenSize.height - kToolbarHeight;
-
-    final mapCenterY = hexGrid.mapPixelHeight / 2;
-
-    final mapWidthPx = hexGrid.mapPixelWidth;
-    final mapHeightPx = hexGrid.mapPixelHeight;
-    final scaleX = screenSize.width / mapWidthPx;
-    final scaleY = availableHeight / mapHeightPx;
-    final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.25, 1.5);
-
-    final translateX = 0.0;
-    final translateY = availableHeight / 2 - mapCenterY * scale;
-
-    final matrix = Matrix4.identity()
-      ..setTranslationRaw(translateX, translateY, 0)
-      ..scale(scale);
-    controller.value = matrix;
+    // Keine manuelle Zentrierung – der InteractiveViewer übernimmt das.
+    // Matrix4.identity() = Karte bei (0,0) ohne Skalierung.
+    controller.value = Matrix4.identity();
   }
 
   @override
