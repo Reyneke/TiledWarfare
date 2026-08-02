@@ -78,6 +78,7 @@
 5. Nächste Runde
 
 ### Karten-Rendering (Viewport-Culling)
+
 - `_HexMapPainter` ist eine **private** `CustomPainter`-Klasse in `widget_map_loader.dart`
 - Zeichnet **nur sichtbare Tiles** (Viewport-Culling) → ~50 statt 10.000 Iterationen bei großen Karten
 - Nutzt `canvas.clipRect()` für GPU-beschleunigtes Clipping – Pixel außerhalb des Viewports werden Hardware-seitig verworfen
@@ -85,6 +86,8 @@
 - Drei Layer: `ground` → `decoration` → `decoration_upper` (konfigurierbar über `MapLoadConfig`)
 - `shouldRepaint` vergleicht Layer-Inhalte tief (Namen + Tile-Daten + Purpose), nicht nur Referenzen
 - `_drawLayer()` verwendet `mapData.layerByName()` (O(1) statt O(n) pro Frame)
+- **Hexagonales Clipping:** `_createHexPath()` + `canvas.clipPath()` – jedes quadratische Tileset-Tile wird auf Pointy-Top-Hexagon beschnitten
+- **InteractiveViewer:** `constrained: false` + `boundaryMargin: zero` – kein weißer Hintergrund unter der Karte
 
 ### Token-Typen
 | Token | Farbe | HP | Angriff | Bewegung | Sicht | Besonderheit |

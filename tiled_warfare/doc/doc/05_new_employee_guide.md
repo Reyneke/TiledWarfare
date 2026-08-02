@@ -308,14 +308,17 @@ Tests befinden sich in `lib/fuzzy_logic/test/` sowie in `test/fog_of_war_test.da
 | Ressource | Beschreibung |
 |-----------|-------------|
 | `doc/doc/00_project_overview.md` | Projektübersicht |
-| `doc/doc/01_class_diagram.md` | Klassendiagramm |
+| `doc/doc/01_class_diagram.md` | Klassendiagramm (inkl. aller neuen Klassen) |
 | `doc/doc/02_flow_diagrams.md` | Ablaufpläne |
 | `doc/doc/03_dependency_graph.md` | Abhängigkeitsdiagramm |
 | `doc/doc/04_cliffnotes.md` | Cliffnotes (kurz & knapp) |
+| `doc/doc/06_map_loader.md` | Mapper-Guide (Layer-System, Terrain, Tilesets) |
+| `doc/todo/feat_better_maps/2_robusteres_tmx_parsing.md` | TMX/TMJ-Parsing Details |
 | `doc/todo/feat_better_maps/3_terrain_system.md` | Detaillierte Terrain-System-Doku |
 | `doc/todo/feat_better_maps/4_Kartenauswahl.md` | Kartenauswahl: maps.json, MapMeta, MapRegistry |
 | `doc/todo/feat_better_maps/8_tile_layer_system.md` | Tile-Layer-System (LayerPurpose, O(1)-Lookups) |
 | `doc/rules/combat_rules.md` | Vollständige Kampfregeln |
+| `test/` | Tests: hex_grid, map_parser, terrain_service, fog_of_war, widget_map_loader, game_flow (93 Tests gesamt) |
 | `pubspec.yaml` | Abhängigkeiten und Metadaten |
 
 ---

@@ -14,6 +14,8 @@ screen_main.dart
   ├─ app_theme.dart
   ├─ widget_caretaker.dart
   ├─ widget_map_loader.dart
+  ├─ services/terrain_service.dart
+  ├─ services/map_exceptions.dart
   └─ utils/hex_grid.dart
 
 screen_restaurant.dart

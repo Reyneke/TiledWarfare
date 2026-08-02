@@ -66,8 +66,8 @@ doc/
 ## Kernkonzepte
 
 0. **Tile-Layer-System**: Die Karte unterstützt mehrere Tile-Layer (Boden, Dekoration, Kollision), die über den `LayerPurpose`-Enum typsicher klassifiziert werden. Layer-Lookups erfolgen in O(1) über einen vorberechneten Index. Siehe `doc/todo/feat_better_maps/8_tile_layer_system.md`.
-1. **Hex-Gitter**: Die Karte verwendet ein Pointy-Top-Hex-Gitter mit `staggeraxis="y"` und `staggerindex="odd"` (odd-r). Berechnungen erfolgen zentral über `HexGrid` (`lib/utils/hex_grid.dart`).
-2. **Karten-Parsing**: TMX (XML) und TMJ (JSON) werden über das `MapParser`-Interface mit `TmxParser` und `TmjParser` geparst. Das Datenmodell (`lib/models/map_data.dart`) kapselt alle Karteninformationen.
+1. **Hex-Gitter**: Die Karte verwendet ein Pointy-Top-Hex-Gitter mit `staggeraxis="y"` und `staggerindex="odd"` (odd-r). Berechnungen erfolgen zentral über `HexGrid` (`lib/utils/hex_grid.dart`) – inklusive A\*-Pfadfindung (`findPath()`).
+2. **Karten-Parsing**: TMX (XML) und TMJ (JSON) werden über das `MapParser`-Interface mit `TmxParser` und `TmjParser` geparst. Das Datenmodell (`lib/models/map_data.dart`) kapselt alle Karteninformationen. Unterstützt Polygon-Geometrie (`MapObject.points`), Base64/GZip, CSV, Multi-Layer und Objektgruppen mit typisierten Properties.
 3. **Gelände-System**: Die Karte unterstützt Geländetypen (normal, ruin, forest, water, wall, openGround, swamp) mit individuellen Bewegungskosten und Sichtbarkeitsregeln. Zentral verwaltet durch `TerrainService` (`lib/services/terrain_service.dart`).
 4. **Fog of War**: Jeder Token hat eine `fieldOfView`-Eigenschaft (Sichtweite in Hex-Feldern). Der `FogOfWarService` (`lib/services/fog_of_war.dart`) berechnet pro Runde die sichtbaren Felder unter Berücksichtigung von Line-of-Sight und Sichtbarrieren.
 5. **Runden-System**: Jede Runde beginnt mit einem Initiative-Wurf (W100). Der Gewinner beginnt.

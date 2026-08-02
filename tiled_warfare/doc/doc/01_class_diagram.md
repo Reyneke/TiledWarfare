@@ -40,52 +40,35 @@
 │  (Singleton – Spieler-Steuerung)                                │
 ├─────────────────────────────────────────────────────────────────┤
 │  + lineCookList: List<ObjectLineCook>                           │
-│  + spawnLineCook(): ObjectLineCook                              │
-│  + removeLineCook(cook): void                                   │
-│  + upgradeLineCook(cook, ...): void                             │
-│  + getAvailableActions(cook): List<CombatAction>                │
-│  + rollInitiative(): int                                        │
-│  + performAction(action, attacker, defender, distance): Combat  │
-│    Result                                                       │
+│  + spawnLineCook(), removeLineCook(cook), rollInitiative()      │
+│  + performAction(action, attacker, defender, distance)          │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ObjectHost                                │
 │  (Singleton – KI-Gegner-Steuerung)                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  + name: String                                                 │
-│  + enneagramProfile: EnneagramProfile                           │
-│  + personality: HostPersonality                                 │
+│  + hexGrid: HexGrid (late final)                                │
+│  + terrainService: TerrainService?                              │
 │  + doughDumpsterList: List<ObjectDoughDumpster>                 │
-│  + spawnDoughDumpster(): ObjectDoughDumpster                    │
-│  + moveAllZombiesTowardsLineCooks(targets): void                │
-│  + performAllZombieAttacks(player): List<String>                │
-│  + performAllDumpsterSpawning(): List<String>                   │
-│  + rollInitiative(): int                                        │
-│  + isDefeated: bool                                             │
+│  + collisionSet: Set<int> (gekapselt)                           │
+│  + moveAllZombiesTowardsTargets() (nutzt A*)                    │
+│  + performAllZombieAttacks(), performAllDumpsterSpawning()       │
+│  + rollInitiative(), isDefeated                                 │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                        WidgetCaretaker                           │
-│  (StatefulWidget – Token-Verwaltung & Spiel-Logik)              │
+│                        HexGrid (utils/)                          │
+│  (Zentrale Hex-Utility, odd-r Hex-Gitter)                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  + tileWidth, tileHeight: int                                   │
-│  + mapWidth, mapHeight: int                                     │
-│  + transformationController: TransformationController           │
-│  + spawnPoints: List<(name, x, y)>                              │
-├─ Intern ────────────────────────────────────────────────────────┤
-│  - _player: ObjectPlayer                                        │
-│  - _host: ObjectHost                                            │
-│  - _selectedToken: ObjectToken?                                 │
-│  - _pendingAction: CombatAction?                                │
-│  - _targetableEnemies: Set<ObjectToken>                         │
-│  - _currentRound: int                                           │
-│  - _isPlayerTurn, _isHostTurn, _isGameOver: bool                │
-│  - _hexToPixel(), _pixelToHex()                                 │
-│  - _handleTap(), _handleDragStart/Update/End()                  │
-│  - _enterTargetingMode(), _executeActionOnTarget()              │
-│  - _startNewRound(), _endPlayerTurn(), _executeHostTurn()       │
-│  - _buildTokenWidgets(), _buildStatusPanel()                    │
+│  + tileWidth, tileHeight, mapWidth, mapHeight                    │
+│  + hexToPixel(x, y) → Offset, pixelToHex(Offset) → (x, y)       │
+│  + hexKey(x, y) → int, hexFromKey(key) → (x, y)                 │
+│  + distance(x1,y1,x2,y2) → int (Cube-Distanz)                   │
+│  + neighborOffsets(y), isInBounds(x, y)                          │
+│  + findFreeHexNear(), buildOccupiedHexFields()                   │
+│  + findPath() → List<int> (A\*, mit Kollisionen + Geländekosten) │
+│  + offsetToCube(x, y) → (x, y, z) (static)                     │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -105,88 +88,73 @@
 │ - _parseTilesets()     │  │ - _parseTilesets()       │
 │ - _parseObjectGroups() │  │ - _parseObjectGroups()   │
 │ - _parseCsv()          │  │ - _parsePropertyValue()  │
-│ - _parseBase64()       │  │                          │
-│ - _parseTilesetElement()│ │                          │
-│ - _parsePropertyValue() │ │                          │
+│ - _parseBase64()       │  │ (Polygon-Parsing)        │
+│ - _parsePropertyValue()│  │                          │
+│ (Polygon-Parsing)      │  │                          │
 └────────────────────────┘  └──────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                        MapData                                   │
-│  (@immutable – Geparste Kartendaten)                             │
+│                        MapData (models/)                         │
+│  (@immutable)                                                    │
 ├─────────────────────────────────────────────────────────────────┤
 │  + width, height, tileWidth, tileHeight                          │
-│  + orientation: MapOrientation (enum)                            │
-│  + staggerAxis, staggerIndex                                     │
-│  + layers: List<TileLayer>                                       │
-│  + tilesets: List<TilesetInfo>                                   │
-│  + objectGroups: List<ObjectGroup>                               │
-│  + _layerIndexByName: Map<String, int> (late)                    │
-│  + layerByName(name) → TileLayer? (O(1))                        │
-│  + layerByPurpose(purpose) → TileLayer? (O(1))                  │
-│  + layerByPurposeWithMapping() → TileLayer?                     │
+│  + orientation, staggerAxis, staggerIndex                        │
+│  + layers: List<TileLayer>, tilesets: List<TilesetInfo>         │
+│  + objectGroups: List<ObjectGroup>, terrain: Map<int,TerrainType>│
+│  + layerByName(name) / layerByPurpose(purpose) → O(1)           │
 │  + computeCollisionTiles(hexGrid) → Set<int>                    │
-│  + copyWith()                                                    │
+│  + copyWith(), toJson(), fromJson()                              │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────┐
-│        TileLayer             │  │       TilesetInfo        │  │     ObjectGroup      │
-│  (@immutable)                │  │  (@immutable)            │  │  (@immutable)        │
+│       TileLayer              │  │      TilesetInfo         │  │    ObjectGroup       │
 ├──────────────────────────────┤  ├──────────────────────────┤  ├──────────────────────┤
-│  + name                      │  │  + firstGid              │  │  + name              │
-│  + width, height             │  │  + source                │  │  + objects: List<    │
-│  + opacity, visible          │  │  + name, tileWidth       │  │      MapObject>      │
-│  + tileData: Uint32List      │  │  + tileCount, columns    │  └──────────────────────┘
-│  + purpose: LayerPurpose     │  │  + imageSource           │
-│  + isEmpty: bool             │  │  + imageWidth/Height     │
-│  + tileAt(x, y) → int       │  └──────────────────────────┘
-│  + copyWith()                │
-│  + toListOfLists()           │
+│  + name, width, height       │  │  + firstGid, source      │  │  + name              │
+│  + opacity, visible          │  │  + name, tileWidth/Height│  │  + objects: List<    │
+│  + tileData: Uint32List      │  │  + tileCount, columns    │  │      MapObject>      │
+│  + purpose: LayerPurpose     │  │  + imageSource           │  └──────────────────────┘
+│  + isEmpty, tileAt(x,y)      │  └──────────────────────────┘
 └──────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        MapObject                                 │
+│  (@immutable)                                                    │
+├─────────────────────────────────────────────────────────────────┤
+│  + id, name, type, x, y, width, height, rotation, visible       │
+│  + properties: Map<String, dynamic>                              │
+│  + points: List<({double x, double y})>  (*Polygon-Geometrie)   │
+│  + absolutePoints: List<({double x, double y})>                  │
+└─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        WidgetMapLoader                           │
 │  (StatefulWidget – Karten-Ladung & -Rendering)                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  + hexGrid: HexGrid                                              │
-│  + onMapLoaded: Callback                                        │
-│  + onTransformationControllerCreated: Callback                  │
-│  + onSpawnPointsParsed: Callback                                │
-│  + config: MapLoadConfig                                        │
+│  + hexGrid: HexGrid, mapPath: String                            │
+│  + onMapLoaded, onTransformationControllerCreated               │
+│  + onSpawnPointsParsed, onTerrainParsed, config: MapLoadConfig  │
 ├─ Intern ────────────────────────────────────────────────────────┤
-│  - _mapData: MapData?                                           │
-│  - _tilesetImages: Map<int, (Image, columns)>                   │
-│  - _loadMap(): Future<void>                                     │
-│  - _loadTilesetImages(MapData, basePath): Future<void>          │
-│  - _extractSpawnPoints(MapData): List<(name, x, y)>             │
-│  - _HexMapPainter (CustomPainter) – multi-tileset, multi-layer  │
+│  - _tilesetImages: LRU-Cache (LinkedHashMap, max 5)             │
+│  - _mapData, _tileWidth/Height, _transformationController       │
+│  - _loadMap(), _loadTilesetImages(), _resolveExternalTileset    │
+│  - _HexMapPainter (CustomPainter): Multi-Layer, Multi-Tileset   │
+│    Viewport-Culling, hexagonales Clipping (_createHexPath)      │
+│  - Laufzeit-Validierung (ground-Layer, Spawn-Gruppe)            │
+│  - InteractiveViewer (constrained: false, boundaryMargin: zero) │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        ScreenMain                                │
 │  (StatefulWidget – Hauptbildschirm)                             │
 ├─────────────────────────────────────────────────────────────────┤
-│  - _tileWidth, _tileHeight: int                                 │
-│  - _mapWidth, _mapHeight: int                                   │
-│  - _mapTransformationController: TransformationController?      │
-│  - _spawnPoints: List<(name, x, y)>                             │
-│  - _onMapLoaded(), _onTransformationControllerCreated()         │
-│  - _onSpawnPointsParsed()                                       │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                        MainApp                                   │
-│  (StatefulWidget – Root-Widget)                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  + build(): MaterialApp mit Theme & ScreenMain                  │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                        AppTheme                                  │
-│  (Abstract – Theme-Konfiguration)                               │
-├─────────────────────────────────────────────────────────────────┤
-│  + lightTheme, darkTheme: ThemeData                             │
-│  + baseTextTheme: TextTheme (Google Fonts)                      │
-│  + themeModeNotifier: ValueNotifier<ThemeMode>                  │
+│  + mapPath: String                                              │
+│  - _hexGrid, _mapTransformationController                       │
+│  - _lastConstraints: BoxConstraints (LayoutBuilder)             │
+│  - _spawnPoints, _collisionSet                                  │
+│  - _centerMap() → Matrix4.identity()                            │
+│  - didChangeMetrics() → setState + recenter                     │
+│  - _onMapLoaded(), _onTerrainParsed()                           │
+│  - _onSpawnPointsParsed(), _onTransformationControllerCreated()  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -194,24 +162,30 @@
 
 | Klasse | Zweck |
 |--------|-------|
-| `CombatAction` | Enum: `melee`, `ranged` |
-| `CombatResult` | Datenklasse für Kampfergebnisse (hit, damage, ...) |
+| `CombatAction` | Enum: `melee`, `ranged`, `focusFire` |
+| `CombatResult` | Datenklasse für Kampfergebnisse |
 | `EnneagramProfile` | 12 Enneagramm-Persönlichkeitsprofile |
 | `HostPersonality` | Fuzzy-Logik-basierte Persönlichkeitsbewertung |
 | `Aggressiveness` | Fuzzy-Variable (0–100) |
 | `RiskTolerance` | Fuzzy-Variable (0–100) |
 | `TacticalComplexity` | Fuzzy-Variable (0–100) |
-| `HexGrid` | Zentrale Hex-Gitter-Utility (odd-r) in `lib/utils/hex_grid.dart` |
-| `_BfsVisitedSet` | Optimiertes Set für BFS-Besuchsmarkierungen |
-| `_TokenRenderInfo` | Kapselt Token + Metadaten für Darstellung |
-| `_TokenWidget` | Widget zur Darstellung eines Tokens auf der Karte |
-| `_HexMapPainter` | CustomPainter für das Zeichnen der Hex-Karte (multi-layer, multi-tileset, Viewport-Culling) |
+| `HexGrid` | Zentrale Hex-Gitter-Utility (odd-r), inkl. A\*-Pfadfindung |
+| `findPath()` | A\*-Pfadfindung in HexGrid (Kollisions-Tiles + Geländekosten) |
+| `hexFromKey()` | Key → (x, y) Rückkonvertierung für Pfad-Ergebnisse |
+| `findTileset()` | Top-Level-Funktion: firstGid-Mapping für Multi-Tileset |
 | `MapData` | Datenmodell für geparste Karten (TMX/TMJ) |
-| `MapMeta` | Metadaten einer Karte aus maps.json (title, previewPath, tmxPath) |
+| `MapMeta` | Metadaten einer Karte aus maps.json |
 | `MapRegistry` | Lädt maps.json, stellt `List<MapMeta>` bereit |
-| `TmxParser` | Parser für TMX (XML)-Karten |
-| `TmjParser` | Parser für TMJ (JSON)-Karten |
 | `MapParser` | Interface + Factory für Karten-Parser |
-| `MapLoadConfig` | Konfiguration für Layer-/Gruppennamen beim Laden |
+| `TmxParser` | Parser für TMX (XML) inkl. Polygon-Parsing |
+| `TmjParser` | Parser für TMJ (JSON) inkl. Polygon-Parsing |
+| `MapLoadConfig` | Konfiguration für Layer-Namen, Spawn-Gruppe, `respectLayerVisibility` |
 | `MapOrientation` | Enum: orthogonal, isometric, hexagonal, staggered |
-| **`LayerPurpose`** | **Neu**: Enum für typsichere Layer-Klassifizierung (ground, collision, decorative, decorativeUpper, terrain, unknown) |
+| `LayerPurpose` | Enum: ground, collision, decorative, decorativeUpper, terrain, unknown |
+| `TerrainType` | Enum: normal, ruin, forest, water, wall, openGround, swamp (mit Plural-Varianten) |
+| `TerrainConfig` | Bewegungskosten-Multiplikator, blocksVision, impassable |
+| `TerrainService` | Geländekonfiguration, BFS-Bewegung, Passierbarkeit, `parseTerrain()` |
+| `FogOfWarService` | Sichtbarkeit (visible + revealed), LoS-Cube-DDA |
+| `_HexMapPainter` | CustomPainter für Hex-Karte (Multi-Layer, Multi-Tileset, Viewport-Culling, hexagonales Clipping) |
+| `_createHexPath()` | Statische Methode: Hexagonaler Clip-Pfad für Pointy-Top-Tiles |
+| `_TokenWidget` | Widget zur Darstellung eines Tokens auf der Karte |
