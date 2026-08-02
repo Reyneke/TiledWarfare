@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/map_exceptions.dart';
 import 'package:tiled_warfare/services/map_parser.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
@@ -41,6 +42,12 @@ class WidgetMapLoader extends StatefulWidget {
   final String mapPath;
   final MapLoadConfig config;
 
+  /// Optionaler Fog-of-War-Service für die Sichtbarkeits-Darstellung.
+  ///
+  /// Wenn gesetzt, werden nicht sichtbare Hex-Felder abgedunkelt und
+  /// nicht aufgedeckte Felder schwarz gezeichnet.
+  final FogOfWarService? fogOfWarService;
+
   const WidgetMapLoader({
     super.key,
     required this.hexGrid,
@@ -50,6 +57,7 @@ class WidgetMapLoader extends StatefulWidget {
     this.onTerrainParsed,
     this.mapPath = 'assets/maps/street_battle.tmx',
     this.config = const MapLoadConfig(),
+    this.fogOfWarService,
   });
 
   @override
@@ -73,14 +81,23 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   void initState() {
     super.initState();
     widget.onTransformationControllerCreated?.call(_transformationController);
+    // Auf Fog-of-War-Änderungen lauschen, um die Karte neu zu zeichnen
+    widget.fogOfWarService?.addListener(_onFogOfWarChanged);
     _loadMap();
   }
 
   @override
   void dispose() {
+    widget.fogOfWarService?.removeListener(_onFogOfWarChanged);
     _transformationController.dispose();
     _disposeTilesetImages();
     super.dispose();
+  }
+
+  /// Wird aufgerufen, wenn sich die Sichtbarkeit (Fog of War) geändert hat.
+  /// Löst ein Neuzeichnen der Karte aus.
+  void _onFogOfWarChanged() {
+    if (mounted) setState(() {});
   }
 
   void _disposeTilesetImages() {
@@ -193,6 +210,7 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
               tileHeight: _tileHeight,
               hexGrid: widget.hexGrid,
               config: widget.config,
+              fogOfWarService: widget.fogOfWarService,
             ),
           ),
         ),
@@ -234,6 +252,7 @@ class _HexMapPainter extends CustomPainter {
   final int tileWidth, tileHeight;
   final HexGrid hexGrid;
   final MapLoadConfig config;
+  final FogOfWarService? fogOfWarService;
   final Map<LayerPurpose, String> _effectiveNames;
   final List<List<Offset>> _pixelPositions;
 
@@ -241,6 +260,7 @@ class _HexMapPainter extends CustomPainter {
     required this.tilesetImages, required this.tilesets, required this.mapData,
     required this.tileWidth, required this.tileHeight,
     required this.hexGrid, required this.config,
+    this.fogOfWarService,
   }) : _effectiveNames = config.effectiveLayerNames,
        _pixelPositions = List.generate(mapData.height, (y) => List.generate(mapData.width, (x) => hexGrid.hexToPixel(x: x, y: y)));
 
@@ -260,7 +280,51 @@ class _HexMapPainter extends CustomPainter {
     try {
       final viewportTiles = _computeVisibleTileRange(visibleRect);
       for (final layer in _getVisibleLayers()) _drawLayer(canvas, viewportTiles, layer);
+      // Fog of War Overlay über die Karte zeichnen
+      if (fogOfWarService != null) {
+        _drawFogOfWar(canvas, viewportTiles);
+      }
     } finally { canvas.restore(); }
+  }
+
+  /// Zeichnet den Fog of War als Overlay über die Karte.
+  ///
+  /// - Sichtbare Felder: kein Overlay (normal gezeichnet)
+  /// - Aufgedeckte, aber nicht sichtbare Felder: dunkles Overlay (50% schwarz)
+  /// - Weder sichtbar noch aufgedeckt: schwarzes Overlay (komplett verdeckt)
+  void _drawFogOfWar(Canvas canvas, _VisibleTileRange v) {
+    final fog = fogOfWarService!;
+    final revealedPaint = Paint()..color = const Color(0x80000000); // 50% schwarz
+    final hiddenPaint = Paint()..color = const Color(0xFF000000);   // komplett schwarz
+
+    for (int y = v.startY; y < v.endY; y++) {
+      for (int x = v.startX; x < v.endX; x++) {
+        final key = hexGrid.hexKey(x, y);
+        if (fog.isVisible(key)) continue; // sichtbar → kein Overlay
+
+        final pixel = _pixelPositions[y][x];
+        final hexPath = _createHexPath(
+          centerX: pixel.dx + tileWidth / 2,
+          centerY: pixel.dy + tileHeight / 2,
+          size: tileWidth ~/ 2,
+        );
+
+        canvas.save();
+        canvas.clipPath(hexPath);
+        if (fog.isRevealed(key)) {
+          canvas.drawRect(
+            Rect.fromLTWH(pixel.dx, pixel.dy, tileWidth.toDouble(), tileHeight.toDouble()),
+            revealedPaint,
+          );
+        } else {
+          canvas.drawRect(
+            Rect.fromLTWH(pixel.dx, pixel.dy, tileWidth.toDouble(), tileHeight.toDouble()),
+            hiddenPaint,
+          );
+        }
+        canvas.restore();
+      }
+    }
   }
 
   _VisibleTileRange _computeVisibleTileRange(Rect visibleRect) {
@@ -315,7 +379,15 @@ class _HexMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HexMapPainter old) {
-    if (identical(old.tilesetImages, tilesetImages) && identical(old.mapData, mapData) && identical(old.hexGrid, hexGrid) && identical(old.config, config)) return false;
+    if (identical(old.tilesetImages, tilesetImages) && identical(old.mapData, mapData) && identical(old.hexGrid, hexGrid) && identical(old.config, config) && identical(old.fogOfWarService, fogOfWarService)) {
+      // Fog of War: Neu zeichnen, wenn sich die Sichtbarkeit geändert hat
+      if (fogOfWarService != null && old.fogOfWarService != null) {
+        if (fogOfWarService!.visibilityVersion != old.fogOfWarService!.visibilityVersion) {
+          return true;
+        }
+      }
+      return false;
+    }
     if (old.tilesetImages.length != tilesetImages.length) return true;
     if (old.mapData.layers.length != mapData.layers.length) return true;
     for (int i = 0; i < mapData.layers.length; i++) {

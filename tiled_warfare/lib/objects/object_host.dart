@@ -8,6 +8,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:random_name_generator/random_name_generator.dart';
@@ -184,6 +185,17 @@ class ObjectHost {
     terrainService = service;
   }
 
+  /// Optionaler FogOfWarService für Sichtbarkeits-basierte KI.
+  ///
+  /// Wenn gesetzt, greifen Zombies nur sichtbare Ziele an und bewegen
+  /// sich nur in aufgedeckte Gebiete.
+  FogOfWarService? fogOfWarService;
+
+  /// Setzt den FogOfWarService für Sichtbarkeits-basierte KI.
+  void setFogOfWarService(FogOfWarService service) {
+    fogOfWarService = service;
+  }
+
   /// Zufälliger Name für den Host.
   String name = RandomNames(Zone.us).fullName();
 
@@ -263,12 +275,35 @@ class ObjectHost {
   /// Simuliert die gradlinige Bewegung der Dough Zombies auf Objekte vom
   /// Typ [ObjectLineCook]. Diese Methode sollte pro Spielzug aufgerufen
   /// werden.
+  ///
+  /// Wenn ein [fogOfWarService] gesetzt ist, werden nur Ziele berücksichtigt,
+  /// die auf sichtbaren oder aufgedeckten Feldern stehen (Fog-of-War-KI).
   void moveAllZombiesTowardsTargets(List<ObjectApprentice> targets) {
+    // Fog-of-War: Nur sichtbare/aufgedeckte Ziele berücksichtigen
+    final visibleTargets = _filterVisibleTargets(targets);
+
     for (final dumpster in doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
-        _moveZombieTowardsTarget(zombie, targets);
+        _moveZombieTowardsTarget(zombie, visibleTargets);
       }
     }
+  }
+
+  /// Filtert die Ziel-Liste basierend auf dem Fog of War.
+  ///
+  /// Wenn kein [fogOfWarService] gesetzt ist, werden alle Ziele zurückgegeben.
+  /// Sonst werden nur Ziele auf sichtbaren oder aufgedeckten Feldern
+  /// zurückgegeben.
+  List<ObjectApprentice> _filterVisibleTargets(List<ObjectApprentice> targets) {
+    final fog = fogOfWarService;
+    if (fog == null) return targets;
+
+    return targets.where((target) {
+      if (target.woundValue <= 0) return false;
+      final hex = hexGrid.pixelToHex(target.position);
+      final key = hexGrid.hexKey(hex.x, hex.y);
+      return fog.isVisible(key) || fog.isRevealed(key);
+    }).toList();
   }
 
   /// Rechnet Pixel-Koordinaten in die nächstgelegenen Hex-Gitter-Koordinaten
@@ -551,6 +586,9 @@ class ObjectHost {
   List<String> performAllZombieAttacks(ObjectPlayer player) {
     final logMessages = <String>[];
 
+    // Fog-of-War: Nur sichtbare Ziele angreifen
+    final visibleTargets = _filterVisibleTargets(player.unitList);
+
     // Puffer für neue Dumpster, die während der Kampfiteration erstellt werden,
     // um ConcurrentModificationError zu vermeiden.
     final newDumpsters = <ObjectDoughDumpster>[];
@@ -564,7 +602,7 @@ class ObjectHost {
       for (final zombie in dumpster.zombieList) {
         // Kopie der Liste erstellen, da wir während der Iteration ggf.
         // Einträge entfernen müssen
-      for (final cook in player.unitList.toList()) {
+      for (final cook in visibleTargets.toList()) {
           // Hex-Entfernung zwischen Zombie und Ziel ermitteln
           final zombieHex = _pixelToHex(zombie.position);
           final cookHex = _pixelToHex(cook.position);

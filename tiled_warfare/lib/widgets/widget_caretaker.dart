@@ -9,6 +9,8 @@ import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/fog_of_war.dart';
+import 'package:tiled_warfare/models/map_data.dart';
 
 import 'package:tiled_warfare/utils/hex_grid.dart';
 
@@ -61,6 +63,15 @@ class WidgetCaretaker extends StatefulWidget {
   /// Enthält alle Hex-Keys, die durch den "collision"-Layer blockiert sind.
   final Set<int> collisionSet;
 
+  /// Optionaler FogOfWarService für Sichtbarkeits-Berechnung.
+  ///
+  /// Wenn gesetzt, wird die Sichtbarkeit zu Beginn jeder Runde neu
+  /// berechnet und an den Karten-Renderer weitergegeben.
+  final FogOfWarService? fogOfWarService;
+
+  /// Gelände-Map für die Fog-of-War-Berechnung (hexKey → TerrainType).
+  final Map<int, TerrainType>? terrainMap;
+
   const WidgetCaretaker({
     super.key,
     required this.hexGrid,
@@ -69,6 +80,8 @@ class WidgetCaretaker extends StatefulWidget {
     this.onGameOver,
     this.onRequestCameraFocus,
     this.collisionSet = const {},
+    this.fogOfWarService,
+    this.terrainMap,
   });
 
   @override
@@ -142,6 +155,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Der nächste Snackbar-Schlüssel, um das Stapeln von Snackbars zu vermeiden.
   int _snackBarKey = 0;
 
+  /// Ghost-Tokens: Gegner auf aufgedeckten, aber nicht sichtbaren Feldern.
+  /// Wird nach jeder Sichtbarkeits-Berechnung aktualisiert.
+  final Map<ObjectToken, Offset> _ghostTokenPositions = {};
+
   /// Animation-Controller für sanfte Token-Bewegungen (Host Tokens gleiten).
   AnimationController? _tokenAnimationController;
 
@@ -157,6 +174,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // um die Token-Positionen zu aktualisieren
     widget.transformationController.addListener(_onTransformationChanged);
 
+    // Auf Fog-of-War-Änderungen lauschen, um Ghost-Positionen zu aktualisieren
+    widget.fogOfWarService?.addListener(_onFogOfWarChanged);
+
     // Animation-Controller für Token-Animationen (Host gleiten)
     _tokenAnimationController = AnimationController(
       vsync: this,
@@ -171,9 +191,18 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
 
   @override
   void dispose() {
+    widget.fogOfWarService?.removeListener(_onFogOfWarChanged);
     widget.transformationController.removeListener(_onTransformationChanged);
     _tokenAnimationController?.dispose();
     super.dispose();
+  }
+
+  /// Wird aufgerufen, wenn sich die Sichtbarkeit (Fog of War) geändert hat.
+  /// Aktualisiert die Ghost-Positionen und löst ein Neuzeichnen aus.
+  void _onFogOfWarChanged() {
+    if (!mounted) return;
+    _invalidateCache();
+    setState(() {});
   }
 
   /// Animiert alle Tokens mit gesetztem targetPosition über die
@@ -409,6 +438,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // Bewegungspunkte und hasActed-Flag aller Einheiten zurücksetzen
     _resetRoundState();
 
+    // Fog of War: Sichtbarkeit zu Beginn jeder Runde neu berechnen
+    _computeFogOfWar();
+
     // Initiativwürfe für beide Seiten
     final playerInitiative = _player.rollInitiative();
     final hostInitiative = _host.rollInitiative();
@@ -449,6 +481,37 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     }
 
     setState(() {});
+  }
+
+  /// Berechnet die Sichtbarkeit für die aktuelle Runde neu (Fog of War).
+  ///
+  /// Verwendet den [fogOfWarService] und die aktuellen Spieler-Einheiten.
+  /// Aktualisiert außerdem die Ghost-Positionen für Gegner auf aufgedeckten,
+  /// aber nicht sichtbaren Feldern.
+  void _computeFogOfWar() {
+    final fog = widget.fogOfWarService;
+    if (fog == null) return;
+
+    fog.computeVisibility(
+      friendlyTokens: _player.unitList,
+      terrainMap: widget.terrainMap ?? {},
+      terrainConfigs: TerrainConfig.defaults,
+    );
+
+    // Ghost-Positionen aktualisieren: Gegner auf aufgedeckten Feldern
+    _ghostTokenPositions.clear();
+    final allEnemies = <ObjectToken>[];
+    for (final dumpster in _host.doughDumpsterList) {
+      allEnemies.add(dumpster);
+      allEnemies.addAll(dumpster.zombieList);
+    }
+    for (final enemy in fog.getRevealedEnemies(allEnemies)) {
+      final enemyHex = widget.hexGrid.pixelToHex(enemy.position);
+      if (fog.isVisible(widget.hexGrid.hexKey(enemyHex.x, enemyHex.y))) {
+        continue; // Sichtbare Gegner werden normal gezeichnet
+      }
+      _ghostTokenPositions[enemy] = enemy.position;
+    }
   }
 
   /// Beendet den Zug des Spielers und übergibt an den Host.
@@ -1033,6 +1096,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       _dragStartHex = null;
 
       _invalidateCache();
+
+      // Fog of War: Sichtbarkeit nach der Bewegung aktualisieren,
+      // damit der Spieler die neue Sichtweite sofort sieht
+      _computeFogOfWar();
 
       // Nach Bewegung prüfen, ob alle Tokens fertig sind
       _checkAutoEndPlayerTurn();
@@ -1984,6 +2051,38 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     for (final renderInfo in _allTokens) {
       final token = renderInfo.token;
       if (token.woundValue <= 0) continue;
+
+      // Fog of War: Gegner auf nicht sichtbaren Feldern als Ghost zeichnen
+      final fog = widget.fogOfWarService;
+      if (fog != null && !renderInfo.isPlayerUnit) {
+        final hex = hexGrid.pixelToHex(token.position);
+        final key = hexGrid.hexKey(hex.x, hex.y);
+        if (!fog.isVisible(key)) {
+          if (fog.isRevealed(key)) {
+            // Ghost-Darstellung: Aufgedecktes Feld, aber nicht sichtbar
+            final ghostPos = _ghostTokenPositions[token];
+            if (ghostPos != null && visibleRect.contains(ghostPos)) {
+              widgets.add(
+                Positioned(
+                  left: ghostPos.dx - (hexGrid.tileWidth * 0.7 / 2),
+                  top: ghostPos.dy - (hexGrid.tileHeight * 0.7 / 2),
+                  child: Opacity(
+                    opacity: 0.4,
+                    child: _TokenWidget(
+                      token: token,
+                      isSelected: false,
+                      isDragging: false,
+                      tileWidth: hexGrid.tileWidth,
+                      tileHeight: hexGrid.tileHeight,
+                    ),
+                  ),
+                ),
+              );
+            }
+          }
+          continue; // Nicht sichtbar → nicht normal zeichnen
+        }
+      }
 
       Offset displayPosition = token.position;
       if (_isDragging && _draggedToken == token) {

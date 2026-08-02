@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
+import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
@@ -38,6 +39,12 @@ class _ScreenMainState extends State<ScreenMain>
   bool _mapDataReady = false;
   AnimationController? _focusAnimationController;
   Size? _lastScreenSize;
+
+  /// Fog-of-War-Service für Sichtbarkeits-Berechnung und -Darstellung.
+  FogOfWarService? _fogOfWarService;
+
+  /// Gelände-Map für die Fog-of-War-Berechnung (hexKey → TerrainType).
+  Map<int, TerrainType>? _terrainMap;
 
   /// Letzte Layout-Constraints des [LayoutBuilder] (verfügbarer Platz für
   /// die Karte). Wird für die Zentrierung verwendet, damit der weiße Balken
@@ -104,6 +111,10 @@ class _ScreenMainState extends State<ScreenMain>
 
     ObjectHost().hexGrid = hexGrid;
 
+    // Fog of War Service initialisieren
+    _fogOfWarService = FogOfWarService(hexGrid: hexGrid);
+    ObjectHost().setFogOfWarService(_fogOfWarService!);
+
     setState(() {
       _hexGrid = hexGrid;
       _mapDataReady = true;
@@ -124,6 +135,7 @@ class _ScreenMainState extends State<ScreenMain>
 
   void _onTerrainParsed(Map<int, TerrainType> terrainMap, Set<int> collisionSet) {
     ObjectHost().collisionSet = collisionSet;
+    _terrainMap = terrainMap;
 
     if (_hexGrid != null) {
       ObjectHost().setTerrainService(TerrainService(
@@ -323,6 +335,7 @@ class _ScreenMainState extends State<ScreenMain>
                         _onTransformationControllerCreated,
                     onSpawnPointsParsed: _onSpawnPointsParsed,
                     onTerrainParsed: _onTerrainParsed,
+                    fogOfWarService: _fogOfWarService,
                   ),
                 ),
                 if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
@@ -334,6 +347,8 @@ class _ScreenMainState extends State<ScreenMain>
                       collisionSet: _collisionSet,
                       onGameOver: _onGameOver,
                       onRequestCameraFocus: _focusCameraOn,
+                      fogOfWarService: _fogOfWarService,
+                      terrainMap: _terrainMap,
                     ),
                   ),
               ],

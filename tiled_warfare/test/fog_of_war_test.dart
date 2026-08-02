@@ -215,6 +215,79 @@ void main() {
     });
   });
 
+  group('FogOfWarService — Performance', () {
+    test('computeVisibility on 30x30 map with 20 tokens completes quickly', () {
+      final largeGrid = HexGrid(tileWidth: 32, tileHeight: 32, mapWidth: 30, mapHeight: 30);
+      final largeFog = FogOfWarService(hexGrid: largeGrid);
+      final tokens = <ObjectToken>[
+        for (int i = 0; i < 20; i++)
+          _makeToken(x: i % 5 + 5, y: i ~/ 5 + 5, fieldOfView: 5),
+      ];
+
+      final stopwatch = Stopwatch()..start();
+      largeFog.computeVisibility(
+        friendlyTokens: tokens,
+        terrainMap: emptyTerrain,
+        terrainConfigs: TerrainConfig.defaults,
+      );
+      stopwatch.stop();
+
+      // Sichtbarkeit muss berechnet worden sein
+      expect(largeFog.visibleHexes.isNotEmpty, true);
+      // Sollte in unter 1 Sekunde fertig sein (sehr großzügig)
+      expect(stopwatch.elapsedMilliseconds, lessThan(1000));
+    });
+
+    test('fieldOfView is clamped to maxFieldOfView', () {
+      // 100x100 Karte – selbst mit maxFieldOfView=50 wird nicht alles sichtbar
+      final largeGrid = HexGrid(tileWidth: 32, tileHeight: 32, mapWidth: 100, mapHeight: 100);
+      final largeFog = FogOfWarService(hexGrid: largeGrid);
+      final token = _makeToken(x: 50, y: 50, fieldOfView: 1000);
+      token.position = largeGrid.hexToPixel(x: 50, y: 50);
+
+      largeFog.computeVisibility(
+        friendlyTokens: [token],
+        terrainMap: emptyTerrain,
+        terrainConfigs: TerrainConfig.defaults,
+      );
+
+      // Bei Sichtweite 1000, geclampft auf 50, dürfen nicht alle 10000 Felder
+      // sichtbar sein – nur der Radius-50-Bereich (~7801 Hexagone)
+      expect(largeFog.visibleHexes.length, lessThan(10000));
+      // Aber mehr als ein einfacher Radius-3-Bereich (Standard-Sichtweite)
+      expect(largeFog.visibleHexes.length, greaterThan(100));
+    });
+
+    test('getRevealedEnemies returns enemies on revealed hexes', () {
+      final friendly = _makeToken(x: 5, y: 5, fieldOfView: 3);
+      final enemy = _makeToken(x: 6, y: 6, fieldOfView: 0);
+
+      fog.computeVisibility(
+        friendlyTokens: [friendly],
+        terrainMap: emptyTerrain,
+        terrainConfigs: TerrainConfig.defaults,
+      );
+
+      final revealedEnemies = fog.getRevealedEnemies([enemy]);
+      expect(revealedEnemies.length, 1);
+      expect(revealedEnemies.first, enemy);
+    });
+
+    test('getRevealedEnemies returns empty for enemies on hidden hexes', () {
+      final friendly = _makeToken(x: 0, y: 0, fieldOfView: 1);
+      final enemy = _makeToken(x: 9, y: 9, fieldOfView: 0);
+
+      fog.computeVisibility(
+        friendlyTokens: [friendly],
+        terrainMap: emptyTerrain,
+        terrainConfigs: TerrainConfig.defaults,
+      );
+
+      final revealedEnemies = fog.getRevealedEnemies([enemy]);
+      expect(revealedEnemies.isEmpty, true);
+    });
+  });
+
   group('FogOfWarService — Edge Cases', () {
     test('token at map edge does not cause out-of-bounds errors', () {
       final token = _makeToken(x: 0, y: 0, fieldOfView: 5);

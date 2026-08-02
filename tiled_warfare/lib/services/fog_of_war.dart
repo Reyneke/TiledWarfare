@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
@@ -28,21 +30,40 @@ import 'package:tiled_warfare/utils/hex_grid.dart';
 /// else if (fog.isRevealed(hexKey)) { /* zeichne dunkel */ }
 /// else { /* zeichne schwarz */ }
 /// ```
-class FogOfWarService {
+class FogOfWarService extends ChangeNotifier {
+  /// Maximale Sichtweite in Hex-Feldern, um die BFS-Erkundung zu begrenzen.
+  ///
+  /// Verhindert, dass ein sehr großer [ObjectToken.fieldOfView] die gesamte
+  /// Karte erkundet und die Performance beeinträchtigt. Der Wert ist bewusst
+  /// großzügig gewählt (größer als jede realistische Karten-Diagonale),
+  /// sodass er im Normalfall nie erreicht wird.
+  static const int maxFieldOfView = 50;
+
   /// Hex-Utility für alle Gitter-Berechnungen.
   final HexGrid hexGrid;
 
   /// Aktuell sichtbare Hex-Felder (wird pro Runde neu berechnet).
-  @visibleForTesting
-  final Set<int> visibleHexes = {};
+  final Set<int> _visibleHexes = {};
 
   /// Dauerhaft aufgedeckte Hex-Felder (kumulativ über Runden).
-  @visibleForTesting
-  final Set<int> revealedHexes = {};
+  final Set<int> _revealedHexes = {};
 
   /// Cache für LoS-Ergebnisse innerhalb einer Berechnung.
   /// Wird bei jedem [computeVisibility]-Aufruf zurückgesetzt.
   final Map<(int, int, int, int), bool> _losCache = {};
+
+  /// Versionszähler, der bei jeder Sichtbarkeits-Berechnung erhöht wird.
+  ///
+  /// Wird vom Karten-Renderer verwendet, um zu erkennen, ob sich die
+  /// Sichtbarkeit geändert hat und ein Neuzeichnen erforderlich ist.
+  int _visibilityVersion = 0;
+
+  /// Aktuelle Version der Sichtbarkeits-Berechnung.
+  ///
+  /// Erhöht sich bei jedem [computeVisibility]-Aufruf. Der Karten-Renderer
+  /// kann diesen Wert in `shouldRepaint()` prüfen, um festzustellen, ob
+  /// sich die Sichtbarkeit geändert hat.
+  int get visibilityVersion => _visibilityVersion;
 
   FogOfWarService({
     required this.hexGrid,
@@ -51,6 +72,14 @@ class FogOfWarService {
   // ──────────────────────────────────────────────
   // Öffentliche API
   // ──────────────────────────────────────────────
+
+  /// Aktuell sichtbare Hex-Felder (unveränderliche Sicht).
+  @visibleForTesting
+  Set<int> get visibleHexes => Set.unmodifiable(_visibleHexes);
+
+  /// Dauerhaft aufgedeckte Hex-Felder (unveränderliche Sicht).
+  @visibleForTesting
+  Set<int> get revealedHexes => Set.unmodifiable(_revealedHexes);
 
   /// Berechnet die Sichtbarkeit für die aktuelle Runde neu.
   ///
@@ -68,7 +97,7 @@ class FogOfWarService {
     required Map<TerrainType, TerrainConfig> terrainConfigs,
   }) {
     // Alte Sichtbarkeit zurücksetzen, LoS-Cache leeren
-    visibleHexes.clear();
+    _visibleHexes.clear();
     _losCache.clear();
 
     for (final token in friendlyTokens) {
@@ -79,29 +108,35 @@ class FogOfWarService {
       _computeTokenVisibility(
         tokenHexX: hex.x,
         tokenHexY: hex.y,
-        fieldOfView: token.fieldOfView,
+        fieldOfView: token.fieldOfView.clamp(0, maxFieldOfView),
         terrainMap: terrainMap,
         terrainConfigs: terrainConfigs,
       );
     }
 
     // Aufgedeckte Felder aktualisieren: visibleHexes zu revealedHexes hinzufügen
-    revealedHexes.addAll(visibleHexes);
+    _revealedHexes.addAll(_visibleHexes);
+
+    // Versionszähler erhöhen, damit der Renderer ein Neuzeichnen auslöst
+    _visibilityVersion++;
+    notifyListeners();
   }
 
   /// Setzt den gesamten Fog-of-War-Zustand zurück (z. B. beim Laden einer
   /// neuen Karte).
   void reset() {
-    visibleHexes.clear();
-    revealedHexes.clear();
+    _visibleHexes.clear();
+    _revealedHexes.clear();
     _losCache.clear();
+    _visibilityVersion++;
+    notifyListeners();
   }
 
   /// Gibt zurück, ob das Hex-Feld mit [hexKey] aktuell sichtbar ist.
-  bool isVisible(int hexKey) => visibleHexes.contains(hexKey);
+  bool isVisible(int hexKey) => _visibleHexes.contains(hexKey);
 
   /// Gibt zurück, ob das Hex-Feld mit [hexKey] jemals aufgedeckt wurde.
-  bool isRevealed(int hexKey) => revealedHexes.contains(hexKey);
+  bool isRevealed(int hexKey) => _revealedHexes.contains(hexKey);
 
   /// Gibt alle gegnerischen Tokens zurück, die auf aktuell sichtbaren
   /// Feldern stehen.
@@ -114,11 +149,32 @@ class FogOfWarService {
     for (final token in enemyTokens) {
       if (token.woundValue <= 0) continue;
       final hex = hexGrid.pixelToHex(token.position);
-      if (visibleHexes.contains(hexGrid.hexKey(hex.x, hex.y))) {
+      if (_visibleHexes.contains(hexGrid.hexKey(hex.x, hex.y))) {
         visible.add(token);
       }
     }
     return visible;
+  }
+
+  /// Gibt alle gegnerischen Tokens zurück, die auf aufgedeckten (aber nicht
+  /// unbedingt sichtbaren) Feldern stehen.
+  ///
+  /// [enemyTokens] – Liste der gegnerischen Tokens.
+  /// Ein Token gilt als aufgedeckt, wenn sein Hex-Feld in [revealedHexes] ist
+  /// und der Token lebt (woundValue > 0).
+  ///
+  /// Nützlich für die Ghost-Darstellung: Tokens auf aufgedeckten Feldern
+  /// können als "letzte bekannte Position" angezeigt werden.
+  List<ObjectToken> getRevealedEnemies(Iterable<ObjectToken> enemyTokens) {
+    final revealed = <ObjectToken>[];
+    for (final token in enemyTokens) {
+      if (token.woundValue <= 0) continue;
+      final hex = hexGrid.pixelToHex(token.position);
+      if (_revealedHexes.contains(hexGrid.hexKey(hex.x, hex.y))) {
+        revealed.add(token);
+      }
+    }
+    return revealed;
   }
 
   // ──────────────────────────────────────────────
@@ -145,18 +201,18 @@ class FogOfWarService {
     final startKey = hexGrid.hexKey(tokenHexX, tokenHexY);
 
     // 1. Start-Hex ist immer sichtbar
-    visibleHexes.add(startKey);
+    _visibleHexes.add(startKey);
 
     if (fieldOfView <= 0) return;
 
     // 2. BFS über die Nachbarschaft
-    // Queue speichert (x, y, distance)
-    final queue = <(int x, int y, int distance)>[];
+    // Queue speichert (x, y, distance) – O(1) removeFirst() statt O(n) removeAt(0)
+    final queue = Queue<(int x, int y, int distance)>();
     final visited = <int>{startKey};
     queue.add((tokenHexX, tokenHexY, 0));
 
     while (queue.isNotEmpty) {
-      final (currentX, currentY, distance) = queue.removeAt(0);
+      final (currentX, currentY, distance) = queue.removeFirst();
       final nextDistance = distance + 1;
 
       if (nextDistance > fieldOfView) continue;
@@ -181,7 +237,7 @@ class FogOfWarService {
         );
 
         if (canSee) {
-          visibleHexes.add(nKey);
+          _visibleHexes.add(nKey);
 
           // Prüfen, ob das Feld selbst die Sicht blockiert
           final terrainType = terrainMap[nKey] ?? TerrainType.normal;
