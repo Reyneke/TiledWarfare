@@ -22,9 +22,8 @@ class MapLoadConfig {
     return result;
   }
 
-  String layerNameFor(LayerPurpose purpose) {
-    return effectiveLayerNames[purpose] ?? LayerPurpose.defaultLayerNames[purpose]!;
-  }
+  String layerNameFor(LayerPurpose purpose) =>
+      effectiveLayerNames[purpose] ?? LayerPurpose.defaultLayerNames[purpose]!;
 
   const MapLoadConfig({
     this.spawnGroupName = 'Spawns',
@@ -104,28 +103,19 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       final parser = MapParser.forPath(widget.mapPath, assetBundle: rootBundle);
       final mapData = await parser.loadFromAsset(widget.mapPath);
       _mapData = mapData;
-
       final groundLayer = mapData.layerByPurpose(LayerPurpose.ground);
       if (groundLayer == null) throw MapParseException(message: 'Map has no "ground" layer.', path: widget.mapPath);
-
-      final hasSpawns = mapData.objectGroups.any((g) => g.name == widget.config.spawnGroupName && g.objects.isNotEmpty);
-      if (!hasSpawns) debugPrint('Warning: Map has no spawn points.');
-
       _mapWidth = mapData.width; _mapHeight = mapData.height;
       _tileWidth = mapData.tileWidth; _tileHeight = mapData.tileHeight;
-
       final basePath = MapParser.basePath(widget.mapPath);
       await _loadTilesetImages(mapData, basePath);
-
       final spawnPoints = _extractSpawnPoints(mapData);
       widget.onSpawnPointsParsed?.call(spawnPoints);
-
       final terrainGroup = mapData.objectGroups.where((g) => g.name == 'Gelaendetypen').firstOrNull;
       final terrainMap = parseTerrain(terrainGroup, widget.hexGrid);
       final collisionSet = mapData.computeCollisionTiles(widget.hexGrid);
       widget.onTerrainParsed?.call(terrainMap, collisionSet);
       widget.onMapLoaded?.call(tileWidth: _tileWidth, tileHeight: _tileHeight, mapWidth: _mapWidth, mapHeight: _mapHeight);
-
       setState(() { _isLoading = false; _error = null; _errorType = null; });
     } on MapParseException catch (e) { _setErrorState('Kartenformat-Fehler: $e', _MapErrorType.parseError); }
     on MapNotFoundException catch (e) { _setErrorState('Karte nicht gefunden: $e', _MapErrorType.notFound); }
@@ -183,22 +173,26 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
 
     final mapPixelWidth = widget.hexGrid.mapPixelWidth;
     final mapPixelHeight = widget.hexGrid.mapPixelHeight;
-    final maxDim = [mapPixelWidth, mapPixelHeight].reduce(max).toDouble();
-    final boundaryMargin = maxDim * 0.3;
 
     return RepaintBoundary(
       child: InteractiveViewer(
         transformationController: _transformationController,
-        boundaryMargin: EdgeInsets.all(boundaryMargin),
-        minScale: 0.25, maxScale: 4.0,
+        constrained: false,
+        boundaryMargin: EdgeInsets.zero,
+        minScale: 0.25,
+        maxScale: 4.0,
         child: SizedBox(
           width: mapPixelWidth.toDouble(),
           height: mapPixelHeight.toDouble(),
           child: CustomPaint(
             painter: _HexMapPainter(
-              tilesetImages: _tilesetImages, tilesets: _mapData!.tilesets,
-              mapData: _mapData!, tileWidth: _tileWidth, tileHeight: _tileHeight,
-              hexGrid: widget.hexGrid, config: widget.config,
+              tilesetImages: _tilesetImages,
+              tilesets: _mapData!.tilesets,
+              mapData: _mapData!,
+              tileWidth: _tileWidth,
+              tileHeight: _tileHeight,
+              hexGrid: widget.hexGrid,
+              config: widget.config,
             ),
           ),
         ),
@@ -293,7 +287,10 @@ class _HexMapPainter extends CustomPainter {
         final tilesetEntry = tilesetImages[tilesetInfo.firstGid];
         if (tilesetEntry == null) continue;
         final localId = tileId - tilesetInfo.firstGid;
-        final srcRect = Rect.fromLTWH((localId % tilesetEntry.columns * tileWidth).toDouble(), (localId ~/ tilesetEntry.columns * tileHeight).toDouble(), tileWidth.toDouble(), tileHeight.toDouble());
+        final srcRect = Rect.fromLTWH(
+          (localId % tilesetEntry.columns * tileWidth).toDouble(),
+          (localId ~/ tilesetEntry.columns * tileHeight).toDouble(),
+          tileWidth.toDouble(), tileHeight.toDouble());
         canvas.save();
         canvas.clipPath(_createHexPath(centerX: pixel.dx + tileWidth / 2, centerY: pixel.dy + tileHeight / 2, size: tileWidth ~/ 2));
         canvas.drawImageRect(tilesetEntry.image, srcRect, tileRect, paint);

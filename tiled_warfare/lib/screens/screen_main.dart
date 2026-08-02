@@ -57,32 +57,21 @@ class _ScreenMainState extends State<ScreenMain>
     super.dispose();
   }
 
-  /// Wird bei Fenster-Größenänderungen aufgerufen. Zentriert die Karte neu.
-  ///
-  /// Der [LayoutBuilder] muss vor der Zentrierung seine Constraints aktualisieren,
-  /// sonst verwendet `_centerMap()` die alte (falsche) Höhe → weißer Balken.
-  /// Deshalb: 1) setState → LayoutBuilder rebuildet → 2) addPostFrameCallback →
-  /// 3) _centerMap() mit korrekten Constraints.
+  /// Wird bei Fenster-Größenänderungen aufgerufen.
+  /// Erzwingt LayoutBuilder-Neubau (setState) und setzt dann die
+  /// Transformation zurück, damit die Karte zentriert bleibt.
   @override
   void didChangeMetrics() {
     if (!_mapDataReady || _hexGrid == null) return;
 
-    // setState erzwingt einen Neubau des LayoutBuilder. Dadurch werden
-    // _lastConstraints aktualisiert, bevor _centerMap() ausgeführt wird.
+    // setState erzwingt LayoutBuilder-Neubau → aktualisiert _lastConstraints
     setState(() {});
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-
-      final newSize = MediaQuery.of(context).size;
-      if (_lastScreenSize != null) {
-        final deltaH = (newSize.height - _lastScreenSize!.height).abs();
-        final deltaW = (newSize.width - _lastScreenSize!.width).abs();
-        if (deltaH < 20 && deltaW < 20) return;
-      }
-      _lastScreenSize = newSize;
-
-      // Karte mit nun aktuellen _lastConstraints zentrieren
+      _lastScreenSize = MediaQuery.of(context).size;
+      // Karte zurücksetzen: verhindert weiße Balken durch veraltete
+      // Transformation nach Fenstergrößen-Änderung
       _centerMap();
     });
   }

@@ -716,7 +716,7 @@ Nach sorgfältiger Analyse des "weisser Balken" Problems wurden neue Erkenntniss
 
 Bitte ausgormulieren und weitere Tests, gerne auch auomatisierte Laufzeittests, entwickeln, um dem Problem auf die Spur zu kommen.
 
-Nach einigen Tests konnte 2. behoben werden. 1. jedoch bleibt weiterhin - ausser im Vollbilmodus.
+Nach einigen Tests konnte 2. behoben werden. 1. ist teilweise gelöst. Der weiße Rahmen tritt nicht mehr beim direkten Verändern der Fenstergröße auf. Er tritt jedoch noch auf, wenn man nicht im Vollbildmodus ist, dann die Fenstergröße unten / rechts verändert, den Fensterrahmen über die Map zieht, loslässt und dann die Karte hin und herbewegt. Der Rahmenm verschwindet jedoch in dem Moment, wo man die Fenstergröße wieder ändert.
 
 ### Verifikation
 
