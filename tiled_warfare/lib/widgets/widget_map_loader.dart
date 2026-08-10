@@ -81,9 +81,28 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   void initState() {
     super.initState();
     widget.onTransformationControllerCreated?.call(_transformationController);
-    // Auf Fog-of-War-Änderungen lauschen, um die Karte neu zu zeichnen
+    // Auf Fog-of-War-Änderungen lauschen, um die Karte neu zu zeichnen.
+    // WICHTIG: Der Service kann beim ersten Build null sein (er wird erst
+    // in _onMapLoaded erzeugt). Der Listener wird daher zusätzlich in
+    // didUpdateWidget nachgezogen.
     widget.fogOfWarService?.addListener(_onFogOfWarChanged);
     _loadMap();
+  }
+
+  @override
+  void didUpdateWidget(covariant WidgetMapLoader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fog-of-War-Service wechselt von null → non-null (wird erst nach dem
+    // Kartenladen erzeugt). Listener umhängen, damit Sichtbarkeitsänderungen
+    // die Karte neu zeichnen.
+    if (!identical(oldWidget.fogOfWarService, widget.fogOfWarService)) {
+      oldWidget.fogOfWarService?.removeListener(_onFogOfWarChanged);
+      widget.fogOfWarService?.addListener(_onFogOfWarChanged);
+      // Neu zeichnen, falls der Service jetzt verfügbar ist
+      if (widget.fogOfWarService != null && mounted) {
+        setState(() {});
+      }
+    }
   }
 
   @override
@@ -253,6 +272,16 @@ class _HexMapPainter extends CustomPainter {
   final HexGrid hexGrid;
   final MapLoadConfig config;
   final FogOfWarService? fogOfWarService;
+
+  /// Fog-of-War-Versionsstand beim Erstellen dieses Painters.
+  ///
+  /// Wird in [shouldRepaint] mit dem alten Painter verglichen, um zu
+  /// erkennen, ob sich die Sichtbarkeit geändert hat. Da beide Painter
+  /// dieselbe [FogOfWarService]-Instanz referenzieren, kann nicht die
+  /// Instanz selbst, sondern nur der eingefrorene Versionsstand verglichen
+  /// werden.
+  final int _fogVisibilityVersion;
+
   final Map<LayerPurpose, String> _effectiveNames;
   final List<List<Offset>> _pixelPositions;
 
@@ -261,7 +290,8 @@ class _HexMapPainter extends CustomPainter {
     required this.tileWidth, required this.tileHeight,
     required this.hexGrid, required this.config,
     this.fogOfWarService,
-  }) : _effectiveNames = config.effectiveLayerNames,
+  }) : _fogVisibilityVersion = fogOfWarService?.visibilityVersion ?? 0,
+       _effectiveNames = config.effectiveLayerNames,
        _pixelPositions = List.generate(mapData.height, (y) => List.generate(mapData.width, (x) => hexGrid.hexToPixel(x: x, y: y)));
 
   Iterable<TileLayer> _getVisibleLayers() sync* {
@@ -379,13 +409,17 @@ class _HexMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HexMapPainter old) {
-    if (identical(old.tilesetImages, tilesetImages) && identical(old.mapData, mapData) && identical(old.hexGrid, hexGrid) && identical(old.config, config) && identical(old.fogOfWarService, fogOfWarService)) {
-      // Fog of War: Neu zeichnen, wenn sich die Sichtbarkeit geändert hat
-      if (fogOfWarService != null && old.fogOfWarService != null) {
-        if (fogOfWarService!.visibilityVersion != old.fogOfWarService!.visibilityVersion) {
-          return true;
-        }
+    // Fog of War: Neu zeichnen, wenn sich die Sichtbarkeit seit dem Bau des
+    // letzten Painters geändert hat. Der eingefrorene Versionsstand wird mit
+    // dem alten Painter verglichen – die Live-Services beider Painter sind
+    // identisch, daher wäre ein direkter Service-Vergleich immer false.
+    if (fogOfWarService != null || old.fogOfWarService != null) {
+      if (_fogVisibilityVersion != old._fogVisibilityVersion) {
+        return true;
       }
+    }
+
+    if (identical(old.tilesetImages, tilesetImages) && identical(old.mapData, mapData) && identical(old.hexGrid, hexGrid) && identical(old.config, config) && identical(old.fogOfWarService, fogOfWarService)) {
       return false;
     }
     if (old.tilesetImages.length != tilesetImages.length) return true;

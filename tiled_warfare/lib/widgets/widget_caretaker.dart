@@ -166,6 +166,13 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Wird benötigt, da ObjectToken kein _animationStart-Feld hat.
   final Map<ObjectToken, Offset> _tokenAnimationStarts = {};
 
+  /// Letzte Layout-Constraints des [LayoutBuilder] (verfügbarer Viewport).
+  ///
+  /// Wird in [_getVisibleMapRect] verwendet, um die tatsächliche Widget-Größe
+  /// zu ermitteln. `context.size` ist während des Builds nicht verfügbar,
+  /// daher werden die Constraints im Build gespeichert.
+  BoxConstraints? _lastConstraints;
+
   @override
   void initState() {
     super.initState();
@@ -1096,14 +1103,16 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       _dragStartHex = null;
 
       _invalidateCache();
-
-      // Fog of War: Sichtbarkeit nach der Bewegung aktualisieren,
-      // damit der Spieler die neue Sichtweite sofort sieht
-      _computeFogOfWar();
-
-      // Nach Bewegung prüfen, ob alle Tokens fertig sind
-      _checkAutoEndPlayerTurn();
     });
+
+    // Fog of War: Sichtbarkeit nach der Bewegung aktualisieren,
+    // damit der Spieler die neue Sichtweite sofort sieht.
+    // Wird NACH setState aufgerufen, um verschachtelte setState-Aufrufe
+    // über notifyListeners() zu vermeiden (verlässliche Aktualisierung).
+    _computeFogOfWar();
+
+    // Nach Bewegung prüfen, ob alle Tokens fertig sind
+    _checkAutoEndPlayerTurn();
   }
 
   /// Versetzt das Spiel in den Targeting-Modus für die angegebene Aktion.
@@ -1477,6 +1486,20 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     final matrix = widget.transformationController.value;
     final hexGrid = widget.hexGrid;
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Aktuelle Constraints speichern (für Viewport-Berechnung)
+        _lastConstraints = constraints;
+        return _buildContent(matrix, hexGrid);
+      },
+    );
+  }
+
+  /// Baut den eigentlichen Inhalt des WidgetCaretakers.
+  ///
+  /// Wird vom [LayoutBuilder] in [build] aufgerufen, damit die
+  /// Viewport-Größe über [_lastConstraints] verfügbar ist.
+  Widget _buildContent(Matrix4 matrix, HexGrid hexGrid) {
     return GestureDetector(
       onTapUp: (details) {
         // Bildschirm-Koordinaten in Karten-Koordinaten umrechnen
@@ -1515,7 +1538,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
           });
         }
       },
+      // clipBehavior: Clip.none – erlaubt, dass das Info-Panel (left: -232)
+      // in die linke Gutter-Spalte ragt, die in ScreenMain für das Panel
+      // reserviert wurde. Mit Clip.hardEdge würde das Panel abgeschnitten.
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           // SizedBox.expand() als nicht-positioniertes Child, das den Stack
           // auf die volle verfügbare Größe (Bildschirm) zwingt.
@@ -1547,10 +1574,16 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
             ),
           ),
           // Info-Panel für den ausgewählten Token (nicht transformiert,
-          // damit es immer lesbar im Bildschirm bleibt)
+          // damit es immer lesbar im Bildschirm bleibt).
+          //
+          // WICHTIG: Der WidgetCaretaker ist in ScreenMain um 240px nach
+          // rechts gepaddet (Gutter-Spalte für das Info-Panel). Daher wird
+          // das Panel mit `left: -232` (8 - 240) positioniert, damit es in
+          // der Gutter-Spalte (Screen-x: 8..228) erscheint – NICHT über
+          // der Karte (die bei x=240 beginnt).
           if (_selectedToken != null)
             Positioned(
-              left: 8,
+              left: -232, // -240 (Gutter) + 8 (Randabstand)
               top: 8,
               child: SizedBox(
                 width: 220,
@@ -1862,17 +1895,24 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       return _cachedVisibleRect!;
     }
 
-    // Die Bildschirmgröße über den BuildContext ermitteln
-    final screenSize = MediaQuery.of(context).size;
+    // Die Viewport-Größe über die LayoutBuilder-Constraints ermitteln.
+    // Wichtig: Der WidgetCaretaker kann sich innerhalb eines Paddings
+    // befinden (z. B. 240px links für das Info-Panel) – die MediaQuery
+    // würde sonst die volle Bildschirmbreite liefern und den Viewport
+    // falsch berechnen. `context.size` ist während des Builds nicht
+    // verfügbar, daher werden die Constraints im LayoutBuilder gespeichert.
+    final constraints = _lastConstraints;
+    final viewportWidth = constraints?.maxWidth ?? MediaQuery.of(context).size.width;
+    final viewportHeight = constraints?.maxHeight ?? MediaQuery.of(context).size.height;
 
-    // Die vier Ecken des Bildschirms in Karten-Koordinaten umrechnen
+    // Die vier Ecken des Viewports in Karten-Koordinaten umrechnen
     final topLeft = MatrixUtils.transformPoint(inverseMatrix, Offset.zero);
     final topRight = MatrixUtils.transformPoint(
-        inverseMatrix, Offset(screenSize.width, 0));
+        inverseMatrix, Offset(viewportWidth, 0));
     final bottomLeft = MatrixUtils.transformPoint(
-        inverseMatrix, Offset(0, screenSize.height));
+        inverseMatrix, Offset(0, viewportHeight));
     final bottomRight = MatrixUtils.transformPoint(
-        inverseMatrix, Offset(screenSize.width, screenSize.height));
+        inverseMatrix, Offset(viewportWidth, viewportHeight));
 
     // Das umschließende Rechteck in Karten-Koordinaten berechnen
     final minX = [

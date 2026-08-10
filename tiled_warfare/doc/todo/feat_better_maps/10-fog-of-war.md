@@ -199,6 +199,39 @@ fieldOfView: token.fieldOfView.clamp(0, maxFieldOfView),
 
 **Effekt:** Auch bei `fieldOfView = 1000` wird die BFS auf maximal 50 Hex-Felder begrenzt. Die Karten-Diagonale der größten Karten (30×30) beträgt ~42 Hex-Felder, sodass der Wert im Normalfall nie erreicht wird.
 
+### ✅ Problem 6 (behoben): Fog of War wird nicht immer bei Tokenbewegung geupdated
+
+**Ursache:** Zwei Probleme verhinderten eine zuverlässige Aktualisierung:
+
+1. **`_HexMapPainter.shouldRepaint()` verglich die Live-Versionsnummern** beider Painter. Da beide Painter dieselbe `FogOfWarService`-Instanz referenzieren, waren die Versionsnummern immer identisch → `shouldRepaint` gab immer `false` zurück, und die Karte wurde nie neu gezeichnet.
+
+2. **`_computeFogOfWar()` wurde innerhalb des `setState`-Callbacks von `_handleDragEnd()` aufgerufen.** Der `notifyListeners()`-Aufruf im Fog-Service löste einen verschachtelten `setState` aus, was zu unzuverlässigen Updates führen konnte.
+
+**Lösung (umgesetzt):**
+
+| Datei | Änderung |
+|-------|----------|
+| `lib/widgets/widget_map_loader.dart` | `_HexMapPainter` friert die Fog-Versionsnummer beim Bau ein (`_fogVisibilityVersion`) und vergleicht sie in `shouldRepaint()` mit dem alten Painter |
+| `lib/widgets/widget_caretaker.dart` | `_computeFogOfWar()` wird **nach** dem `setState`-Callback aufgerufen, um verschachtelte `setState`-Aufrufe zu vermeiden |
+
+### ✅ Problem 7 (behoben): Layout unzentriert
+
+**Ursache:** Die Karte war bündig mit dem linken Rand (`Positioned.fill` ohne Padding). Tokens, die links spawnen, wurden von der Info-Panel-Box (CombatActions) verdeckt.
+
+**Lösung (umgesetzt):**
+
+| Datei | Änderung |
+|-------|----------|
+| `lib/screens/screen_main.dart` | 240px linkes Padding für `WidgetMapLoader` und `WidgetCaretaker` – die Karte beginnt rechts neben dem Info-Panel |
+| `lib/screens/screen_main.dart` | `_focusCameraOn()` berücksichtigt die 240px Panel-Breite bei der Kamera-Zentrierung |
+| `lib/widgets/widget_caretaker.dart` | `_getVisibleMapRect()` verwendet die LayoutBuilder-Constraints (`_lastConstraints`) statt `context.size`/`MediaQuery` – korrektes Viewport-Culling im gepaddeten Bereich |
+| `lib/widgets/widget_caretaker.dart` | Info-Panel wird mit `left: -232` in die 240px-Gutter-Spalte positioniert – **nicht** über der Karte |
+
+**Layout-Entscheidung (beantwortet):**
+
+- **Info-Panel (CombatActions):** Sitzt jetzt in der **240px-Gutter-Spalte** links (Screen-x: 8..228) – die Karte beginnt bei x=240. Das Panel verdeckt **keine** Karteninhalte mehr.
+- **Rundentimer (oben rechts):** Bleibt bewusst als **HUD-Overlay** über der Karte (Screen-x: rechts oben). Das ist der Standard in Strategiespielen (z. B. XCOM, Fire Emblem) – der Timer ist eine permanente Statusanzeige und soll immer sichtbar sein, auch beim Scrollen/Zoomen. Er verdeckt nur einen kleinen Bereich oben rechts, der für Gameplay selten kritisch ist.
+
 ---
 
 ## Offene Fragen

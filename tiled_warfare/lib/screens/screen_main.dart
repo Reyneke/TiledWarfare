@@ -199,10 +199,15 @@ class _ScreenMainState extends State<ScreenMain>
     final availableHeight =
         _lastConstraints?.maxHeight ?? screenSize.height - kToolbarHeight;
 
+    // Linker Rand für das Info-Panel (muss mit dem Padding der Karte
+    // übereinstimmen, damit die Kamera im sichtbaren Kartenbereich zentriert).
+    const leftPanelWidth = 240.0;
+    final viewportWidth = screenSize.width - leftPanelWidth;
+
     final currentScale = controller.value.getMaxScaleOnAxis();
     if (currentScale <= 0) return;
 
-    final targetDx = screenSize.width / 2 - mapPosition.dx * currentScale;
+    final targetDx = viewportWidth / 2 - mapPosition.dx * currentScale;
     final targetDy = availableHeight / 2 - mapPosition.dy * currentScale;
 
     final currentTranslation = Offset(
@@ -317,38 +322,51 @@ class _ScreenMainState extends State<ScreenMain>
             // Aktuelle Constraints speichern (für korrekte Zentrierung bei
             // Fenster-Größenänderungen)
             _lastConstraints = constraints;
+            // clipBehavior: Clip.none – erlaubt, dass das Info-Panel (das im
+            // gepaddeten WidgetCaretaker bei left: -232 sitzt) in die linke
+            // Gutter-Spalte ragen kann. Mit Clip.hardEdge würde das Panel
+            // am Rand des gepaddeten Bereichs abgeschnitten.
             return Stack(
-              clipBehavior: Clip.hardEdge,
+              clipBehavior: Clip.none,
               children: [
                 const SizedBox.expand(),
+                // Linker Rand als Platzhalter für das Info-Panel (CombatActions).
+                // Verhindert, dass Tokens, die links spawnen, unter der
+                // Dialogbox des Spielers verschwinden.
                 Positioned.fill(
-                  child: WidgetMapLoader(
-                    hexGrid: _hexGrid ?? const HexGrid(
-                      tileWidth: 32,
-                      tileHeight: 32,
-                      mapWidth: 30,
-                      mapHeight: 30,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 240),
+                    child: WidgetMapLoader(
+                      hexGrid: _hexGrid ?? const HexGrid(
+                        tileWidth: 32,
+                        tileHeight: 32,
+                        mapWidth: 30,
+                        mapHeight: 30,
+                      ),
+                      mapPath: widget.mapPath,
+                      onMapLoaded: _onMapLoaded,
+                      onTransformationControllerCreated:
+                          _onTransformationControllerCreated,
+                      onSpawnPointsParsed: _onSpawnPointsParsed,
+                      onTerrainParsed: _onTerrainParsed,
+                      fogOfWarService: _fogOfWarService,
                     ),
-                    mapPath: widget.mapPath,
-                    onMapLoaded: _onMapLoaded,
-                    onTransformationControllerCreated:
-                        _onTransformationControllerCreated,
-                    onSpawnPointsParsed: _onSpawnPointsParsed,
-                    onTerrainParsed: _onTerrainParsed,
-                    fogOfWarService: _fogOfWarService,
                   ),
                 ),
                 if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
                   Positioned.fill(
-                    child: WidgetCaretaker(
-                      hexGrid: _hexGrid!,
-                      transformationController: _mapTransformationController!,
-                      spawnPoints: _spawnPoints,
-                      collisionSet: _collisionSet,
-                      onGameOver: _onGameOver,
-                      onRequestCameraFocus: _focusCameraOn,
-                      fogOfWarService: _fogOfWarService,
-                      terrainMap: _terrainMap,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 240),
+                      child: WidgetCaretaker(
+                        hexGrid: _hexGrid!,
+                        transformationController: _mapTransformationController!,
+                        spawnPoints: _spawnPoints,
+                        collisionSet: _collisionSet,
+                        onGameOver: _onGameOver,
+                        onRequestCameraFocus: _focusCameraOn,
+                        fogOfWarService: _fogOfWarService,
+                        terrainMap: _terrainMap,
+                      ),
                     ),
                   ),
               ],
