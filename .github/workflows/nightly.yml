@@ -37,9 +37,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Tests & Analyse ──────────────────────────────────────────
+  test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tiled_warfare
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
   # ── Windows x64 ──────────────────────────────────────────────
   build-windows:
     name: Nightly Windows (x64)
+    needs: test
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -67,6 +90,7 @@ jobs:
   # ── Linux ────────────────────────────────────────────────────
   build-linux:
     name: Nightly Linux
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -100,6 +124,7 @@ jobs:
   # ── Android APK ──────────────────────────────────────────────
   build-android:
     name: Nightly Android (APK)
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

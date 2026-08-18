@@ -96,4 +96,72 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('WidgetMapLoader - Fenstergrößen-Änderung (weißer Balken)', () {
+    Future<void> pumpMap(WidgetTester tester, {Size size = const Size(800, 600)}) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final hexGrid = HexGrid(
+        tileWidth: 32, tileHeight: 32, mapWidth: 30, mapHeight: 30,
+      );
+
+      await tester.runAsync(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: WidgetMapLoader(
+              hexGrid: hexGrid,
+              mapPath: 'assets/maps/map0/street_battle.tmx',
+            ),
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        await tester.pump();
+      });
+    }
+
+    testWidgets('SizedBox hat Karten-Pixelgröße (nicht Viewport)', (tester) async {
+      await pumpMap(tester, size: const Size(800, 600));
+
+      // Das SizedBox-Child hat die Karten-Pixelgröße (30x30 Tiles à 32px)
+      final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).last);
+      expect(sizedBox.width, 30 * 32 + 16, // mapPixelWidth = 30*32 + 16
+          reason: 'Child width must be map pixel width');
+      expect(sizedBox.height, (30 * 32 * 3 ~/ 4) + 32 ~/ 4, // mapPixelHeight
+          reason: 'Child height must be map pixel height');
+    });
+
+    testWidgets('InteractiveViewer ist korrekt konfiguriert (kein weißer Balken)', (tester) async {
+      await pumpMap(tester, size: const Size(800, 600));
+
+      // Der InteractiveViewer muss constrained: false und boundaryMargin: zero haben,
+      // damit die Karte frei pannbar ist und keine weißen Ränder entstehen.
+      final viewer = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer));
+      expect(viewer.constrained, false,
+          reason: 'InteractiveViewer must be unconstrained');
+      expect(viewer.boundaryMargin, EdgeInsets.zero,
+          reason: 'boundaryMargin must be zero to prevent white bars');
+    });
+
+    testWidgets('Karte bleibt nach Größenänderung gerendert', (tester) async {
+      await pumpMap(tester, size: const Size(800, 600));
+
+      // Mehrere Größenänderungen hintereinander – die Karte muss weiterhin
+      // gerendert werden (CustomPaint vorhanden, kein Fehler).
+      for (final size in [const Size(600, 400), const Size(1000, 700), const Size(400, 250)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        await tester.pumpAndSettle();
+
+        expect(find.byType(CustomPaint), findsWidgets,
+            reason: 'Map must still render at $size');
+        expect(tester.takeException(), isNull,
+            reason: 'No exception at $size');
+      }
+    });
+  });
 }

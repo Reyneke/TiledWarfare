@@ -64,8 +64,6 @@ class WidgetMapLoader extends StatefulWidget {
   State<WidgetMapLoader> createState() => _WidgetMapLoaderState();
 }
 
-enum _MapErrorType { parseError, notFound, unknown }
-
 class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   static const int kMaxTilesetImages = 5;
   final LinkedHashMap<int, ({ui.Image image, int columns})> _tilesetImages = LinkedHashMap();
@@ -74,7 +72,6 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   int _tileWidth = 32, _tileHeight = 32;
   bool _isLoading = true;
   String? _error;
-  _MapErrorType? _errorType;
   final TransformationController _transformationController = TransformationController();
 
   @override
@@ -120,7 +117,9 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
   }
 
   void _disposeTilesetImages() {
-    for (final entry in _tilesetImages.values) entry.image.dispose();
+    for (final entry in _tilesetImages.values) {
+      entry.image.dispose();
+    }
     _tilesetImages.clear();
   }
 
@@ -141,27 +140,33 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       _mapData = mapData;
       final groundLayer = mapData.layerByPurpose(LayerPurpose.ground);
       if (groundLayer == null) throw MapParseException(message: 'Map has no "ground" layer.', path: widget.mapPath);
+      final spawnPoints = _extractSpawnPoints(mapData);
+      if (spawnPoints.isEmpty) {
+        throw MapParseException(
+          message: 'Map has no spawn points in group "${widget.config.spawnGroupName}".',
+          path: widget.mapPath,
+        );
+      }
       _mapWidth = mapData.width; _mapHeight = mapData.height;
       _tileWidth = mapData.tileWidth; _tileHeight = mapData.tileHeight;
       final basePath = MapParser.basePath(widget.mapPath);
       await _loadTilesetImages(mapData, basePath);
-      final spawnPoints = _extractSpawnPoints(mapData);
       widget.onSpawnPointsParsed?.call(spawnPoints);
       final terrainGroup = mapData.objectGroups.where((g) => g.name == 'Gelaendetypen').firstOrNull;
       final terrainMap = parseTerrain(terrainGroup, widget.hexGrid);
       final collisionSet = mapData.computeCollisionTiles(widget.hexGrid);
       widget.onTerrainParsed?.call(terrainMap, collisionSet);
       widget.onMapLoaded?.call(tileWidth: _tileWidth, tileHeight: _tileHeight, mapWidth: _mapWidth, mapHeight: _mapHeight);
-      setState(() { _isLoading = false; _error = null; _errorType = null; });
-    } on MapParseException catch (e) { _setErrorState('Kartenformat-Fehler: $e', _MapErrorType.parseError); }
-    on MapNotFoundException catch (e) { _setErrorState('Karte nicht gefunden: $e', _MapErrorType.notFound); }
-    on FormatException catch (e) { _setErrorState('Formatfehler: ${e.message}', _MapErrorType.parseError); }
-    on FlutterError catch (e) { _setErrorState('Asset-Fehler: ${e.message}', _MapErrorType.notFound); }
-    catch (e) { _setErrorState('Unbekannter Fehler: $e', _MapErrorType.unknown); }
+      setState(() { _isLoading = false; _error = null; });
+    } on MapParseException catch (e) { _setErrorState('Kartenformat-Fehler: $e'); }
+    on MapNotFoundException catch (e) { _setErrorState('Karte nicht gefunden: $e'); }
+    on FormatException catch (e) { _setErrorState('Formatfehler: ${e.message}'); }
+    on FlutterError catch (e) { _setErrorState('Asset-Fehler: ${e.message}'); }
+    catch (e) { _setErrorState('Unbekannter Fehler: $e'); }
   }
 
-  void _setErrorState(String message, _MapErrorType type) => setState(() { _error = message; _errorType = type; _isLoading = false; });
-  void _retryLoad() => setState(() { _error = null; _errorType = null; _isLoading = true; _loadMap(); });
+  void _setErrorState(String message) => setState(() { _error = message; _isLoading = false; });
+  void _retryLoad() => setState(() { _error = null; _isLoading = true; _loadMap(); });
 
   Future<void> _loadTilesetImages(MapData mapData, String basePath) async {
     for (final tileset in mapData.tilesets) {
@@ -309,7 +314,9 @@ class _HexMapPainter extends CustomPainter {
     canvas.save(); canvas.clipRect(visibleRect);
     try {
       final viewportTiles = _computeVisibleTileRange(visibleRect);
-      for (final layer in _getVisibleLayers()) _drawLayer(canvas, viewportTiles, layer);
+      for (final layer in _getVisibleLayers()) {
+        _drawLayer(canvas, viewportTiles, layer);
+      }
       // Fog of War Overlay über die Karte zeichnen
       if (fogOfWarService != null) {
         _drawFogOfWar(canvas, viewportTiles);

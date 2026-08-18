@@ -38,7 +38,6 @@ class _ScreenMainState extends State<ScreenMain>
   bool _mapCentered = false;
   bool _mapDataReady = false;
   AnimationController? _focusAnimationController;
-  Size? _lastScreenSize;
 
   /// Fog-of-War-Service für Sichtbarkeits-Berechnung und -Darstellung.
   FogOfWarService? _fogOfWarService;
@@ -76,7 +75,6 @@ class _ScreenMainState extends State<ScreenMain>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _lastScreenSize = MediaQuery.of(context).size;
       // Karte zurücksetzen: verhindert weiße Balken durch veraltete
       // Transformation nach Fenstergrößen-Änderung
       _centerMap();

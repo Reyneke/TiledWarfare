@@ -104,13 +104,13 @@ Das Fog-of-War-Modul bietet aktuell folgende Features:
 | 15 | **BFS-Queue optimiert** | `Queue.removeFirst()` (O(1)) statt `List.removeAt(0)` (O(n)) |
 | 16 | **`fieldOfView` begrenzt** | `maxFieldOfView = 50` verhindert Performance-Probleme |
 | 17 | **Kapselung** | `visibleHexes`/`revealedHexes` sind privat mit unveränderlichen Gettern |
+| 18 | **Event/Callback bei Sichtbarkeitsänderung** | `ChangeNotifier` + `visibilityVersion` + automatisches Neuzeichnen im Painter |
 
 ### ❌ Noch nicht implementiert
 
 | # | Feature | Beschreibung |
 |---|---------|-------------|
-| 1 | **Kein Event/Callback bei Sichtbarkeitsänderung** | Die UI muss manuell neu zeichnen nach `computeVisibility()` |
-| 2 | **Performance-Tests in der CI** | Benchmark-Tests existieren, sind aber nicht in der CI-Pipeline |
+| 1 | **Performance-Tests in der CI** | Benchmark-Tests sind in `nightly.yml` und `release.yml` integriert (Stand: August 2026) |
 
 ---
 
@@ -169,11 +169,15 @@ Set<int> get visibleHexes => Set.unmodifiable(_visibleHexes);
 Set<int> get revealedHexes => Set.unmodifiable(_revealedHexes);
 ```
 
-### 🟡 Problem 4 (offen): Kein Event/Callback bei Sichtbarkeitsänderung
+### ✅ Problem 4 (behoben): Kein Event/Callback bei Sichtbarkeitsänderung
 
-Es gibt keinen Mechanismus, um die UI zu benachrichtigen, wenn sich die Sichtbarkeit ändert. Die UI müsste nach jedem `computeVisibility()`-Aufruf manuell neu zeichnen.
+**Lösung (umgesetzt):** `FogOfWarService` ist ein `ChangeNotifier` mit einem `visibilityVersion`-Zähler. Bei jeder Sichtbarkeitsänderung wird `_visibilityVersion++` und `notifyListeners()` aufgerufen. Der `_WidgetMapLoaderState` lauscht via `addListener(_onFogOfWarChanged)` und löst `setState` aus. Der `_HexMapPainter` friert die Versionsnummer beim Bau ein (`_fogVisibilityVersion`) und vergleicht sie in `shouldRepaint()` mit dem alten Painter – so wird die Karte automatisch neu gezeichnet, sobald sich die Sichtbarkeit ändert.
 
-**Lösungsansatz:** Ein `ChangeNotifier` oder ein `ValueNotifier<int>` (z. B. ein Versionszähler) könnte den `_HexMapPainter` automatisch neu zeichnen lassen, wenn sich die Sichtbarkeit ändert.
+**Beteiligte Dateien:**
+| Datei | Änderung |
+|-------|----------|
+| `lib/services/fog_of_war.dart` | `visibilityVersion`-Zähler + `notifyListeners()` in `computeVisibility()` und `reset()` |
+| `lib/widgets/widget_map_loader.dart` | `_onFogOfWarChanged()`-Listener + `_fogVisibilityVersion`-Vergleich in `shouldRepaint()` |
 
 ### ✅ Problem 5 (behoben): `fieldOfView` ist nicht begrenzt
 
@@ -314,6 +318,15 @@ Private Felder (`_visibleHexes`, `_revealedHexes`) mit unveränderlichen Gettern
   - `getRevealedEnemies` liefert Gegner auf aufgedeckten Feldern
   - `getRevealedEnemies` liefert nichts für Gegner auf verdeckten Feldern
 
+### ✅ Erweiterung 8 (umgesetzt): Event/Callback bei Sichtbarkeitsänderung
+
+**Status:** ✅ **Umgesetzt**
+
+- `FogOfWarService` ist ein `ChangeNotifier` mit `visibilityVersion`-Zähler
+- `_WidgetMapLoaderState` lauscht via `addListener(_onFogOfWarChanged)` und löst `setState` aus
+- `_HexMapPainter.shouldRepaint()` vergleicht die eingefrorene `_fogVisibilityVersion` mit dem alten Painter
+- Die Karte wird automatisch neu gezeichnet, sobald sich die Sichtbarkeit ändert (kein manuelles `setState` mehr nötig)
+
 ---
 
 ## Zusammenfassung
@@ -332,5 +345,4 @@ Private Felder (`_visibleHexes`, `_revealedHexes`) mit unveränderlichen Gettern
 
 **Verbleibende offene Punkte:**
 
-1. 🟡 **Event/Callback bei Sichtbarkeitsänderung** – `ChangeNotifier` oder `ValueNotifier` für automatisches Neuzeichnen (Problem 4)
-2. 🟢 **Performance-Tests in die CI integrieren** – Benchmark-Tests in den CI-Workflow aufnehmen
+1. 🟢 **Performance-Tests in die CI integrieren** – Benchmark-Tests wurden in `nightly.yml` und `release.yml` ergänzt (Analyze & Test-Job)
