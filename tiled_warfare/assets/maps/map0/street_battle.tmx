@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="hexagonal" renderorder="right-down" width="30" height="30" tilewidth="32" tileheight="32" infinite="0" hexsidelength="0" staggeraxis="y" staggerindex="odd" nextlayerid="9" nextobjectid="8">
+<map version="1.10" tiledversion="1.12.2" orientation="hexagonal" renderorder="right-down" width="30" height="30" tilewidth="32" tileheight="32" infinite="0" hexsidelength="0" staggeraxis="y" staggerindex="odd" nextlayerid="10" nextobjectid="8">
  <tileset firstgid="1" source="Thespazztikone_tilemaps_005_neu.tsx"/>
+ <imagelayer id="4" name="Bildebene 1"/>
  <layer id="1" name="ground" width="30" height="30">
   <data encoding="csv">
 121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,121,
@@ -137,7 +138,6 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
- <imagelayer id="4" name="Bildebene 1"/>
  <objectgroup id="2" name="Spawns">
   <object id="1" name="spawn_monster" x="483" y="229">
    <point/>
@@ -160,4 +160,5 @@
    <capsule/>
   </object>
  </objectgroup>
+ <objectgroup id="9" name="Sektoren"/>
 </map>

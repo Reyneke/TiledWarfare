@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/models/sector.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
@@ -44,6 +45,9 @@ class _ScreenMainState extends State<ScreenMain>
 
   /// Gelände-Map für die Fog-of-War-Berechnung (hexKey → TerrainType).
   Map<int, TerrainType>? _terrainMap;
+
+  /// Die geparsten Sektoren aus der "Sektoren"-Objektebene der Karte.
+  List<Sector> _sectors = const [];
 
   /// Letzte Layout-Constraints des [LayoutBuilder] (verfügbarer Platz für
   /// die Karte). Wird für die Zentrierung verwendet, damit der weiße Balken
@@ -149,6 +153,13 @@ class _ScreenMainState extends State<ScreenMain>
     });
   }
 
+  /// Übernimmt die geparsten Sektoren aus der "Sektoren"-Objektebene.
+  void _onSectorsParsed(List<Sector> sectors) {
+    setState(() {
+      _sectors = sectors;
+    });
+  }
+
   Future<bool> _confirmExit() async {
     final result = await showDialog<bool>(
       context: context,
@@ -236,7 +247,7 @@ class _ScreenMainState extends State<ScreenMain>
       final value = animation.value;
       final matrix = Matrix4.identity()
         ..setTranslationRaw(value.dx, value.dy, 0)
-        ..scale(currentScale);
+        ..scaleByDouble(currentScale, currentScale, currentScale, 1.0);
       controller.value = matrix;
     });
 
@@ -347,6 +358,7 @@ class _ScreenMainState extends State<ScreenMain>
                           _onTransformationControllerCreated,
                       onSpawnPointsParsed: _onSpawnPointsParsed,
                       onTerrainParsed: _onTerrainParsed,
+                      onSectorsParsed: _onSectorsParsed,
                       fogOfWarService: _fogOfWarService,
                     ),
                   ),
@@ -364,6 +376,7 @@ class _ScreenMainState extends State<ScreenMain>
                         onRequestCameraFocus: _focusCameraOn,
                         fogOfWarService: _fogOfWarService,
                         terrainMap: _terrainMap,
+                        sectors: _sectors,
                       ),
                     ),
                   ),

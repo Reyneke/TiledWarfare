@@ -11,6 +11,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/models/sector.dart';
 
 import 'package:tiled_warfare/utils/hex_grid.dart';
 
@@ -72,6 +73,12 @@ class WidgetCaretaker extends StatefulWidget {
   /// Gelände-Map für die Fog-of-War-Berechnung (hexKey → TerrainType).
   final Map<int, TerrainType>? terrainMap;
 
+  /// Die geparsten Sektoren aus der "Sektoren"-Objektebene der Karte.
+  ///
+  /// Wird von [ScreenMain] nach dem Parsen der Karte übergeben und kann
+  /// für gebiets-basierte Spielmechaniken verwendet werden.
+  final List<Sector> sectors;
+
   const WidgetCaretaker({
     super.key,
     required this.hexGrid,
@@ -82,6 +89,7 @@ class WidgetCaretaker extends StatefulWidget {
     this.collisionSet = const {},
     this.fogOfWarService,
     this.terrainMap,
+    this.sectors = const [],
   });
 
   @override

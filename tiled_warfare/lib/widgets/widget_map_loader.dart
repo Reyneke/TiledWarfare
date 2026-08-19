@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/models/sector.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/map_exceptions.dart';
 import 'package:tiled_warfare/services/map_parser.dart';
+import 'package:tiled_warfare/services/sector_service.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:xml/xml.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
@@ -39,6 +41,11 @@ class WidgetMapLoader extends StatefulWidget {
   final void Function(TransformationController controller)? onTransformationControllerCreated;
   final void Function(List<({String name, double x, double y})> spawnPoints)? onSpawnPointsParsed;
   final void Function(Map<int, TerrainType> terrainMap, Set<int> collisionSet)? onTerrainParsed;
+
+  /// Callback, der aufgerufen wird, sobald die "Sektoren"-Objektebene
+  /// geparst wurde. Übergibt die Liste aller gefundenen Sektoren.
+  final void Function(List<Sector> sectors)? onSectorsParsed;
+
   final String mapPath;
   final MapLoadConfig config;
 
@@ -55,6 +62,7 @@ class WidgetMapLoader extends StatefulWidget {
     this.onTransformationControllerCreated,
     this.onSpawnPointsParsed,
     this.onTerrainParsed,
+    this.onSectorsParsed,
     this.mapPath = 'assets/maps/street_battle.tmx',
     this.config = const MapLoadConfig(),
     this.fogOfWarService,
@@ -156,6 +164,8 @@ class _WidgetMapLoaderState extends State<WidgetMapLoader> {
       final terrainMap = parseTerrain(terrainGroup, widget.hexGrid);
       final collisionSet = mapData.computeCollisionTiles(widget.hexGrid);
       widget.onTerrainParsed?.call(terrainMap, collisionSet);
+      final sectors = parseSectors(findSectorGroup(mapData.objectGroups));
+      widget.onSectorsParsed?.call(sectors);
       widget.onMapLoaded?.call(tileWidth: _tileWidth, tileHeight: _tileHeight, mapWidth: _mapWidth, mapHeight: _mapHeight);
       setState(() { _isLoading = false; _error = null; });
     } on MapParseException catch (e) { _setErrorState('Kartenformat-Fehler: $e'); }

@@ -1,5 +1,5 @@
 {
-    "activeFile": "Thespazztikone_tilemaps_005_neu.tsx",
+    "activeFile": "street_battle.tmx",
     "expandedProjectPaths": [
         "."
     ],
@@ -11,7 +11,7 @@
         },
         "street_battle.tmx": {
             "scale": 1.5,
-            "selectedLayer": 3,
+            "selectedLayer": 7,
             "viewCenter": {
                 "x": 478.99999999999994,
                 "y": 221
@@ -33,13 +33,14 @@
     "map.lastUsedFormat": "tmx",
     "map.orientation": "2",
     "openFiles": [
-        "Thespazztikone_tilemaps_005_neu.tsx"
+        "Thespazztikone_tilemaps_005_neu.tsx",
+        "street_battle.tmx"
     ],
     "project": "battleground.tiled-project",
     "recentFiles": [
         "Thespazztikone_tilemaps_005_neu.tsx",
-        "street_battle_colliders.tmx",
-        "street_battle.tmx"
+        "street_battle.tmx",
+        "street_battle_colliders.tmx"
     ],
     "tileset.lastUsedFormat": "tsx"
 }

@@ -157,6 +157,19 @@ Automatisierte Widget-Tests simulieren die Fenstergrößen-Änderung zur Laufzei
 
 `test`-Job mit `flutter analyze` + `flutter test` in `nightly.yml` und `release.yml` ergänzt.
 
+## 8. Neue Objektebene "Sektoren"
+
+**Status:** ✅ Umgesetzt
+
+Die neue Objektebene **"Sektoren"** wurde in das Projekt eingebunden, analog zu den anderen Objektebenen (`Spawns`, `Gelaendetypen`):
+
+- **Neues Datenmodell:** `lib/models/sector.dart` – `Sector` mit Name, Geometrie (Rechteck/Polygon/Punkt), Properties, `containsPixel()` (Ray-Casting für Polygone) und `containsHex()`.
+- **Service:** `lib/services/sector_service.dart` – `parseSectors()` + `findSectorGroup()` (analog zu `parseTerrain()`).
+- **Parser-Anbindung:** `WidgetMapLoader.onSectorsParsed` wird nach dem Laden der Karte aufgerufen (analog zu `onTerrainParsed`/`onSpawnPointsParsed`).
+- **Screen-Anbindung:** `ScreenMain` hält die Sektoren im State und reicht sie an `WidgetCaretaker` weiter (`sectors`-Feld).
+- **Tests:** `test/sector_service_test.dart` – 13 neue Tests (containsPixel, containsHex, parseSectors, findSectorGroup, Integration mit echten Karten `map0` + `map1`).
+- **Stand:** `flutter analyze` 0 Fehler/0 neue Warnungen; `flutter test` **113/113 grün**.
+
 ---
 
 ## Zusammenfassung
