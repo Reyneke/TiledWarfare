@@ -18,13 +18,77 @@ Dieses Dokument ist zunächst ein reines Planungsdokument zur Klärung aller Fra
 
 **Antwort:** Da das OpenBrawl-Projekt eine andere Spielelogik hat (Spieler kontrollieren die Token nicht direkt usw.), dürften **TMX-Parser, Hex-Utility und Karten-Rendering** ausreichen. Die Spawn-/Objekt-Logik ist hingegen nicht ohne Weiteres übertragbar.
 
-**Noch offen:** Eine Analyse des OpenBrawl-Repositories ist unbedingt nötig, um den tatsächlich benötigten Export-Umfang festzustellen.
+**Analyse des OpenBrawl-Repositories (durchgeführt):**
+
+Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereits eine eigene, rudimentäre Karten-Implementierung:
+
+| Datei | Zweck | Status |
+|---|---|---|
+| `lib/utils/tmx_parser.dart` | Eigener TMX-/TMJ-Parser (`TmxMap`, `TmxTileset`) | Aktiv, aber eingeschränkt |
+| `lib/widgets/widget_hex_map_renderer.dart` | Hex-Grid-Renderer (`HexMapRenderer`, `_HexMapPainter`) | Aktiv, mit Token-Zeichnung |
+| `lib/widgets/widget_map_loader.dart` | Lädt TMJ-Karte, generiert Tokens, Tile-Auswahl | Aktiv |
+| `lib/widgets/widget_maploader.dart` | Lädt TMX-Karte (veraltet) | **Unbenutzt** (durch `WidgetMapLoader` ersetzt) |
+| `lib/objects/object_token.dart` | `ObjectToken` mit `hexCol`/`hexRow` | Aktiv, spiel-spezifisch |
+
+**Grenzen des bestehenden OpenBrawl-Parsers** (`tmx_parser.dart`):
+- Nur **CSV**-Encoding (kein Base64/Zlib/Gzip)
+- Nur **ein** Layer (`.first`)
+- Nur **ein** Tileset (`.first`)
+- Keine Objektgruppen (Spawns, Terrain-Regionen)
+- Keine Flip-Bit-Maskierung
+
+**Grenzen des bestehenden OpenBrawl-Renderers** (`widget_hex_map_renderer.dart`):
+- Hex-Geometrie (Zentrum, Hit-Test) ist direkt im Widget implementiert, nicht zentralisiert
+- Kein Viewport-Culling, kein `RepaintBoundary`
+- Token-Zeichnung ist fest mit `ObjectToken`/`ObjectPlayer` gekoppelt (spiel-spezifisch)
+
+**Vergleich mit der TiledWarfare-Engine:**
+- `lib/services/map_parser.dart` + `lib/models/map_data.dart`: unterstützt **mehrere Layer**, **mehrere Tilesets**, **Base64/Zlib/Gzip**, **Objektgruppen** (inkl. Polygon-Punkte), Flip-Bit-Maskierung → deutlich robuster als der OpenBrawl-Parser
+- `lib/utils/hex_grid.dart`: zentralisierte Hex-Utility (Pixel↔Hex, Nachbarn, Distanz) → ersetzt die im Renderer duplizierte Geometrie
+- `lib/services/map_exceptions.dart`: spezifische Fehlerbehandlung
+
+**Fazit zum Export-Umfang:**
+- **Exportieren**: `map_parser.dart`, `map_data.dart`, `map_exceptions.dart`, `hex_grid.dart` sowie ein entkoppelter Hex-Map-Renderer (ohne Token-/Spieler-Kopplung)
+- **Nicht exportieren**: `ObjectToken`, `ObjectPlayer`, `ObjectTeam`, `WidgetMapLoader` (Token-Generierung), Spawn-/Objekt-Logik – diese bleiben spiel-spezifisch in OpenBrawl
+- **Ersetzen**: Der bestehende OpenBrawl-Parser und -Renderer werden durch die exportierte Engine ersetzt bzw. darauf aufgebaut
+- **Abhängigkeit**: OpenBrawl nutzt aktuell `hex_toolkit` (^1.0.0) und `xml` (^6.5.0) – die exportierte Engine bringt `hex_grid.dart` mit, `xml` bleibt als Abhängigkeit
+
+**Entscheidung:** Ja, der OpenBrawl-Parser kann und soll direkt mit der exportierten Engine aktualisiert werden. Da er deutlich hinter der TiledWarfare-Engine zurücksteht (nur CSV, ein Layer, ein Tileset, keine Objektgruppen, keine Flip-Bit-Maskierung), wird er durch die robustere Engine ersetzt. Dies geschieht im Zuge der Einbindung als Git-Submodul: Der bestehende `tmx_parser.dart` in OpenBrawl wird durch die exportierten Dateien (`map_parser.dart`, `map_data.dart`, `map_exceptions.dart`, `hex_grid.dart`) ersetzt, und der Renderer (`widget_hex_map_renderer.dart`) wird auf die zentralisierte Hex-Utility umgestellt. Die spiel-spezifischen Teile (Token-Generierung, `ObjectToken`, `ObjectPlayer`, `ObjectTeam`) bleiben unverändert in OpenBrawl.
 
 ### Entkopplung
 
 **Frage:** Wie stark ist die Engine aktuell mit TiledWarfare-spezifischem Code (Widgets, Services, Assets) verwoben, und welche Refactorings sind nötig, um sie eigenständig nutzbar zu machen?
 
-**Noch offen:** Festzustellen durch Analyse des Projekts.
+**Analyse der TiledWarfare-Engine (durchgeführt):**
+
+| Datei | Externe Abhängigkeiten | Entkopplungs-Status |
+|---|---|---|
+| `lib/services/map_exceptions.dart` | Keine | ✅ Vollständig entkoppelt |
+| `lib/models/map_data.dart` | `flutter/foundation.dart` (`@immutable`, `listEquals`, `mapEquals`), `hex_grid.dart` | ⚠️ Teilweise entkoppelt |
+| `lib/services/map_parser.dart` | `dart:io` (zlib/gzip), `flutter/services.dart` (`rootBundle`), `xml`, `map_data.dart`, `map_exceptions.dart` | ⚠️ Teilweise entkoppelt |
+| `lib/utils/hex_grid.dart` | `dart:ui` (`Offset`), **`object_token.dart`** | ❌ Kritisch gekoppelt |
+
+**Kritische Kopplung: `hex_grid.dart` ↔ `ObjectToken`**
+- `hex_grid.dart` importiert `package:tiled_warfare/objects/object_token.dart`
+- Die Methoden `buildOccupiedHexFields()` und `buildOccupiedHexesFromIterable()` hängen direkt von `ObjectToken` ab (nutzen `token.woundValue`, `token.position`)
+- **Refactoring nötig**: Diese Methoden müssen aus `hex_grid.dart` entfernt oder generisch gemacht werden (z. B. über eine Getter-Funktion `Offset Function(T) getPosition`), damit die Hex-Utility ohne das Spielmodell auskommt
+
+**Kritische Kopplung: `map_parser.dart` ↔ `dart:io`**
+- `map_parser.dart` importiert `dart:io` für `zlib.decode()`/`gzip.decode()` (Base64-kodierte Layer)
+- **Problem**: `dart:io` ist auf Web-Plattformen nicht verfügbar → bricht die Web-Kompatibilität
+- **Refactoring nötig**: Auf `package:archive` umstellen oder konditionale Imports verwenden
+
+**Weitere Kopplungen:**
+- `map_data.dart` nutzt `flutter/foundation.dart` für `@immutable`, `listEquals`, `mapEquals` – akzeptabel, da `foundation` ein leichtgewichtiges Flutter-Paket ist
+- `map_data.dart` enthält die Klasse `MapMeta` (Metadaten aus `maps.json`) – **spiel-spezifisch**, sollte nicht exportiert werden
+- `map_parser.dart` nutzt `flutter/services.dart` (`rootBundle`) für Asset-Laden – akzeptabel für eine Flutter-Engine, aber der `AssetBundle`-Parameter ist bereits injizierbar (gut für Tests)
+- `map_data.dart` enthält `TerrainType`/`TerrainConfig` (Geländesystem) – **Engine-Level**, sollte exportiert werden
+
+**Fazit zur Entkopplung:**
+- **Bereits entkoppelt**: `map_exceptions.dart` (keine Änderungen nötig)
+- **Refactoring nötig (kritisch)**: `hex_grid.dart` von `ObjectToken` entkoppeln; `map_parser.dart` von `dart:io` entkoppeln (Web-Kompatibilität)
+- **Refactoring nötig (leicht)**: `MapMeta` aus `map_data.dart` ausschließen oder in ein separates spiel-spezifisches Modul verschieben
+- **Kein Refactoring nötig**: `flutter/foundation.dart` und `flutter/services.dart` sind akzeptable Abhängigkeiten für eine Flutter-Engine
 
 ### Wartung
 
@@ -49,3 +113,87 @@ Dieses Dokument ist zunächst ein reines Planungsdokument zur Klärung aller Fra
 ## Links
 
 - [OpenBrawl Repository](https://github.com/Reyneke/OpenBrawl)
+
+## Umsetzungsplan
+
+### Phase 1: Engine entkoppeln (in TiledWarfare)
+
+**1.1 `hex_grid.dart` von `ObjectToken` entkoppeln**
+- Methoden `buildOccupiedHexFields()` und `buildOccupiedHexesFromIterable()` aus `hex_grid.dart` entfernen
+- Stattdessen eine generische Methode einführen, z. B.:
+  ```dart
+  Set<int> buildOccupiedHexes<T>(Iterable<T> items, Offset Function(T) getPosition, {bool Function(T)? include})
+  ```
+- Aufrufer in TiledWarfare (`widget_caretaker.dart`, `object_host.dart` etc.) auf die neue API umstellen
+
+**1.2 `map_parser.dart` von `dart:io` entkoppeln (Web-Kompatibilität)**
+- `package:archive` als Abhängigkeit hinzufügen
+- `zlib.decode()` → `ZLibDecoder().decodeBytes()` und `gzip.decode()` → `GZipDecoder().decodeBytes()` aus `package:archive`
+- Verifizieren, dass `dart:io`-Import entfällt
+
+**1.3 `MapMeta` aus der Engine ausschließen**
+- `MapMeta`, `map_registry.dart` und `maps.json`-Logik verbleiben spiel-spezifisch in TiledWarfare
+- `map_data.dart` referenziert `MapMeta` nicht (bereits der Fall) → kein Refactoring nötig
+
+### Phase 2: Engine als Paket strukturieren
+
+**2.1 Engine-Verzeichnis anlegen**
+- Neues Verzeichnis `packages/tilemap_engine/` im TiledWarfare-Repo
+- `pubspec.yaml` mit `name: tilemap_engine`, Abhängigkeiten: `flutter`, `xml`, `archive`
+- `lib/tilemap_engine.dart` als öffentliche Export-Datei (`map_parser.dart`, `map_data.dart`, `map_exceptions.dart`, `hex_grid.dart`)
+
+**2.2 Entkoppelten Hex-Map-Renderer erstellen**
+- Neues Widget `HexMapView` (analog zu `widget_hex_map_renderer.dart` in OpenBrawl) im Paket
+- Keine Abhängigkeit zu `ObjectToken`/`ObjectPlayer` – stattdessen generische `tokenPainter`-Callback oder `List<HexTokenFigure>`-Modell:
+  ```dart
+  typedef TokenPainter = void Function(Canvas canvas, Offset center);
+  ```
+- Laden des Tileset-Bilds über `AssetBundle` (injizierbar)
+
+**2.3 TiledWarfare auf Paket umstellen**
+- `pubspec.yaml` von TiledWarfare: `tilemap_engine: path: packages/tilemap_engine`
+- Imports in `lib/` anpassen: `package:tilemap_engine/tilemap_engine.dart`
+- Alle Tests laufen lassen → Regressionen fixen
+
+### Phase 3: Einbindung in OpenBrawl
+
+**3.1 Git-Submodul anlegen**
+- Im OpenBrawl-Repo: `git submodule add <TiledWarfare-Repo-URL> packages/tilemap_engine`
+- `pubspec.yaml` von OpenBrawl: `tilemap_engine: path: packages/tilemap_engine`
+
+**3.2 OpenBrawl-Karten-Code auf Engine umstellen**
+- `lib/utils/tmx_parser.dart` löschen (wird durch `MapParser`/`MapData` aus der Engine ersetzt)
+- `lib/widgets/widget_hex_map_renderer.dart`: auf `HexGrid` und Engine-Datenmodelle umstellen; Token-Zeichnung über `tokenPainter`-Callback beibehalten
+- `lib/widgets/widget_map_loader.dart` auf die neue Engine-API umstellen (`MapParser.forPath().loadFromAsset()`)
+
+**3.3 Assets vorbereiten**
+- `test.tmj`/`test.tmx` an die neue Engine übergeben (RFC: auch Base64-kodierte Layer testen)
+- `Thespazztikone_tilemaps_005_neu.png` weiterhin als Tileset verwenden
+
+### Phase 4: Tests und Verifikation
+
+**4.1 TiledWarfare-Tests**
+- `flutter test` im TiledWarfare-Repo
+- Sicherstellen, dass `hex_grid_test.dart`, `map_parser_test.dart` etc. weiterhin grün sind
+
+**4.2 OpenBrawl-Tests**
+- Neuen Test für die Engine-Integration anlegen (Parser-Laden der `test.tmj`, HexGrid-Pixel-Konvertierung)
+- `flutter analyze` und `flutter test` in OpenBrawl
+
+**4.3 Web-Kompatibilität**
+- `flutter build web` in TiledWarfare (verifiziert den `dart:io`-Fix)
+- Falls Web-Build ohne Fehler durchläuft, ist die Entkopplung erfolgreich
+
+### Phase 5: Abschluss
+
+**5.1 Dokumentation**
+- `README.md` der Engine erweitern (Nutzung, API, Migration)
+- `doc/todo/feat_better_maps/12-Export.md` um Ist-Zustand ergänzen
+
+**5.2 Lizenz & Beitragende**
+- Lizenz der Engine prüfen (siehe "Lizenz- und Urheberfragen")
+- OpenBrawl-Repo-Lizenz mit der Engine-Lizenz abgleichen
+
+**5.3 Bonus**
+- OpenBrawl-eigene Hex-Logik (`hex_toolkit`) entfernen, da `HexGrid` aus Engine übernommen wird
+- Unbenutzten `widget_maploader.dart` in OpenBrawl löschen
