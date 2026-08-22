@@ -227,3 +227,25 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 **6.3 Bonus**
 - OpenBrawl-eigene Hex-Logik (`hex_toolkit`) entfernen, da `HexGrid` aus Engine übernommen wird
 - Unbenutzten `widget_maploader.dart` in OpenBrawl löschen
+
+## Frage: Combat-Maneuver-Buttons vs. Export-Änderungen
+
+**Frage:** Es hat ein Problem mit den Buttons gegeben, welche die CombatManeuvers des Spielers kontrollieren. Wurde durch die Änderungen etwas an den bereits erledigten Phasen des Exports geändert?
+
+**Antwort:** Nein. Die Export-Änderungen (Phasen 1–2) betreffen ausschließlich:
+
+- `lib/utils/hex_grid.dart` – Entkopplung von `ObjectToken` (generische `buildOccupiedHexes`-API statt `buildOccupiedHexFields`/`buildOccupiedHexesFromIterable`)
+- `lib/services/map_parser.dart` – `dart:io`/`zlib`/`gzip` → `package:archive` (Web-Kompatibilität)
+- `packages/tilemap_engine/` – neues Paket mit `map_parser`, `map_data`, `map_exceptions`, `hex_grid`, `hex_map_view`
+- `pubspec.yaml` – neue Abhängigkeiten (`archive`, `tilemap_engine`)
+
+**Zum Button-Problem:** Der Regressionstest `test/widget_caretaker_combat_test.dart` beschreibt den eigentlichen Bug: Das Info-Panel lag bei Stack-Position `left: -232` außerhalb der Stack-Bounds des gepaddeten `WidgetCaretaker`. `RenderBox.hitTest` lehnt Positionen außerhalb der Bounds ab (`Clip.none` erlaubt nur das Malen über die Grenzen, nicht das Hit-Testen) – die Buttons waren dadurch physisch nicht klickbar.
+
+- **Meine einzige Änderung** in `lib/widgets/widget_caretaker.dart` war `_buildBlockedHexFields` (Umstellung auf `buildOccupiedHexes`) – **keinerlei** Einfluss auf UI-Layout oder Button-Interaktion.
+- Das Info-Panel-Layout (`left: -232` / `right: 8`, `top: 8`) sowie die Combat-Button-Logik (`_buildPlayerActionButtons`, `_enterTargetingMode` etc.) wurden **nicht** verändert.
+
+**Verifikation:** Der neue Regressionstest `Combat-Maneuver-Buttons sind sichtbar und klickbar` läuft grün:
+```
+00:01 +1: All tests passed!
+```
+Die Export-Phasen 1–2 sind davon unberührt und weiterhin voll funktionsfähig (114 Tests grün).

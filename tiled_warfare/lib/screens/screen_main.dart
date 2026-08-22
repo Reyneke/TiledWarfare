@@ -363,21 +363,30 @@ class _ScreenMainState extends State<ScreenMain>
                     ),
                   ),
                 ),
+                // Der WidgetCaretaker erhält die volle Fläche (KEIN
+                // Padding(left: 240)). Die Karte/Tokens werden intern um
+                // 240px nach rechts gepaddet (linke Gutter-Spalte für das
+                // Info-Panel), sodass Karte und Tokens weiterhin ab x=240
+                // liegen. Die UI-Panels (Info, Status) liegen im äußeren
+                // Stock des WidgetCaretaker bei left: 8 / right: 8 –
+                // innerhalb der Stack-Bounds und damit klickbar.
+                // (Bugfix: "Combat Maneuvers Buttons funktionieren nicht" –
+                // vorher lagen die Panels bei left: -232 außerhalb der
+                // Stack-Bounds des gepaddeten WidgetCaretaker; RenderBox.hitTest
+                // lehnt Positionen außerhalb der Bounds ab, unabhängig von
+                // clipBehavior: Clip.none.)
                 if (_mapTransformationController != null && _mapDataReady && _hexGrid != null)
                   Positioned.fill(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 240),
-                      child: WidgetCaretaker(
-                        hexGrid: _hexGrid!,
-                        transformationController: _mapTransformationController!,
-                        spawnPoints: _spawnPoints,
-                        collisionSet: _collisionSet,
-                        onGameOver: _onGameOver,
-                        onRequestCameraFocus: _focusCameraOn,
-                        fogOfWarService: _fogOfWarService,
-                        terrainMap: _terrainMap,
-                        sectors: _sectors,
-                      ),
+                    child: WidgetCaretaker(
+                      hexGrid: _hexGrid!,
+                      transformationController: _mapTransformationController!,
+                      spawnPoints: _spawnPoints,
+                      collisionSet: _collisionSet,
+                      onGameOver: _onGameOver,
+                      onRequestCameraFocus: _focusCameraOn,
+                      fogOfWarService: _fogOfWarService,
+                      terrainMap: _terrainMap,
+                      sectors: _sectors,
                     ),
                   ),
               ],

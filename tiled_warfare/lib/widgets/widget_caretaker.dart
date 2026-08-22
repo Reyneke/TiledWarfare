@@ -1509,109 +1509,125 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Wird vom [LayoutBuilder] in [build] aufgerufen, damit die
   /// Viewport-Größe über [_lastConstraints] verfügbar ist.
   Widget _buildContent(Matrix4 matrix, HexGrid hexGrid) {
-    return GestureDetector(
-      onTapUp: (details) {
-        // Bildschirm-Koordinaten in Karten-Koordinaten umrechnen
-        final mapPosition = _screenToMap(details.localPosition);
-        _handleTap(mapPosition);
-      },
-      onLongPressStart: (details) {
-        // Bei langem Drücken: zuerst den Token unter dem Finger auswählen,
-        // dann Kontextmenü anzeigen
-        final mapPosition = _screenToMap(details.localPosition);
-        _handleTap(mapPosition);
-        if (_selectedToken != null) {
-          _showContextMenu(context, details.globalPosition);
-        }
-      },
-      onPanStart: (details) {
-        final mapPosition = _screenToMap(details.localPosition);
-        _handleDragStart(mapPosition);
-      },
-      onPanUpdate: (details) {
-        // Delta muss ebenfalls durch den aktuellen Zoom geteilt werden,
-        // damit der Drag in Karten-Koordinaten korrekt ist
-        final scale = matrix.getMaxScaleOnAxis();
-        final scaledDelta = details.delta / scale;
-        _handleDragUpdate(scaledDelta);
-      },
-      onPanEnd: (details) {
-        _handleDragEnd();
-      },
-      onPanCancel: () {
-        if (_isDragging) {
-          setState(() {
-            _isDragging = false;
-            _draggedToken = null;
-            _dragOffset = Offset.zero;
-          });
-        }
-      },
-      // clipBehavior: Clip.none – erlaubt, dass das Info-Panel (left: -232)
-      // in die linke Gutter-Spalte ragt, die in ScreenMain für das Panel
-      // reserviert wurde. Mit Clip.hardEdge würde das Panel abgeschnitten.
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // SizedBox.expand() als nicht-positioniertes Child, das den Stack
-          // auf die volle verfügbare Größe (Bildschirm) zwingt.
-          // Dadurch positionieren sich Positioned(right: 8) etc. korrekt
-          // am Bildschirmrand, nicht am Kartenrand.
-          // (Bugfix: "Rundenzähler und Kartenrand sind schmaler als WidgetCaretaker")
-          const SizedBox.expand(),
-          // Tokens mit der gleichen Transformation wie die Karte zeichnen.
-          // Positioned, damit es die Stack-Größe nicht beeinflusst.
-          Positioned(
-            left: 0,
-            top: 0,
-            child: Transform(
-              transform: matrix,
-              child: SizedBox(
-                width: hexGrid.mapPixelWidth.toDouble(),
-                height: hexGrid.mapPixelHeight.toDouble(),
-                child: Stack(
-                  children: [
-                    ..._buildTokenWidgets(),
-                    // DEBUG: Karten-Bounding-Box visualisieren, um zu prüfen,
-                    // ob die Map im WidgetMapLoader die gleiche Größe hat
-                    // wie die Token-Ebene im WidgetCaretaker.
-                    // Entfernen für Release-Builds.
-                    ..._buildDebugOverlay(),
-                  ],
-                ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Karten-Interaktionsschicht.
+        //
+        // Umfasst NUR Karte und Tokens, NICHT die UI-Panels (Info-Panel und
+        // Status-Panel). Dadurch konkurrieren die Buttons in den Panels
+        // (Nahkampf, Fernkampf, FocusFire, Zug beenden, Zurück) nicht mehr
+        // mit der Gesture-Arena des Karten-GestureDetectors – der Pan-/
+        // Tap-Recognizer des GestureDetectors konnte die Button-Klicks
+        // schlucken (Bugfix: "Combat Maneuvers Buttons funktionieren nicht").
+        Positioned.fill(
+          child: Padding(
+            // Karte/Tokens um 240px nach rechts verschieben: Die linke
+            // Gutter-Spalte ist für das Info-Panel reserviert. Tokens, die
+            // links spawnen, liegen damit weiterhin NICHT unter dem Panel.
+            padding: const EdgeInsets.only(left: 240),
+            child: GestureDetector(
+              onTapUp: (details) {
+                // Bildschirm-Koordinaten in Karten-Koordinaten umrechnen
+                final mapPosition = _screenToMap(details.localPosition);
+                _handleTap(mapPosition);
+              },
+              onLongPressStart: (details) {
+                // Bei langem Drücken: zuerst den Token unter dem Finger auswählen,
+                // dann Kontextmenü anzeigen
+                final mapPosition = _screenToMap(details.localPosition);
+                _handleTap(mapPosition);
+                if (_selectedToken != null) {
+                  _showContextMenu(context, details.globalPosition);
+                }
+              },
+              onPanStart: (details) {
+                final mapPosition = _screenToMap(details.localPosition);
+                _handleDragStart(mapPosition);
+              },
+              onPanUpdate: (details) {
+                // Delta muss ebenfalls durch den aktuellen Zoom geteilt werden,
+                // damit der Drag in Karten-Koordinaten korrekt ist
+                final scale = matrix.getMaxScaleOnAxis();
+                final scaledDelta = details.delta / scale;
+                _handleDragUpdate(scaledDelta);
+              },
+              onPanEnd: (details) {
+                _handleDragEnd();
+              },
+              onPanCancel: () {
+                if (_isDragging) {
+                  setState(() {
+                    _isDragging = false;
+                    _draggedToken = null;
+                    _dragOffset = Offset.zero;
+                  });
+                }
+              },
+              // clipBehavior: Clip.none – erlaubt, dass Markierungen/Tokens
+              // über die Kartenränder hinausragen dürfen.
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // SizedBox.expand() als nicht-positioniertes Child, das den
+                  // Stack auf die volle verfügbare Größe (Bildschirm) zwingt.
+                  // Dadurch deckt der GestureDetector die gesamte Fläche ab
+                  // (Taps außerhalb der Karte → Deselektieren funktioniert).
+                  const SizedBox.expand(),
+                  // Tokens mit der gleichen Transformation wie die Karte zeichnen.
+                  // Positioned, damit es die Stack-Größe nicht beeinflusst.
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    child: Transform(
+                      transform: matrix,
+                      child: SizedBox(
+                        width: hexGrid.mapPixelWidth.toDouble(),
+                        height: hexGrid.mapPixelHeight.toDouble(),
+                        child: Stack(
+                          children: [
+                            ..._buildTokenWidgets(),
+                            // DEBUG: Karten-Bounding-Box visualisieren, um zu prüfen,
+                            // ob die Map im WidgetMapLoader die gleiche Größe hat
+                            // wie die Token-Ebene im WidgetCaretaker.
+                            // Entfernen für Release-Builds.
+                            ..._buildDebugOverlay(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          // Info-Panel für den ausgewählten Token (nicht transformiert,
-          // damit es immer lesbar im Bildschirm bleibt).
-          //
-          // WICHTIG: Der WidgetCaretaker ist in ScreenMain um 240px nach
-          // rechts gepaddet (Gutter-Spalte für das Info-Panel). Daher wird
-          // das Panel mit `left: -232` (8 - 240) positioniert, damit es in
-          // der Gutter-Spalte (Screen-x: 8..228) erscheint – NICHT über
-          // der Karte (die bei x=240 beginnt).
-          if (_selectedToken != null)
-            Positioned(
-              left: -232, // -240 (Gutter) + 8 (Randabstand)
-              top: 8,
-              child: SizedBox(
-                width: 220,
-                child: _buildInfoPanelContent(),
-              ),
-            ),
-          // Runden- und Status-Anzeige (oben rechts)
-          // Explizite Breite, damit SizedBox(width: double.infinity) nicht
-          // zu BoxConstraints(w=Infinity) führt (Bugfix: App crasht)
+        ),
+        // Info-Panel für den ausgewählten Token – liegt im äußeren Stack
+        // des WidgetCaretaker (der die volle Screen-Fläche erhält).
+        // Die Karte/Tokens sind intern um 240px nach rechts gepaddet
+        // (linke Gutter-Spalte), daher sitzt das Panel bei Screen-x 8..228 –
+        // innerhalb der Stack-Bounds und damit klickbar.
+        if (_selectedToken != null)
           Positioned(
-            right: 8,
+            left: 8,
             top: 8,
             child: SizedBox(
               width: 220,
-              child: _buildStatusPanel(),
+              child: _buildInfoPanelContent(),
             ),
           ),
-        ],
-      ),
+        // Runden- und Status-Anzeige (oben rechts)
+        // Explizite Breite, damit SizedBox(width: double.infinity) nicht
+        // zu BoxConstraints(w=Infinity) führt (Bugfix: App crasht)
+        Positioned(
+          right: 8,
+          top: 8,
+          child: SizedBox(
+            width: 220,
+            child: _buildStatusPanel(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1740,50 +1756,66 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
           mainAxisSize: MainAxisSize.min,
           children: [
             // Überschrift-Zeile: Runde + Status-Icon
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(statusIcon, size: 18, color: accentColor),
-                const SizedBox(width: 6),
-                Text(
-                  'Runde $_currentRound',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: textColor,
-                  ),
+            // FittedBox: verhindert RenderFlex-Overflow bei schmalem
+            // Platzangebot oder System-Schriftvergrößerung.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 18, color: accentColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Runde $_currentRound',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 6),
             // Status-Badge (wessen Zug)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: accentColor,
-                    ),
+            // FittedBox: verhindert RenderFlex-Overflow bei schmalem
+            // Platzangebot oder System-Schriftvergrößerung.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    statusText,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accentColor,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
             // Initiativnachricht
@@ -1802,31 +1834,40 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
             const SizedBox(height: 8),
             Container(height: 1, color: accentColor.withValues(alpha: 0.2)),
             const SizedBox(height: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.people, size: 14, color: Colors.green.shade700),
-                const SizedBox(width: 4),
-                Text(
-                  '${_player.unitCount}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade800,
-                  ),
+            // FittedBox: verhindert RenderFlex-Overflow, wenn die Zeile
+            // (Icons + Einheitenzahl) schmaler als der verfügbare Platz ist
+            // (z. B. bei kleinen Fenstern oder System-Schriftvergrößerung).
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.people, size: 14, color: Colors.green.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_player.unitCount}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.dangerous, size: 14, color: Colors.red.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_host.activeUnitCount}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade800,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Icon(Icons.dangerous, size: 14, color: Colors.red.shade700),
-                const SizedBox(width: 4),
-                Text(
-                  '${_host.activeUnitCount}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red.shade800,
-                  ),
-                ),
-              ],
+              ),
             ),
             // "Zug beenden"-Button (nur im Spieler-Zug)
             if (_isPlayerTurn && !_isGameOver) ...[
@@ -1911,7 +1952,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // falsch berechnen. `context.size` ist während des Builds nicht
     // verfügbar, daher werden die Constraints im LayoutBuilder gespeichert.
     final constraints = _lastConstraints;
-    final viewportWidth = constraints?.maxWidth ?? MediaQuery.of(context).size.width;
+    // Der WidgetCaretaker erhält jetzt die volle Screen-Fläche; die Karte
+    // ist intern um die linke Gutter-Spalte (240px) nach rechts gepaddet.
+    // Der sichtbare Karten-Viewport ist daher um 240px schmaler.
+    final fullWidth = constraints?.maxWidth ?? MediaQuery.of(context).size.width;
+    final viewportWidth = fullWidth - 240;
     final viewportHeight = constraints?.maxHeight ?? MediaQuery.of(context).size.height;
 
     // Die vier Ecken des Viewports in Karten-Koordinaten umrechnen
