@@ -181,6 +181,18 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 - **`release.yml`** (`.github/workflows/release.yml`): Enthält denselben `test`-Job und läuft bei **Pushes auf `main`** → deckt den Merge in den Main ab
 - **Fazit**: Ja, es existieren bereits fertige CI-Tests für diesen Fall. Beide Workflows führen `flutter analyze` + `flutter test` aus. Für den PR-Merge ist kein neuer Workflow nötig – die Checks laufen automatisch auf dem Feature-Branch (nightly) und nach dem Merge auf `main` (release). Optional kann zusätzlich ein `pull_request`-Trigger ergänzt werden, damit die Checks direkt im PR-Status sichtbar sind.
 
+**Aufgetretenes CI-Problem („Run flutter analyze" schlägt mit leerer Fehlermeldung fehl):**
+- **Ursache**: `flutter analyze` endet mit Exit-Code 1, sobald **auch nur Info-Level-Issues** gefunden werden. Im Repo existierten 77 vorbestehende `info`-Issues – davon 57 im eingebetteten externen Unterprojekt `lib/fuzzy_logic/` (`non_constant_identifier_names`, `avoid_print` etc.) und 20 im Spiel-Code (`object_host.dart`/`object_team_medic.dart` Namenskonventionen, `terrain_service.dart` `prefer_initializing_formals`). In GitHub Actions wirkt das wie eine leere Fehlermeldung, weil der Schritt nur den Exit-Code als Fehler meldet.
+- **Fix 1 – `analysis_options.yaml`**: `lib/fuzzy_logic/**` aus der Analyse ausgeschlossen (eingebettetes externes Unterprojekt, nicht Teil der App) → reduziert auf 20 Issues.
+- **Fix 2 – Beide Workflows** (`nightly.yml`, `release.yml`): `flutter analyze` → `flutter analyze --no-fatal-infos`. Damit brechen echte Errors/Warnings weiterhin die Pipeline, Info-Level-Issues jedoch nicht mehr.
+- **Verifiziert** (lokal): `flutter analyze --no-pub --no-fatal-infos` endet mit Exit-Code 0:
+  ```
+  20 issues found. (ran in 14.0s)
+  EXIT_OK
+  ```
+  Die 20 verbleibenden Issues sind reine `info`-Hinweise (Stil) – keine Fehler, keine Warnings.
+- **Fazit**: Die CI läuft nach dem nächsten Push mit den Fixes durch (`--no-fatal-infos` + excludiertes `fuzzy_logic`).
+
 **3.3 Main-Commit als Submodul-Referenz festlegen**
 - Nach dem Merge den Main-Commit notieren; er dient als Ausgangsreferenz für das Submodul in OpenBrawl
 
