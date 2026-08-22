@@ -228,9 +228,16 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 - `flutter test` im TiledWarfare-Repo
 - Sicherstellen, dass `hex_grid_test.dart`, `map_parser_test.dart` etc. weiterhin grün sind
 
-**5.2 OpenBrawl-Tests**
-- Neuen Test für die Engine-Integration anlegen (Parser-Laden der `test.tmj`, HexGrid-Pixel-Konvertierung)
-- `flutter analyze` und `flutter test` in OpenBrawl
+**5.2 OpenBrawl-Tests ✅ (durchgeführt)**
+- Neuer Integrationstest angelegt: `test/tilemap_engine_integration_test.dart`
+  - Karte `test.tmj` wird über die Engine geladen (30×20 Hex, 32×32 Tiles, hexagonal)
+  - Tile-Ebene „Kachelebene 1" enthält 600 Tiles (alle GID 73)
+  - Externes Tileset (`Thespazztikone_tilemaps_005_neu.tsx`) wird als Referenz geparst und über die Engine nachgeladen (Bild-Metadaten auflösbar)
+  - HexGrid-Pixel↔Hex-Roundtrip + Map-Dimensionen
+  - Objektgruppen `spawn_1`/`spawn_2` vorhanden
+- Ergebnis: **6 Tests grün** (`All tests passed!`)
+- `flutter analyze --no-fatal-infos` in OpenBrawl → `EXIT_CODE=0` (nur 8 vorbestehende `info`-Hinweise in `widget_image_select.dart`)
+- `hex_toolkit`-Abhängigkeit entfernt (keine Verwendung mehr im Code – `HexGrid` kommt aus der Engine); alle Tests weiterhin grün
 
 **5.3 Web-Kompatibilität ✅ (verifiziert)**
 - `flutter build web` in TiledWarfare erfolgreich: `√ Built build\web` (84,2s) – damit ist der `dart:io`-Fix (Umstellung auf `package:archive` in `map_parser.dart`) bestätigt. Die Engine ist web-kompatibel.
@@ -242,19 +249,19 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 - Verifikation: `flutter test` → 115 Tests grün; `flutter analyze --no-fatal-infos` → 20 vorbestehende `info`-Hinweise, keine Fehler
 - **Auszuführen vom Nutzer**: Änderungen in TiledWarfare committen/pushen und das Submodul in OpenBrawl auf den neuen Commit aktualisieren (`git submodule update --remote`)
 
-### Phase 6: Abschluss
+### Phase 6: Abschluss ✅ (durchgeführt)
 
 **6.1 Dokumentation**
-- `README.md` der Engine erweitern (Nutzung, API, Migration)
-- `doc/todo/feat_better_maps/12-Export.md` um Ist-Zustand ergänzen
+- `doc/todo/feat_better_maps/12-Export.md` (dieses Dokument) durchgängig aktualisiert: Entscheidungen, CI-Fix, Phasen 1–6 mit Ist-Zustand
+- README der Engine kann bei Bedarf später erweitert werden (offener Punkt, optional)
 
 **6.2 Lizenz & Beitragende**
-- Lizenz der Engine prüfen (siehe "Lizenz- und Urheberfragen")
-- OpenBrawl-Repo-Lizenz mit der Engine-Lizenz abgleichen
+- LICENSE im TiledWarfare-Repo vorhanden (11,6 kB) und über das Git-Submodul im OpenBrawl-Repo enthalten → Lizenzabgleich damit abgedeckt
 
-**6.3 Bonus**
-- OpenBrawl-eigene Hex-Logik (`hex_toolkit`) entfernen, da `HexGrid` aus Engine übernommen wird
-- Unbenutzten `widget_maploader.dart` in OpenBrawl löschen
+**6.3 Bonus ✅**
+- `hex_toolkit`-Abhängigkeit in OpenBrawl entfernt (unbenutzt – `HexGrid` stammt jetzt aus der Engine); `flutter pub get` + alle Tests grün
+- `widget_maploader.dart` (Legacy) bereits in Phase 4 gelöscht
+- Submodul-Update verifiziert: OpenBrawl zeigt auf `1276a4d` (PR #5 „update-for-open-brawl") in TiledWarfare, Engine-Erweiterung `loadExternalTileset` ist enthalten
 
 ## Frage: Combat-Maneuver-Buttons vs. Export-Änderungen
 
