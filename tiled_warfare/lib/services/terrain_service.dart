@@ -56,7 +56,11 @@ Set<int> buildAllBlockedFields({
   ObjectToken? excludeToken,
   required HexGrid hexGrid,
 }) {
-  final blocked = hexGrid.buildOccupiedHexFields(tokens, excludeToken: excludeToken);
+  final blocked = hexGrid.buildOccupiedHexes(
+    tokens,
+    (token) => token.position,
+    include: (token) => token.woundValue > 0 && token != excludeToken,
+  );
   blocked.addAll(mapData.computeCollisionTiles(hexGrid));
   return blocked;
 }

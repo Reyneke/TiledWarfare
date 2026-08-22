@@ -708,9 +708,10 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   }
 
   Set<int> _buildBlockedHexFields({ObjectToken? excludeToken}) {
-    final blocked = widget.hexGrid.buildOccupiedHexFields(
+    final blocked = widget.hexGrid.buildOccupiedHexes(
       _allTokens.map((r) => r.token),
-      excludeToken: excludeToken,
+      (token) => token.position,
+      include: (token) => token.woundValue > 0 && token != excludeToken,
     );
     blocked.addAll(widget.collisionSet);
     return blocked;

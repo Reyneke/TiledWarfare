@@ -272,7 +272,7 @@ void main() {
     });
   });
 
-  group('HexGrid - buildOccupiedHexFields', () {
+  group('HexGrid - buildOccupiedHexes', () {
     late HexGrid grid;
 
     setUp(() {
@@ -287,21 +287,43 @@ void main() {
 
     test('builds set of occupied hex fields', () {
       final tokens = [makeToken(2, 3), makeToken(5, 5)];
-      final occupied = grid.buildOccupiedHexFields(tokens);
+      final occupied = grid.buildOccupiedHexes(
+        tokens,
+        (t) => t.position,
+        include: (t) => t.woundValue > 0,
+      );
       expect(occupied, {grid.hexKey(2, 3), grid.hexKey(5, 5)});
     });
 
     test('skips dead tokens (woundValue <= 0)', () {
       final tokens = [makeToken(2, 3, wound: 0), makeToken(5, 5)];
-      final occupied = grid.buildOccupiedHexFields(tokens);
+      final occupied = grid.buildOccupiedHexes(
+        tokens,
+        (t) => t.position,
+        include: (t) => t.woundValue > 0,
+      );
       expect(occupied, {grid.hexKey(5, 5)});
     });
 
     test('excludeToken is not included', () {
       final exclude = makeToken(2, 3);
       final tokens = [exclude, makeToken(5, 5)];
-      final occupied = grid.buildOccupiedHexFields(tokens, excludeToken: exclude);
+      final occupied = grid.buildOccupiedHexes(
+        tokens,
+        (t) => t.position,
+        include: (t) => t.woundValue > 0 && t != exclude,
+      );
       expect(occupied, {grid.hexKey(5, 5)});
+    });
+
+    test('all items are included when include is null', () {
+      final positions = [
+        grid.hexToPixel(x: 1, y: 1),
+        grid.hexToPixel(x: 4, y: 4),
+      ];
+      final items = [positions[0], positions[1]];
+      final occupied = grid.buildOccupiedHexes(items, (pos) => pos);
+      expect(occupied, {grid.hexKey(1, 1), grid.hexKey(4, 4)});
     });
   });
 
