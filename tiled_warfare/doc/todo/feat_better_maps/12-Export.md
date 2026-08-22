@@ -102,6 +102,17 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 
 **Entscheidung:** Dieselben Flutter-/Dart-Versionen und Plattformen, die dieses Projekt unterstützt.
 
+### Merge der Feature-Branch in den Main-Branch
+
+**Frage:** Da wir uns gerade in einem Nebenbranch befinden, wäre es für die Umsetzung evtl. sinnvoll, die Ergebnisse dieses Branches per Pull-Request in den Main-Branch zu übernehmen und das OpenBrawl-Repo den Main-Branch einbinden zu lassen?
+
+**Entscheidung:** Ja, das ist sinnvoll. Ein Git-Submodul referenziert immer einen konkreten Kommitt – keinen Branch. Daher macht der Weg über den Merge per Pull-Request Sinn:
+
+- **Stabiler Stand**: Der Feature-Branch wird per PR reviewed und mit den automatisierten Checks (CI) in den Main-Branch überführt → die Engine steht dort in einem getesteten, reproduzierbaren Zustand.
+- **Klare Referenz für das Submodul**: Das OpenBrawl-Repo kann als Submodul-Referenz den gemergten Main-Commit verwenden (bzw. den Main-Branch im Submodul nachziehen).
+- **Konsistente Weiterentwicklung**: Künftige Änderungen an der Engine fließen weiterhin über den normalen Workflow (Feature-Branch → PR → Main) und werden dann über das Submodul-Update in OpenBrawl übernommen – passend zur bereits getroffenen Entscheidung unter „Wartung".
+- **Empfehlung**: Das Submodul im OpenBrawl-Repo sollte dem Main-Branch von TiledWarfare (commit nach Commit) folgen. Bei Bedarf kann in `.gitmodules` der `branch = main` gesetzt werden, um das Tracking explizit zu machen (das Submodul zeigt weiterhin auf konkrete, nachvollziehbare Commits).
+
 ## Was für Probleme können auftreten?
 
 - **Versteckte Abhängigkeiten**: Die Engine nutzt u. U. interne Pfade, Assets oder Services (z. B. `rootBundle`, hardcodierte Bildpfade), die im Zielprojekt nicht vorhanden sind.
@@ -155,45 +166,64 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 - Imports in `lib/` anpassen: `package:tilemap_engine/tilemap_engine.dart`
 - Alle Tests laufen lassen → Regressionen fixen
 
-### Phase 3: Einbindung in OpenBrawl
+### Phase 3: Feature-Branch per Pull-Request in den Main-Branch überführen
 
-**3.1 Git-Submodul anlegen**
+**3.1 Pull-Request erstellen**
+- Feature-Branch (aktueller Stand) per PR in den Main-Branch von TiledWarfare überführen
+- Begründung (siehe „Merge der Feature-Branch in den Main-Branch"): Ein Git-Submodul referenziert konkrete Commits – die Engine muss zuerst stabil im Main stehen
+
+**3.2 CI & Review**
+- Automatisierte Checks (`flutter analyze` + `flutter test`) laufen im PR
+- Review durchführen und den PR mergen
+
+**Bestehende CI-Workflows (geprüft):**
+- **`nightly.yml`** (`.github/workflows/nightly.yml`): Enthält einen `test`-Job (`flutter analyze` + `flutter test`) und läuft u. a. bei **Pushes auf Nicht-Main-Branches** (`branches-ignore: main`) → deckt den Feature-Branch ab
+- **`release.yml`** (`.github/workflows/release.yml`): Enthält denselben `test`-Job und läuft bei **Pushes auf `main`** → deckt den Merge in den Main ab
+- **Fazit**: Ja, es existieren bereits fertige CI-Tests für diesen Fall. Beide Workflows führen `flutter analyze` + `flutter test` aus. Für den PR-Merge ist kein neuer Workflow nötig – die Checks laufen automatisch auf dem Feature-Branch (nightly) und nach dem Merge auf `main` (release). Optional kann zusätzlich ein `pull_request`-Trigger ergänzt werden, damit die Checks direkt im PR-Status sichtbar sind.
+
+**3.3 Main-Commit als Submodul-Referenz festlegen**
+- Nach dem Merge den Main-Commit notieren; er dient als Ausgangsreferenz für das Submodul in OpenBrawl
+
+### Phase 4: Einbindung in OpenBrawl
+
+**4.1 Git-Submodul anlegen**
 - Im OpenBrawl-Repo: `git submodule add <TiledWarfare-Repo-URL> packages/tilemap_engine`
+- Optional in `.gitmodules`: `branch = main` setzen, damit das Submodul dem Main-Branch von TiledWarfare folgt (zeigt weiterhin auf konkrete Commits)
 - `pubspec.yaml` von OpenBrawl: `tilemap_engine: path: packages/tilemap_engine`
 
-**3.2 OpenBrawl-Karten-Code auf Engine umstellen**
+**4.2 OpenBrawl-Karten-Code auf Engine umstellen**
 - `lib/utils/tmx_parser.dart` löschen (wird durch `MapParser`/`MapData` aus der Engine ersetzt)
 - `lib/widgets/widget_hex_map_renderer.dart`: auf `HexGrid` und Engine-Datenmodelle umstellen; Token-Zeichnung über `tokenPainter`-Callback beibehalten
 - `lib/widgets/widget_map_loader.dart` auf die neue Engine-API umstellen (`MapParser.forPath().loadFromAsset()`)
 
-**3.3 Assets vorbereiten**
+**4.3 Assets vorbereiten**
 - `test.tmj`/`test.tmx` an die neue Engine übergeben (RFC: auch Base64-kodierte Layer testen)
 - `Thespazztikone_tilemaps_005_neu.png` weiterhin als Tileset verwenden
 
-### Phase 4: Tests und Verifikation
+### Phase 5: Tests und Verifikation
 
-**4.1 TiledWarfare-Tests**
+**5.1 TiledWarfare-Tests**
 - `flutter test` im TiledWarfare-Repo
 - Sicherstellen, dass `hex_grid_test.dart`, `map_parser_test.dart` etc. weiterhin grün sind
 
-**4.2 OpenBrawl-Tests**
+**5.2 OpenBrawl-Tests**
 - Neuen Test für die Engine-Integration anlegen (Parser-Laden der `test.tmj`, HexGrid-Pixel-Konvertierung)
 - `flutter analyze` und `flutter test` in OpenBrawl
 
-**4.3 Web-Kompatibilität**
+**5.3 Web-Kompatibilität**
 - `flutter build web` in TiledWarfare (verifiziert den `dart:io`-Fix)
 - Falls Web-Build ohne Fehler durchläuft, ist die Entkopplung erfolgreich
 
-### Phase 5: Abschluss
+### Phase 6: Abschluss
 
-**5.1 Dokumentation**
+**6.1 Dokumentation**
 - `README.md` der Engine erweitern (Nutzung, API, Migration)
 - `doc/todo/feat_better_maps/12-Export.md` um Ist-Zustand ergänzen
 
-**5.2 Lizenz & Beitragende**
+**6.2 Lizenz & Beitragende**
 - Lizenz der Engine prüfen (siehe "Lizenz- und Urheberfragen")
 - OpenBrawl-Repo-Lizenz mit der Engine-Lizenz abgleichen
 
-**5.3 Bonus**
+**6.3 Bonus**
 - OpenBrawl-eigene Hex-Logik (`hex_toolkit`) entfernen, da `HexGrid` aus Engine übernommen wird
 - Unbenutzten `widget_maploader.dart` in OpenBrawl löschen
