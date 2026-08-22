@@ -37,16 +37,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ================================================================
-  # Shared setup
-  # ================================================================
-  # Extractable into a composite/reusable action if the project
-  # grows – kept inline here for clarity.
-  # ================================================================
+  # ── Tests & Analyse ──────────────────────────────────────────
+  test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tiled_warfare
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+
+      - run: flutter pub get
+
+      - run: flutter analyze --no-fatal-infos
+
+      - run: flutter test
 
   # ── Windows x64 ──────────────────────────────────────────────
   build-windows:
     name: Nightly Windows (x64)
+    needs: test
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -60,15 +76,6 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: ${{ env.FLUTTER_CHANNEL }}
 
-      - name: Cache Flutter dependencies (pub)
-        uses: actions/cache@v4
-        with:
-          path: |
-            %APPDATA%\Pub\Cache
-            tiled_warfare/.dart_tool
-          key: pub-windows-${{ hashFiles('tiled_warfare/pubspec.lock') }}
-          restore-keys: pub-windows-
-
       - run: flutter pub get
 
       - run: flutter build windows --${{ env.BUILD_MODE }}
@@ -77,12 +84,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-windows
-          path: tiled_warfare/build/windows/x64/runner/${{ env.BUILD_MODE == 'release' && 'Release' || 'Debug' }}/tiled_warfare.exe
-          compression-level: 0               # .exe is already compressed
+          path: build/windows/x64/runner/${{ env.BUILD_MODE == 'release' && 'Release' || 'Debug' }}/tiled_warfare.exe
+          compression-level: 0
 
   # ── Linux ────────────────────────────────────────────────────
   build-linux:
     name: Nightly Linux
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -95,15 +103,6 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: ${{ env.FLUTTER_CHANNEL }}
-
-      - name: Cache Flutter dependencies (pub)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            tiled_warfare/.dart_tool
-          key: pub-linux-${{ hashFiles('tiled_warfare/pubspec.lock') }}
-          restore-keys: pub-linux-
 
       - name: Install Linux build dependencies
         run: |
@@ -119,12 +118,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-linux
-          path: tiled_warfare/build/linux/x64/${{ env.BUILD_MODE == 'release' && 'release' || 'debug' }}/bundle/
-          compression-level: 6               # directory → good default
+          path: build/linux/x64/${{ env.BUILD_MODE == 'release' && 'release' || 'debug' }}/bundle/
+          compression-level: 6
 
   # ── Android APK ──────────────────────────────────────────────
   build-android:
     name: Nightly Android (APK)
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -138,25 +138,13 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: ${{ env.FLUTTER_CHANNEL }}
 
-      - name: Cache Flutter dependencies (pub)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            tiled_warfare/.dart_tool
-          key: pub-android-${{ hashFiles('tiled_warfare/pubspec.lock') }}
-          restore-keys: pub-android-
-
       - run: flutter pub get
 
-      # --android-skip-build-dependency-validation is used because
-      # the nightly target API level may not align with the installed
-      # Android SDK platforms. Remove after CI SDK is synced.
       - run: flutter build apk --${{ env.BUILD_MODE }} --android-skip-build-dependency-validation
 
       - name: Upload Nightly Android APK
         uses: actions/upload-artifact@v4
         with:
           name: tiled_warfare-nightly-${{ github.ref_name }}-${{ github.run_id }}-android
-          path: tiled_warfare/build/app/outputs/flutter-apk/app-${{ env.BUILD_MODE }}.apk
-          compression-level: 0               # .apk is already zipped
+          path: build/app/outputs/flutter-apk/app-${{ env.BUILD_MODE }}.apk
+          compression-level: 0

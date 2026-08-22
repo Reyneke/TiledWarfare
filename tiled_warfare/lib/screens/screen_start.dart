@@ -190,11 +190,23 @@ class _ScreenStartState extends State<ScreenStart> {
       profile.profileImagePath = destPath;
       await ProfileStorage.saveProfile(profile);
       await _loadProfiles();
-    } catch (_) {
+    } on FileSystemException catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.profileImageError)),
+        SnackBar(content: Text('${l10n.profileImageError}: ${e.message}')),
+      );
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l10n.profileImageError}: ${e.message}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l10n.profileImageError}: $e')),
       );
     }
   }

@@ -17,6 +17,9 @@ dependencies:
   xml: ^7.0.1
   logging: ^1.2.0
   image_picker: ^1.2.3
+  archive: ^4.0.9
+  tilemap_engine:
+    path: packages/tilemap_engine
 
 dev_dependencies:
   flutter_test:
@@ -44,4 +47,4 @@ flutter:
     - assets/images/token/
     - assets/maps/
     - assets/maps/map0/
-    
+    - assets/maps/map1/

@@ -30,6 +30,7 @@ enum CombatAction {
 /// | [woundValue]     | Trefferpunkte (Gesundheit)       |
 /// | [movementValue]  | Maximale Bewegung pro Zug        |
 /// | [rangeValue]     | Reichweite für Fernkampf         |
+/// | [fieldOfView]    | Sichtweite in Hex-Feldern        |
 ///
 /// Siehe auch: [ObjectApprentice] (Spieler-Charaktere),
 /// [ObjectDoughZombie] (Standard-Gegner).
@@ -59,8 +60,27 @@ class ObjectToken {
   /// Verteidigungswert – W100-Zielwert für Verteidigungswürfe (0–100).
   int defenseValue;
 
-  /// Maximale Bewegung in Hex-Feldern pro Zug.
+  /// Basis-Bewegungswert – der ursprüngliche [movementValue] aus dem Konstruktor.
+  ///
+  /// Dieser Wert bleibt während des gesamten Spiels unverändert und wird
+  /// zu Beginn jeder Runde verwendet, um [movementValue] zurückzusetzen.
+  /// Dadurch wird verhindert, dass ein reduzierter (verbrauchter) Wert
+  /// nach Spielende dauerhaft als neuer Basiswert übernommen wird.
+  final int baseMovementValue;
+
+  /// Aktuelle verbleibende Bewegung in Hex-Feldern in dieser Runde.
+  ///
+  /// Dieser Wert wird bei Bewegung verbraucht (dekrementiert) und zu Beginn
+  /// jeder Runde wieder auf [baseMovementValue] zurückgesetzt.
   int movementValue;
+
+  /// Sichtweite in Hex-Feldern für Fog of War.
+  ///
+  /// Gibt an, wie viele Hex-Felder weit dieser Token sehen kann.
+  /// 0 bedeutet: der Token sieht nur sein eigenes Feld.
+  /// Dieser Wert wird von [FogOfWarService] verwendet, um die
+  /// aktuell sichtbaren Felder zu berechnen.
+  int fieldOfView;
 
   /// Schadenswert – Höhe des Schadens, den dieser Token bei einem Treffer verursacht.
   int damageValue;
@@ -117,14 +137,19 @@ class ObjectToken {
     this.woundValue = 3,
     this.attackValue = 0,
     this.defenseValue = 0,
-    this.movementValue = 0,
+    int? movementValue,
+    this.fieldOfView = 3,
     this.damageValue = 1,
     this.rangeValue = 1,
     this.moneyValue = 100,
     this.xpValue = 25,
-  });
+  })  : baseMovementValue = movementValue ?? 0,
+        movementValue = movementValue ?? 0;
 
   /// Erzeugt eine Kopie dieses Tokens mit optional geänderten Werten.
+  ///
+  /// Die [baseMovementValue] wird aus dem ursprünglichen Token übernommen,
+  /// da der Basiswert unveränderlich ist (final).
   ObjectToken copyWith({
     String? name,
     String? imagePath,
@@ -133,6 +158,7 @@ class ObjectToken {
     int? attackValue,
     int? defenseValue,
     int? movementValue,
+    int? fieldOfView,
     int? damageValue,
     int? rangeValue,
     int? moneyValue,
@@ -148,6 +174,7 @@ class ObjectToken {
       attackValue: attackValue ?? this.attackValue,
       defenseValue: defenseValue ?? this.defenseValue,
       movementValue: movementValue ?? this.movementValue,
+      fieldOfView: fieldOfView ?? this.fieldOfView,
       damageValue: damageValue ?? this.damageValue,
       rangeValue: rangeValue ?? this.rangeValue,
       moneyValue: moneyValue ?? this.moneyValue,

@@ -3,6 +3,7 @@
     "expandedProjectPaths": [
         "."
     ],
+    "file.lastUsedOpenFilter": "Alle Dateien (*)",
     "fileStates": {
         "Thespazztikone_tilemaps_005_neu.tsx": {
             "scaleInDock": 1,
@@ -10,27 +11,36 @@
         },
         "street_battle.tmx": {
             "scale": 1.5,
-            "selectedLayer": 3,
+            "selectedLayer": 7,
             "viewCenter": {
                 "x": 478.99999999999994,
                 "y": 221
             }
+        },
+        "street_battle_colliders.tmx": {
+            "scale": 1,
+            "selectedLayer": 6,
+            "viewCenter": {
+                "x": 478.5,
+                "y": 221.5
+            }
         }
     },
-    "last.exportedFilePath": "C:/Users/matth/dev/TiledWarfare/tiled_warfare/assets/maps",
+    "last.exportedFilePath": "C:/Users/matth/dev/TiledWarfare/tiled_warfare/assets/maps/map0",
     "last.imagePath": "C:/Users/matth/dev/TiledWarfare/tiled_warfare/assets/maps",
     "map.height": 30,
     "map.lastUsedExportFilter": "JSON-Kartendateien (*.tmj *.json)",
     "map.lastUsedFormat": "tmx",
     "map.orientation": "2",
     "openFiles": [
-        "street_battle.tmx",
-        "Thespazztikone_tilemaps_005_neu.tsx"
+        "Thespazztikone_tilemaps_005_neu.tsx",
+        "street_battle.tmx"
     ],
     "project": "battleground.tiled-project",
     "recentFiles": [
         "Thespazztikone_tilemaps_005_neu.tsx",
-        "street_battle.tmx"
+        "street_battle.tmx",
+        "street_battle_colliders.tmx"
     ],
     "tileset.lastUsedFormat": "tsx"
 }

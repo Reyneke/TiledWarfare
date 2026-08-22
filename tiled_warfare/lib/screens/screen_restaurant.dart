@@ -1,31 +1,17 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/screens/screen_character_detail.dart';
 import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
+import 'package:tiled_warfare/services/map_registry.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
-
-class MapPreviewEntry {
-  final String mapPath;
-  final String title;
-  final String? previewPath;
-  final String tmxPath;
-
-  MapPreviewEntry({
-    required this.mapPath,
-    required this.title,
-    this.previewPath,
-    required this.tmxPath,
-  });
-}
 
 class ScreenRestaurant extends StatefulWidget {
   const ScreenRestaurant({super.key});
@@ -39,7 +25,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   String _profileImagePath = 'assets/images/echo_standard.png';
   bool _hasCustomImage = false;
   final Set<ObjectApprentice> _battleReadyCharacters = {};
-  List<MapPreviewEntry> _mapEntries = [];
+  List<MapMeta> _mapEntries = [];
   bool _isLoadingMaps = true;
   String? _mapLoadingError;
   int? _selectedMapIndex;
@@ -66,20 +52,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     setState(() {});
   }
 
-  /// Lädt die Karten-Konfiguration aus assets/maps/maps.json.
+  /// Lädt die Karten-Konfiguration aus assets/maps/maps.json via [MapRegistry].
   Future<void> _discoverMaps() async {
     try {
-      final jsonString = await rootBundle.loadString('assets/maps/maps.json');
-      final List<dynamic> jsonList = jsonDecode(jsonString);
-      final maps = jsonList.map((map) => MapPreviewEntry(
-        mapPath: map['mapPath'] as String,
-        title: map['title'] as String,
-        previewPath: map['previewPath'] as String?,
-        tmxPath: map['tmxPath'] as String,
-      )).toList();
+      final registry = await MapRegistry.loadFromAsset();
       if (!mounted) return;
       setState(() {
-        _mapEntries = maps;
+        _mapEntries = registry.maps;
         _isLoadingMaps = false;
       });
     } catch (e) {
@@ -207,7 +186,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     }
   }
 
-  Widget _buildMapTile(int index, MapPreviewEntry mapEntry, ThemeData theme) {
+  Widget _buildMapTile(int index, MapMeta mapEntry, ThemeData theme) {
     final isSelected = _selectedMapIndex == index;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
