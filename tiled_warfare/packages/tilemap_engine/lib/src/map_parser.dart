@@ -15,6 +15,13 @@ abstract class MapParser {
   /// Lädt und parst eine Karte aus einer Asset-Datei.
   Future<MapData> loadFromAsset(String assetPath);
 
+  /// Lädt und parst eine externe TSX-Tileset-Datei.
+  ///
+  /// TSX-Dateien sind immer XML (unabhängig davon, ob die referenzierende
+  /// Karte als TMX oder TMJ vorliegt). [tsxPath] ist der vollständige
+  /// Asset-Pfad zur `.tsx`-Datei.
+  Future<TilesetInfo> loadExternalTileset(String tsxPath);
+
   /// Extrahiert den Basis-Pfad aus einem Asset-Pfad.
   static String basePath(String assetPath) {
     final index = assetPath.lastIndexOf('/');
@@ -179,6 +186,7 @@ class TmxParser implements MapParser {
   }
 
   /// Lädt und parst eine TSX-Datei asynchron.
+  @override
   Future<TilesetInfo> loadExternalTileset(String tsxPath) async {
     final tsxContent = await _assetBundle.loadString(tsxPath);
     final document = XmlDocument.parse(tsxContent);
@@ -335,6 +343,25 @@ class TmjParser implements MapParser {
   Future<MapData> loadFromAsset(String assetPath) async {
     final content = await _assetBundle.loadString(assetPath);
     return parse(content, MapParser.basePath(assetPath));
+  }
+
+  @override
+  Future<TilesetInfo> loadExternalTileset(String tsxPath) async {
+    final tsxContent = await _assetBundle.loadString(tsxPath);
+    final document = XmlDocument.parse(tsxContent);
+    final tilesetElement = document.findElements('tileset').first;
+    final imageElement = tilesetElement.findElements('image').firstOrNull;
+    return TilesetInfo(
+      firstGid: 1,
+      name: tilesetElement.getAttribute('name'),
+      tileWidth: int.tryParse(tilesetElement.getAttribute('tilewidth') ?? ''),
+      tileHeight: int.tryParse(tilesetElement.getAttribute('tileheight') ?? ''),
+      tileCount: int.tryParse(tilesetElement.getAttribute('tilecount') ?? ''),
+      columns: int.tryParse(tilesetElement.getAttribute('columns') ?? ''),
+      imageSource: imageElement?.getAttribute('source'),
+      imageWidth: int.tryParse(imageElement?.getAttribute('width') ?? ''),
+      imageHeight: int.tryParse(imageElement?.getAttribute('height') ?? ''),
+    );
   }
 
   // ──────────────────────────────────────────────

@@ -196,21 +196,31 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 **3.3 Main-Commit als Submodul-Referenz festlegen**
 - Nach dem Merge den Main-Commit notieren; er dient als Ausgangsreferenz für das Submodul in OpenBrawl
 
-### Phase 4: Einbindung in OpenBrawl
+### Phase 4: Einbindung in OpenBrawl ✅ (durchgeführt)
 
 **4.1 Git-Submodul anlegen**
-- Im OpenBrawl-Repo: `git submodule add <TiledWarfare-Repo-URL> packages/tilemap_engine`
-- Optional in `.gitmodules`: `branch = main` setzen, damit das Submodul dem Main-Branch von TiledWarfare folgt (zeigt weiterhin auf konkrete Commits)
-- `pubspec.yaml` von OpenBrawl: `tilemap_engine: path: packages/tilemap_engine`
+- Im OpenBrawl-Repo als Submodul hinzugefügt: `git submodule add https://github.com/Reyneke/TiledWarfare.git packages/tilemap_engine`
+- `.gitmodules` enthält `branch = main` (Submodul folgt dem Main-Branch von TiledWarfare)
+- `pubspec.yaml` von OpenBrawl: `tilemap_engine: path: ../packages/tilemap_engine/tiled_warfare/packages/tilemap_engine`
+  - Hinweis: Das Submodul zeigt auf den **Repo-Stamm** von TiledWarfare; dadurch enthält es zusätzlich das gesamte TiledWarfare-Projekt (`packages/tilemap_engine/tiled_warfare/`). Das Engine-Paket liegt verschachtelt darunter.
+- `xml` auf `^7.0.1` angehoben (Engine-Anforderung; entspricht der Kompatibilitäts-Entscheidung „dieselben Versionen wie TiledWarfare")
+- `flutter pub get` erfolgreich durchgelaufen
 
 **4.2 OpenBrawl-Karten-Code auf Engine umstellen**
-- `lib/utils/tmx_parser.dart` löschen (wird durch `MapParser`/`MapData` aus der Engine ersetzt)
-- `lib/widgets/widget_hex_map_renderer.dart`: auf `HexGrid` und Engine-Datenmodelle umstellen; Token-Zeichnung über `tokenPainter`-Callback beibehalten
-- `lib/widgets/widget_map_loader.dart` auf die neue Engine-API umstellen (`MapParser.forPath().loadFromAsset()`)
+- `lib/utils/tmx_parser.dart` gelöscht (durch `MapParser`/`MapData` aus der Engine ersetzt)
+- `lib/widgets/widget_maploader.dart` gelöscht (Legacy, unbenutzt)
+- `lib/widgets/widget_hex_map_renderer.dart`: umgebaut auf `HexMapView` + `HexGrid` und `MapData`; Token-Zeichnung (OpenBrawl-spezifisch, `ObjectToken`) über den generischen `tokenPainter`-Callback realisiert
+- `lib/widgets/widget_map_loader.dart`: nutzt `MapParser.forPath().loadFromAsset()`, baut die `HexGrid`-Utility, löst externe TSX-Tilesets auf und lädt das Tileset-Bild
 
 **4.3 Assets vorbereiten**
-- `test.tmj`/`test.tmx` an die neue Engine übergeben (RFC: auch Base64-kodierte Layer testen)
-- `Thespazztikone_tilemaps_005_neu.png` weiterhin als Tileset verwenden
+- `test.tmj` referenziert das Tileset **extern** (`source: Thespazztikone_tilemaps_005_neu.tsx`)
+- Die Engine wurde erweitert: `MapParser.loadExternalTileset()` ist nun Teil des Interfaces und auch in `TmjParser` implementiert (TSX ist immer XML), damit die Auflösung externer TSX-Referenzen unabhängig vom Kartenformat (TMX/TMJ) funktioniert
+- `Thespazztikone_tilemaps_005_neu.png` wird weiterhin als Tileset-Bild verwendet (Pfad über `imageSource` + `basePath` aufgelöst)
+
+**Verifikation (OpenBrawl):**
+- `flutter analyze --no-fatal-infos` → `EXIT_CODE=0` (nur 8 vorbestehende `info`-Hinweise in `widget_image_select.dart`)
+
+**Hinweis / Nächster Schritt:** Die Engine-Erweiterung (`loadExternalTileset` im `TmjParser`) wurde **im Submodul** vorgenommen. Damit sie dauerhaft in der Engine ist, muss sie im TiledWarfare-Repo committet und gepusht werden, und das Submodul in OpenBrawl auf den neuen Commit aktualisiert werden.
 
 ### Phase 5: Tests und Verifikation
 
@@ -222,9 +232,15 @@ Das OpenBrawl-Projekt (`c:/Users/matth/dev/OpenBrawl/open_brawl`) besitzt bereit
 - Neuen Test für die Engine-Integration anlegen (Parser-Laden der `test.tmj`, HexGrid-Pixel-Konvertierung)
 - `flutter analyze` und `flutter test` in OpenBrawl
 
-**5.3 Web-Kompatibilität**
-- `flutter build web` in TiledWarfare (verifiziert den `dart:io`-Fix)
-- Falls Web-Build ohne Fehler durchläuft, ist die Entkopplung erfolgreich
+**5.3 Web-Kompatibilität ✅ (verifiziert)**
+- `flutter build web` in TiledWarfare erfolgreich: `√ Built build\web` (84,2s) – damit ist der `dart:io`-Fix (Umstellung auf `package:archive` in `map_parser.dart`) bestätigt. Die Engine ist web-kompatibel.
+- Hinweis: Es erschien eine unkritische Font-Warnung (CupertinoIcons fehlt in pubspec), die den Build nicht stoppt.
+
+**Ergänzung: `MapParser.loadExternalTileset` in Engine übernommen (TiledWarfare)**
+- Abstrakte Methode `loadExternalTileset(String tsxPath)` im `MapParser`-Interface ergänzt
+- Implementierung in `TmxParser` (mit `@override`) und neu in `TmjParser` (TSX ist immer XML – unabhängig vom Kartenformat)
+- Verifikation: `flutter test` → 115 Tests grün; `flutter analyze --no-fatal-infos` → 20 vorbestehende `info`-Hinweise, keine Fehler
+- **Auszuführen vom Nutzer**: Änderungen in TiledWarfare committen/pushen und das Submodul in OpenBrawl auf den neuen Commit aktualisieren (`git submodule update --remote`)
 
 ### Phase 6: Abschluss
 
