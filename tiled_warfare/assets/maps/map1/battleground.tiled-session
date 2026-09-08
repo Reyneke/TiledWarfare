@@ -1,9 +1,34 @@
 {
-    "activeFile": "street_battle_colliders.tmx",
+    "activeFile": "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/test.tmx",
     "expandedProjectPaths": [
-        "."
     ],
+    "file.lastUsedOpenFilter": "Alle Dateien (*)",
     "fileStates": {
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/Thespazztikone_tilemaps_005_neu.tsx": {
+            "scaleInDock": 1
+        },
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/map0/Thespazztikone_tilemaps_005_neu.tsx": {
+            "scaleInDock": 1
+        },
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/map0/street_battle.tmx": {
+            "scale": 0.9110655737704917,
+            "selectedLayer": 5,
+            "viewCenter": {
+                "x": 889.6176338281603,
+                "y": 218.97435897435898
+            }
+        },
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/test.tmx": {
+            "expandedObjectLayers": [
+                2
+            ],
+            "scale": 2,
+            "selectedLayer": 7,
+            "viewCenter": {
+                "x": 743.75,
+                "y": 143.75
+            }
+        },
         "Thespazztikone_tilemaps_005_neu.tsx": {
             "scaleInDock": 1,
             "scaleInEditor": 1
@@ -32,11 +57,12 @@
     "map.lastUsedFormat": "tmx",
     "map.orientation": "2",
     "openFiles": [
-        "Thespazztikone_tilemaps_005_neu.tsx",
-        "street_battle_colliders.tmx"
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/test.tmx"
     ],
     "project": "battleground.tiled-project",
     "recentFiles": [
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/test.tmx",
+        "C:/Users/matth/dev/OpenBrawl/open_brawl/assets/maps/map0/street_battle.tmx",
         "Thespazztikone_tilemaps_005_neu.tsx",
         "street_battle_colliders.tmx",
         "street_battle.tmx"
