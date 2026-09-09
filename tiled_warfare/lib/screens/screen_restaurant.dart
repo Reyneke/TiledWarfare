@@ -9,6 +9,8 @@ import 'package:tiled_warfare/screens/screen_character_detail.dart';
 import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/services/map_registry.dart';
+import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
@@ -86,6 +88,90 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
 
   Future<void> _saveState() async {
     await _profile.saveToStorage();
+  }
+
+  /// Switches to another savegame of the profile.
+  ///
+  /// Saves the current state first, then reloads [restaurantId] from storage
+  /// and resets the local UI states (battle selection, derived logo image).
+  Future<void> _switchRestaurant(int restaurantId) async {
+    if (restaurantId == _profile.activeRestaurantId) return;
+    await _saveState();
+
+    final profiles = await ProfileStorage.loadAllProfiles();
+    final data = profiles.cast<ProfileData?>().firstWhere(
+          (p) => p!.id == _profile.id,
+          orElse: () => null,
+        );
+    if (data == null) return;
+
+    _profile.loadFromData(data, restaurantId: restaurantId);
+    setState(() {
+      _battleReadyCharacters.clear();
+      final logo = _profile.restaurantLogoPath;
+      if (logo != null && logo.isNotEmpty) {
+        _profileImagePath = logo;
+        _hasCustomImage = true;
+      } else {
+        _profileImagePath = 'assets/images/echo_standard.png';
+        _hasCustomImage = false;
+      }
+    });
+  }
+
+  /// Shows a dialog to switch to another (non-dissolved) savegame.
+  Future<void> _showSwitchRestaurantDialog(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final restaurants = _profile.profileRestaurants
+        .where((r) => r.id != _profile.activeRestaurantId)
+        .toList();
+
+    if (restaurants.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.noOtherSavegames)),
+      );
+      return;
+    }
+
+    final selectedId = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.switchRestaurant),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final r in restaurants)
+                ListTile(
+                  enabled: !r.isDissolved,
+                  leading: CircleAvatar(
+                    child: r.isDissolved
+                        ? const Icon(Icons.broken_image)
+                        : const Icon(Icons.restaurant),
+                  ),
+                  title: Text(r.name),
+                  subtitle: Text(
+                    r.isDissolved
+                        ? l10n.dissolved
+                        : l10n.districtLabel(r.district ?? ''),
+                  ),
+                  onTap: () => Navigator.pop(dialogContext, r.id),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedId != null) {
+      await _switchRestaurant(selectedId);
+    }
   }
 
   Future<void> _showEditRestaurantNameDialog(BuildContext context) async {
@@ -511,6 +597,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
             onPressed: () => _showEditRestaurantNameDialog(context),
           ),
           IconButton(
+            icon: const Icon(Icons.swap_horiz),
+            tooltip: l10n.switchRestaurant,
+            onPressed: () => _showSwitchRestaurantDialog(context),
+          ),
+          IconButton(
             icon: Icon(
               switch (AppTheme.themeModeNotifier.value) {
                 ThemeMode.light => Icons.light_mode,
@@ -601,6 +692,17 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                 ),
               ],
             ),
+            if (_profile.activeDistrict != null &&
+                _profile.activeDistrict!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  l10n.districtLabel(_profile.activeDistrict!),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             const SizedBox(height: 24),
             Text(
               l10n.personnelCount(_profile.personalCount),

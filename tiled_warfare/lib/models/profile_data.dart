@@ -1,3 +1,9 @@
+/// Default starting budget of a restaurant (EUR).
+///
+/// Used when creating new restaurants and as the fallback value in the
+/// JSON deserializers. Referenced as `ObjectProfile.startBudget`.
+const int kDefaultRestaurantBudget = 10000;
+
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
 ///
@@ -36,7 +42,7 @@ class ProfileData {
     required this.id,
     required this.name,
     required this.creationDate,
-    this.budget = 10000,
+    this.budget = kDefaultRestaurantBudget,
     this.profileImagePath,
     List<StaffData>? staff,
     List<MedicData>? medics,
@@ -50,10 +56,10 @@ class ProfileData {
         'id': id,
         'name': name,
         'creationDate': creationDate.toIso8601String(),
-        'budget': budget,
         if (profileImagePath != null) 'profileImagePath': profileImagePath,
-        'staff': staff.map((s) => s.toJson()).toList(),
-        'medics': medics.map((m) => m.toJson()).toList(),
+        // Profile level no longer holds any play state: budget/staff/medics
+        // live per restaurant (V1 "mehrere Restaurants"). fromJson still reads
+        // the legacy fields so they can be migrated once on load.
         'restaurants': restaurants.map((r) => r.toJson()).toList(),
       };
 
@@ -62,7 +68,7 @@ class ProfileData {
         id: json['id'] as int,
         name: json['name'] as String,
         creationDate: DateTime.parse(json['creationDate'] as String),
-        budget: json['budget'] as int? ?? 10000,
+        budget: json['budget'] as int? ?? kDefaultRestaurantBudget,
         profileImagePath: json['profileImagePath'] as String?,
         staff: (json['staff'] as List<dynamic>?)
                 ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
@@ -212,27 +218,91 @@ class MedicData {
 
 /// Datenmodell für ein Restaurant innerhalb eines Profils.
 class RestaurantData {
-  /// Name des Restaurants.
+  /// Stable, unique id of the savegame (CRC32 of name + creation time).
+  /// `-1` marks an as-yet unassigned id (legacy data -> migration assigns one).
+  int id;
+
+  /// Name of the restaurant.
   String name;
 
-  /// Pfad zum Logo-Bild (optional).
+  /// Path to the logo image (optional).
   String? logoPath;
 
+  /// District (location) of the restaurant - a name from the "Nachbarschaften"
+  /// object layer in `assets/world/theworld.tmx`. At most one restaurant per
+  /// district and profile.
+  String? district;
+
+  /// Budget of this savegame (starts at [kDefaultRestaurantBudget]).
+  int budget;
+
+  /// Hired characters of this savegame (serialized).
+  List<StaffData> staff;
+
+  /// Hired team medics of this savegame (serialized).
+  List<MedicData> medics;
+
+  /// Last played timestamp (reserved for the realtime system, V8).
+  DateTime? lastSeenAt;
+
+  /// `true` once the savegame has been dissolved after permadeath.
+  bool isDissolved;
+
+  /// Timestamp of the dissolution (optional, for display / V8).
+  DateTime? dissolvedAt;
+
   RestaurantData({
+    this.id = -1,
     required this.name,
     this.logoPath,
-  });
+    this.district,
+    this.budget = kDefaultRestaurantBudget,
+    List<StaffData>? staff,
+    List<MedicData>? medics,
+    this.lastSeenAt,
+    this.isDissolved = false,
+    this.dissolvedAt,
+  })  : staff = staff ?? [],
+        medics = medics ?? [];
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'name': name,
         if (logoPath != null) 'logoPath': logoPath,
+        if (district != null) 'district': district,
+        'budget': budget,
+        'staff': staff.map((s) => s.toJson()).toList(),
+        'medics': medics.map((m) => m.toJson()).toList(),
+        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+        'isDissolved': isDissolved,
+        if (dissolvedAt != null) 'dissolvedAt': dissolvedAt!.toIso8601String(),
       };
 
   factory RestaurantData.fromJson(Map<String, dynamic> json) => RestaurantData(
+        id: json['id'] as int? ?? -1,
         name: json['name'] as String,
         logoPath: json['logoPath'] as String?,
+        district: json['district'] as String?,
+        budget: json['budget'] as int? ?? kDefaultRestaurantBudget,
+        staff: (json['staff'] as List<dynamic>?)
+                ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        medics: (json['medics'] as List<dynamic>?)
+                ?.map((e) => MedicData.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        lastSeenAt: json['lastSeenAt'] == null
+            ? null
+            : DateTime.parse(json['lastSeenAt'] as String),
+        isDissolved: json['isDissolved'] as bool? ?? false,
+        dissolvedAt: json['dissolvedAt'] == null
+            ? null
+            : DateTime.parse(json['dissolvedAt'] as String),
       );
 
   @override
-  String toString() => 'RestaurantData(name=$name)';
+  String toString() => 'RestaurantData(id=$id, name=$name, district=$district, '
+      'budget=$budget, staff=${staff.length}, medics=${medics.length}, '
+      'isDissolved=$isDissolved)';
 }

@@ -73,6 +73,36 @@ class AppLocalizationsDe extends AppLocalizations {
   String get newNameHint => 'Neuen Namen eingeben';
 
   @override
+  String get districtSection => 'Stadtteile';
+
+  @override
+  String districtLabel(String district) {
+    return 'Stadtteil: $district';
+  }
+
+  @override
+  String get foundRestaurant => 'Neues Restaurant gründen';
+
+  @override
+  String get dissolved => 'Aufgelöst';
+
+  @override
+  String get switchRestaurant => 'Spielstand wechseln';
+
+  @override
+  String districtLoadError(String error) {
+    return 'Stadtteile konnten nicht geladen werden:\n$error';
+  }
+
+  @override
+  String districtOccupied(String district) {
+    return 'In $district gibt es bereits ein Restaurant.';
+  }
+
+  @override
+  String get noOtherSavegames => 'Keine weiteren Spielstände vorhanden.';
+
+  @override
   String get profileSection => 'Profile';
 
   @override

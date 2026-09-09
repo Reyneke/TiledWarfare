@@ -8,6 +8,7 @@ import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
+import 'package:tiled_warfare/utils/crc32.dart';
 
 /// Verwaltet das Restaurant und alle Dinge, die ausserhalb des Gefechts
 /// stattfinden (Teamverwaltung, Budget, Anheuerung etc.).
@@ -16,7 +17,9 @@ import 'package:tiled_warfare/services/profile_storage.dart';
 /// Austausch, etwa wenn es darum geht, welche Mitarbeiter ins Gefecht gehen
 /// (siehe: `doc/rules/team_rules.md`).
 ///
-/// Dieses Objekt ist ein Singleton, da es nur ein Restaurant pro Spieler gibt.
+/// This is a singleton that only holds the state of the *active* restaurant
+/// (savegame). A profile may own several restaurants; each of them is an
+/// independent savegame with its own budget, team and medics (V1).
 class ObjectProfile {
   static final ObjectProfile _instance = ObjectProfile._internal();
 
@@ -35,7 +38,7 @@ class ObjectProfile {
   String restaurantName = '';
 
   /// Aktuelles Budget in Euro.
-  int budget = 10000;
+  int budget = kDefaultRestaurantBudget;
 
   /// Pfad zum Profilbild (optional).
   String? profileImagePath;
@@ -46,8 +49,25 @@ class ObjectProfile {
   /// Ob ein benutzerdefiniertes Bild geladen wurde.
   bool hasCustomImage = false;
 
+  /// Id of the currently active restaurant (savegame). `-1` = none loaded.
+  int activeRestaurantId = -1;
+
+  /// District of the active restaurant (location from `theworld.tmx`).
+  String? activeDistrict;
+
+  /// Full profile data from the last load - basis for the merge in
+  /// [toProfileData] (all other savegames stay untouched while saving).
+  ProfileData? _profileData;
+
+  /// Returns the profile data taken over on the last load.
+  ProfileData? get profileData => _profileData;
+
+  /// Returns the profile's restaurants (state from the last load).
+  List<RestaurantData> get profileRestaurants =>
+      _profileData?.restaurants ?? const [];
+
   /// Startbudget (wird zu Spielbeginn festgelegt).
-  static const int startBudget = 10000;
+  static const int startBudget = kDefaultRestaurantBudget;
 
   /// Maximale Negativgrenze (doppelter Startwert).
   static const int negativeLimit = -20000;
@@ -300,13 +320,35 @@ class ObjectProfile {
     _performSurvivalRolls();
   }
 
-  /// Setzt das Restaurant für einen Neustand zurück.
-  void reset() {
-    id = 0;
-    name = '';
-    restaurantName = '';
+  /// Resets to a fresh restaurant savegame (restaurant restart).
+  ///
+  /// V1-fixed semantics (the surrounding flow is steered by V2): the profile is
+  /// kept; the currently active restaurant - if any - is marked as dissolved
+  /// (unless [markCurrentDissolved] is false) and a brand-new savegame (new id,
+  /// default name, [startBudget], empty team/medics) is created in [district].
+  /// All other savegames of the profile stay untouched.
+  void reset({String? district, bool markCurrentDissolved = true}) {
+    // Mark the currently active restaurant as dissolved.
+    if (markCurrentDissolved &&
+        _profileData != null &&
+        activeRestaurantId > 0) {
+      final index = _profileData!.restaurants
+          .indexWhere((r) => r.id == activeRestaurantId);
+      if (index >= 0) {
+        final current = _profileData!.restaurants[index];
+        current.isDissolved = true;
+        current.dissolvedAt = DateTime.now();
+      }
+    }
+
+    final newId = CRC32.compute(
+        '${restaurantName.isEmpty ? 'Neues Restaurant' : restaurantName}'
+        '${DateTime.now().microsecondsSinceEpoch}');
+    activeRestaurantId = newId;
+    activeDistrict = district;
+    restaurantName = 'Neues Restaurant';
+    restaurantLogoPath = null;
     budget = startBudget;
-    profileImagePath = null;
     hasCustomImage = false;
     _personal.clear();
     _hiredMedics.clear();
@@ -315,32 +357,49 @@ class ObjectProfile {
 
   // ── Persistenz ─────────────────────────────────────────────────────────
 
-  /// Lädt die Daten aus einem [ProfileData] in dieses Singleton.
-  void loadFromData(ProfileData data) {
+  /// Loads the data from a [ProfileData] into this singleton.
+  ///
+  /// Loads only the state of the savegame [restaurantId] (fallback: the active
+  /// restaurant, then the first entry). All state fields (name, logo, budget,
+  /// team, medics) refer exclusively to this restaurant. The [data] reference
+  /// is kept for the merge performed on save.
+  void loadFromData(ProfileData data, {int? restaurantId}) {
+    _profileData = data;
     id = data.id;
     name = data.name;
-    restaurantName = data.restaurants.isNotEmpty
-        ? data.restaurants.first.name
-        : '';
-    budget = data.budget;
     profileImagePath = data.profileImagePath;
     hasCustomImage = data.profileImagePath != null;
-    restaurantLogoPath = data.restaurants.isNotEmpty
-        ? data.restaurants.first.logoPath
-        : null;
 
-    // Personal wiederherstellen
+    final restaurant = _resolveRestaurant(data, restaurantId);
+    if (restaurant == null) {
+      activeRestaurantId = -1;
+      activeDistrict = null;
+      restaurantName = '';
+      restaurantLogoPath = null;
+      budget = startBudget;
+      _personal.clear();
+      _hiredMedics.clear();
+      return;
+    }
+
+    activeRestaurantId = restaurant.id;
+    activeDistrict = restaurant.district;
+    restaurantName = restaurant.name;
+    restaurantLogoPath = restaurant.logoPath;
+    budget = restaurant.budget;
+
+    // Restore team.
     _personal.clear();
-    for (final sd in data.staff) {
+    for (final sd in restaurant.staff) {
       final character = _staffDataToApprentice(sd);
       if (character != null) {
         _personal.add(character);
       }
     }
 
-    // Teamärzte wiederherstellen
+    // Restore team medics.
     _hiredMedics.clear();
-    for (final md in data.medics) {
+    for (final md in restaurant.medics) {
       final medic = _medicDataToTeamMedic(md);
       if (medic != null) {
         _hiredMedics.add(medic);
@@ -348,20 +407,73 @@ class ObjectProfile {
     }
   }
 
-  /// Erzeugt aus diesem Singleton ein [ProfileData] zum Speichern.
-  ProfileData toProfileData() => ProfileData(
-        id: id,
-        name: name,
-        creationDate: DateTime.now(),
-        budget: budget,
-        profileImagePath: profileImagePath,
-        staff: _personal.map(_apprenticeToStaffData).toList(),
-        medics: _hiredMedics.map(_medicToMedicData).toList(),
-        restaurants: restaurantName.isNotEmpty
-            ? [RestaurantData(name: restaurantName,
-                               logoPath: restaurantLogoPath)]
-            : [],
-      );
+  /// Looks up the savegame inside [data] - first by [restaurantId], then by
+  /// the active restaurant, finally by the first entry.
+  RestaurantData? _resolveRestaurant(ProfileData data, int? restaurantId) {
+    final wanted = <int>{};
+    if (restaurantId != null) wanted.add(restaurantId);
+    if (activeRestaurantId > 0) wanted.add(activeRestaurantId);
+    for (final candidate in wanted) {
+      final match = data.restaurants.cast<RestaurantData?>().firstWhere(
+            (r) => r!.id == candidate,
+            orElse: () => null,
+          );
+      if (match != null) return match;
+    }
+    return data.restaurants.isNotEmpty ? data.restaurants.first : null;
+  }
+
+  /// Builds a [ProfileData] for saving from this singleton.
+  ///
+  /// Merging (V1): only the *active* restaurant is written back into its slot
+  /// of the profile's `restaurants` list; all other savegames are kept
+  /// untouched. `lastSeenAt` is refreshed; the slot's `isDissolved`/
+  /// `dissolvedAt` are preserved. A freshly founded restaurant (no slot yet) is
+  /// appended and [activeRestaurantId] is set.
+  ProfileData toProfileData() {
+    var activeId = activeRestaurantId;
+    if (activeId <= 0 && restaurantName.isNotEmpty) {
+      activeId = CRC32.compute(
+          '$restaurantName${DateTime.now().toIso8601String()}');
+    }
+
+    final restaurants = _profileData != null
+        ? List<RestaurantData>.from(_profileData!.restaurants)
+        : <RestaurantData>[];
+    final existingIndex = restaurants.indexWhere((r) => r.id == activeId);
+
+    final active = RestaurantData(
+      id: activeId,
+      name: restaurantName,
+      logoPath: restaurantLogoPath,
+      district: activeDistrict,
+      budget: budget,
+      staff: _personal.map(_apprenticeToStaffData).toList(),
+      medics: _hiredMedics.map(_medicToMedicData).toList(),
+      lastSeenAt: DateTime.now(),
+      isDissolved: existingIndex >= 0
+          ? restaurants[existingIndex].isDissolved
+          : false,
+      dissolvedAt: existingIndex >= 0
+          ? restaurants[existingIndex].dissolvedAt
+          : null,
+    );
+
+    if (existingIndex >= 0) {
+      restaurants[existingIndex] = active;
+    } else if (restaurantName.isNotEmpty) {
+      restaurants.add(active);
+      activeRestaurantId = activeId;
+    }
+
+    return ProfileData(
+      id: id,
+      name: name,
+      creationDate: _profileData?.creationDate ?? DateTime.now(),
+      profileImagePath: profileImagePath,
+      restaurants: restaurants,
+    );
+  }
 
   /// Speichert den aktuellen Zustand asynchron in den ProfileStorage.
   Future<bool> saveToStorage() async {
@@ -371,14 +483,14 @@ class ObjectProfile {
 
   /// Lädt asynchron ein Profil aus dem ProfileStorage und initialisiert
   /// dieses Singleton damit.
-  Future<bool> loadFromStorage(int profileId) async {
+  Future<bool> loadFromStorage(int profileId, {int? restaurantId}) async {
     final profiles = await ProfileStorage.loadAllProfiles();
     final data = profiles.cast<ProfileData?>().firstWhere(
           (p) => p!.id == profileId,
           orElse: () => null,
         );
     if (data == null) return false;
-    loadFromData(data);
+    loadFromData(data, restaurantId: restaurantId);
     return true;
   }
 

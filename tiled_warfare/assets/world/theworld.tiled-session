@@ -1,0 +1,24 @@
+{
+    "activeFile": "theworld.tmx",
+    "expandedProjectPaths": [
+        "."
+    ],
+    "fileStates": {
+        "theworld.tmx": {
+            "scale": 3,
+            "selectedLayer": 2,
+            "viewCenter": {
+                "x": 232.16666666666669,
+                "y": 788.8333333333333
+            }
+        }
+    },
+    "map.lastUsedFormat": "tmx",
+    "openFiles": [
+        "theworld.tmx"
+    ],
+    "project": "theworld.tiled-project",
+    "recentFiles": [
+        "theworld.tmx"
+    ]
+}

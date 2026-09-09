@@ -6,6 +6,9 @@ import 'package:tiled_warfare/l10n/locale_provider.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
+import 'package:tiled_warfare/models/district.dart';
+import 'package:tiled_warfare/services/district_service.dart';
+import 'package:tiled_warfare/utils/crc32.dart';
 import 'package:tiled_warfare/screens/screen_restaurant.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
@@ -21,7 +24,14 @@ class ScreenStart extends StatefulWidget {
 class _ScreenStartState extends State<ScreenStart> {
   List<ProfileData> _profiles = [];
   ProfileData? _selectedProfile;
-  RestaurantData? _selectedRestaurant;
+
+  /// Id of the selected savegame (robust against reloads).
+  int? _selectedRestaurantId;
+
+  /// Districts from `assets/world/theworld.tmx`.
+  List<District> _districts = [];
+  bool _isLoadingDistricts = true;
+  String? _districtsLoadingError;
   bool _isLoading = true;
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -29,6 +39,7 @@ class _ScreenStartState extends State<ScreenStart> {
   void initState() {
     super.initState();
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
+    _loadDistricts();
     _loadProfiles();
   }
 
@@ -42,14 +53,44 @@ class _ScreenStartState extends State<ScreenStart> {
     setState(() {});
   }
 
+  /// Loads the districts once from the world map (`theworld.tmx`).
+  Future<void> _loadDistricts() async {
+    try {
+      final districts = await DistrictService.loadDistricts();
+      if (!mounted) return;
+      setState(() {
+        _districts = districts;
+        _isLoadingDistricts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _districtsLoadingError = e.toString();
+        _isLoadingDistricts = false;
+      });
+    }
+  }
+
+  /// Looks up the savegame of [profile] that occupies [district] (if any).
+  RestaurantData? _findRestaurantByDistrict(
+    ProfileData profile,
+    String district,
+  ) {
+    return profile.restaurants.cast<RestaurantData?>().firstWhere(
+          (r) => r!.district == district,
+          orElse: () => null,
+        );
+  }
+
   Future<void> _loadProfiles() async {
+
     final profiles = await ProfileStorage.loadAllProfiles();
     setState(() {
       _profiles = profiles;
       if (_selectedProfile != null &&
           !profiles.any((p) => p.id == _selectedProfile!.id)) {
         _selectedProfile = null;
-        _selectedRestaurant = null;
+        _selectedRestaurantId = null;
       }
       _isLoading = false;
     });
@@ -240,9 +281,17 @@ class _ScreenStartState extends State<ScreenStart> {
     }
   }
 
-  Future<void> _showCreateRestaurantDialog() async {
+  Future<void> _showCreateRestaurantDialog(String district) async {
     if (_selectedProfile == null) return;
     final l10n = AppLocalizations.of(context)!;
+
+    // Guard: at most one restaurant per district and profile.
+    if (_findRestaurantByDistrict(_selectedProfile!, district) != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.districtOccupied(district))),
+      );
+      return;
+    }
 
     final result = await _showTextFormDialog(
       title: l10n.newRestaurant,
@@ -252,16 +301,23 @@ class _ScreenStartState extends State<ScreenStart> {
     );
 
     if (result != null && result.isNotEmpty) {
-      await ProfileStorage.addRestaurantToProfile(
-        _selectedProfile!.id,
-        RestaurantData(name: result),
-      );
+      final id =
+          CRC32.compute('$result${DateTime.now().toIso8601String()}');
+      setState(() {
+        _selectedProfile!.restaurants.add(RestaurantData(
+          id: id,
+          name: result,
+          district: district,
+        ));
+        _selectedRestaurantId = id;
+      });
+      await ProfileStorage.saveProfile(_selectedProfile!);
       await _loadProfiles();
       _updateSelectedProfile();
     }
   }
 
-  Future<void> _confirmDeleteRestaurant(int index) async {
+  Future<void> _confirmDeleteRestaurant(RestaurantData restaurant) async {
     if (_selectedProfile == null) return;
     final l10n = AppLocalizations.of(context)!;
 
@@ -269,7 +325,7 @@ class _ScreenStartState extends State<ScreenStart> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteRestaurant),
-        content: Text(l10n.deleteRestaurantConfirm(_selectedProfile!.restaurants[index].name)),
+        content: Text(l10n.deleteRestaurantConfirm(restaurant.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -287,16 +343,15 @@ class _ScreenStartState extends State<ScreenStart> {
     );
 
     if (confirmed == true) {
-      await ProfileStorage.removeRestaurantFromProfile(
-        _selectedProfile!.id,
-        index,
-      );
+      setState(() {
+        _selectedProfile!.restaurants.remove(restaurant);
+        if (_selectedRestaurantId == restaurant.id) {
+          _selectedRestaurantId = null;
+        }
+      });
+      await ProfileStorage.saveProfile(_selectedProfile!);
       await _loadProfiles();
       _updateSelectedProfile();
-      if (_selectedRestaurant != null &&
-          !_selectedProfile!.restaurants.contains(_selectedRestaurant)) {
-        _selectedRestaurant = null;
-      }
     }
   }
 
@@ -331,12 +386,19 @@ class _ScreenStartState extends State<ScreenStart> {
   }
 
   Future<void> _login() async {
-    if (_selectedProfile == null) return;
+    if (_selectedProfile == null || _selectedRestaurantId == null) return;
 
     final freshProfile = _findProfileById(_selectedProfile!.id);
     if (freshProfile == null) return;
 
-    ObjectProfile().loadFromData(freshProfile);
+    // Resolve the selected savegame; dissolved ones cannot be logged in.
+    final selected = freshProfile.restaurants.cast<RestaurantData?>().firstWhere(
+          (r) => r!.id == _selectedRestaurantId,
+          orElse: () => null,
+        );
+    if (selected == null || selected.isDissolved) return;
+
+    ObjectProfile().loadFromData(freshProfile, restaurantId: selected.id);
 
     if (!mounted) return;
     await Navigator.push(
@@ -355,7 +417,7 @@ class _ScreenStartState extends State<ScreenStart> {
         _selectedProfile = updated;
       } else {
         _selectedProfile = null;
-        _selectedRestaurant = null;
+        _selectedRestaurantId = null;
       }
     }
   }
@@ -417,18 +479,11 @@ class _ScreenStartState extends State<ScreenStart> {
 
                   _buildSectionHeader(
                     context,
-                    icon: Icons.restaurant,
-                    title: l10n.restaurantSection,
-                    action: IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: l10n.newRestaurantTooltip,
-                      onPressed: _selectedProfile != null
-                          ? _showCreateRestaurantDialog
-                          : null,
-                    ),
+                    icon: Icons.map,
+                    title: l10n.districtSection,
                   ),
                   const SizedBox(height: 8),
-                  _buildRestaurantList(context, theme),
+                  _buildDistrictList(context, theme),
 
                   const SizedBox(height: 24),
 
@@ -439,8 +494,10 @@ class _ScreenStartState extends State<ScreenStart> {
                           ? l10n.loginAs(_selectedProfile!.name)
                           : l10n.selectProfilePrompt,
                     ),
-                    onPressed:
-                        _selectedProfile != null ? _login : null,
+                    onPressed: _selectedProfile != null &&
+                            _selectedRestaurantId != null
+                        ? _login
+                        : null,
                   ),
                 ],
               ),
@@ -452,7 +509,7 @@ class _ScreenStartState extends State<ScreenStart> {
     BuildContext context, {
     required IconData icon,
     required String title,
-    required Widget action,
+    Widget? action,
   }) {
     final theme = Theme.of(context);
     return Row(
@@ -461,7 +518,7 @@ class _ScreenStartState extends State<ScreenStart> {
         const SizedBox(width: 8),
         Text(title, style: theme.textTheme.headlineSmall),
         const Spacer(),
-        action,
+        ?action,
       ],
     );
   }
@@ -548,7 +605,7 @@ class _ScreenStartState extends State<ScreenStart> {
               setState(() {
                 _selectedProfile =
                     isSelected ? null : profile;
-                _selectedRestaurant = null;
+                _selectedRestaurantId = null;
               });
             },
           ),
@@ -557,7 +614,13 @@ class _ScreenStartState extends State<ScreenStart> {
     );
   }
 
-  Widget _buildRestaurantList(BuildContext context, ThemeData theme) {
+  /// Builds the district selection for the selected profile.
+  ///
+  /// Per district from `theworld.tmx`: if the profile already owns a (non
+  /// dissolved) restaurant there it can be selected by id and loaded via the
+  /// login button. If the district is free, a new restaurant can be founded.
+  /// Dissolved savegames stay visible (badge) but cannot be loaded.
+  Widget _buildDistrictList(BuildContext context, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
 
     if (_selectedProfile == null) {
@@ -577,18 +640,20 @@ class _ScreenStartState extends State<ScreenStart> {
       );
     }
 
-    final restaurants = _selectedProfile!.restaurants;
+    if (_isLoadingDistricts) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    if (restaurants.isEmpty) {
+    if (_districtsLoadingError != null || _districts.isEmpty) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Center(
             child: Text(
-              l10n.noRestaurantsYet,
+              l10n.districtLoadError(_districtsLoadingError ?? ''),
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                color: theme.colorScheme.error,
               ),
             ),
           ),
@@ -599,68 +664,121 @@ class _ScreenStartState extends State<ScreenStart> {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: restaurants.length,
+      itemCount: _districts.length,
       itemBuilder: (context, index) {
-        final restaurant = restaurants[index];
-        final isSelected = restaurant == _selectedRestaurant;
-
-        return Card(
-          color: isSelected
-              ? theme.colorScheme.secondaryContainer
-              : null,
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: isSelected
-                  ? theme.colorScheme.secondary
-                  : theme.colorScheme.surfaceContainerHighest,
-              child: restaurant.logoPath != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.file(
-                        File(restaurant.logoPath!),
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            Icon(Icons.restaurant,
-                                color: isSelected
-                                    ? theme
-                                        .colorScheme.onSecondary
-                                    : null),
-                      ),
-                    )
-                  : Icon(Icons.restaurant,
-                      color: isSelected
-                          ? theme.colorScheme.onSecondary
-                          : null),
-            ),
-            title: Text(restaurant.name),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isSelected)
-                  Icon(Icons.check_circle,
-                      color: theme.colorScheme.secondary)
-                else
-                  const SizedBox(width: 24),
-                IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      color: theme.colorScheme.error),
-                  tooltip: l10n.deleteRestaurantTooltip,
-                  onPressed: () =>
-                      _confirmDeleteRestaurant(index),
-                ),
-              ],
-            ),
-            onTap: () {
-              setState(() {
-                _selectedRestaurant =
-                    isSelected ? null : restaurant;
-              });
-            },
-          ),
-        );
+        final district = _districts[index];
+        return _buildDistrictTile(context, theme, district);
       },
+    );
+  }
+
+  /// Builds a single district tile.
+  Widget _buildDistrictTile(
+    BuildContext context,
+    ThemeData theme,
+    District district,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    final restaurant =
+        _findRestaurantByDistrict(_selectedProfile!, district.name);
+
+    // Free district -> found a new restaurant.
+    if (restaurant == null) {
+      return Card(
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: theme.colorScheme.primaryContainer,
+            child: Icon(
+              Icons.add,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+          title: Text(l10n.foundRestaurant),
+          subtitle: Text(l10n.districtLabel(district.name)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showCreateRestaurantDialog(district.name),
+        ),
+      );
+    }
+
+    final isSelected = restaurant.id == _selectedRestaurantId;
+
+    // Dissolved savegame: stays visible (badge) but cannot be loaded.
+    if (restaurant.isDissolved) {
+      return Card(
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: ListTile(
+          enabled: false,
+          leading: const CircleAvatar(child: Icon(Icons.broken_image)),
+          title: Text(restaurant.name),
+          subtitle: Text(
+            '${l10n.districtLabel(district.name)} - ${l10n.dissolved}',
+          ),
+          trailing: IconButton(
+            icon: Icon(Icons.delete_outline,
+                color: theme.colorScheme.error),
+            tooltip: l10n.deleteRestaurantTooltip,
+            onPressed: () => _confirmDeleteRestaurant(restaurant),
+          ),
+        ),
+      );
+    }
+
+    // Occupied district -> select the existing savegame for login.
+    return Card(
+      color: isSelected
+          ? theme.colorScheme.secondaryContainer
+          : null,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: isSelected
+              ? theme.colorScheme.secondary
+              : theme.colorScheme.surfaceContainerHighest,
+          child: restaurant.logoPath != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.file(
+                    File(restaurant.logoPath!),
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Icon(Icons.restaurant,
+                            color: isSelected
+                                ? theme
+                                    .colorScheme.onSecondary
+                                : null),
+                  ),
+                )
+              : Icon(Icons.restaurant,
+                  color: isSelected
+                      ? theme.colorScheme.onSecondary
+                      : null),
+        ),
+        title: Text(restaurant.name),
+        subtitle: Text(l10n.districtLabel(district.name)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected)
+              Icon(Icons.check_circle,
+                  color: theme.colorScheme.secondary)
+            else
+              const SizedBox(width: 24),
+            IconButton(
+              icon: Icon(Icons.delete_outline,
+                  color: theme.colorScheme.error),
+              tooltip: l10n.deleteRestaurantTooltip,
+              onPressed: () => _confirmDeleteRestaurant(restaurant),
+            ),
+          ],
+        ),
+        onTap: () {
+          setState(() {
+            _selectedRestaurantId = isSelected ? null : restaurant.id;
+          });
+        },
+      ),
     );
   }
 

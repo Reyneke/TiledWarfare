@@ -218,6 +218,54 @@ abstract class AppLocalizations {
   /// **'Neuen Namen eingeben'**
   String get newNameHint;
 
+  /// Heading for the district (Stadtteil) selection
+  ///
+  /// In de, this message translates to:
+  /// **'Stadtteile'**
+  String get districtSection;
+
+  /// Label showing the district of a restaurant
+  ///
+  /// In de, this message translates to:
+  /// **'Stadtteil: {district}'**
+  String districtLabel(String district);
+
+  /// Action to found a new restaurant in a free district
+  ///
+  /// In de, this message translates to:
+  /// **'Neues Restaurant gründen'**
+  String get foundRestaurant;
+
+  /// Badge for a dissolved (bankrupt) savegame
+  ///
+  /// In de, this message translates to:
+  /// **'Aufgelöst'**
+  String get dissolved;
+
+  /// App-bar action to switch between savegames
+  ///
+  /// In de, this message translates to:
+  /// **'Spielstand wechseln'**
+  String get switchRestaurant;
+
+  /// Error text when the districts could not be loaded
+  ///
+  /// In de, this message translates to:
+  /// **'Stadtteile konnten nicht geladen werden:\n{error}'**
+  String districtLoadError(String error);
+
+  /// Error when founding in an already occupied district
+  ///
+  /// In de, this message translates to:
+  /// **'In {district} gibt es bereits ein Restaurant.'**
+  String districtOccupied(String district);
+
+  /// Snackbar when there are no other savegames to switch to
+  ///
+  /// In de, this message translates to:
+  /// **'Keine weiteren Spielstände vorhanden.'**
+  String get noOtherSavegames;
+
   /// Überschrift für den Profilbereich
   ///
   /// In de, this message translates to:

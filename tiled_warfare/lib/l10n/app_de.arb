@@ -92,6 +92,41 @@
     "description": "Platzhaltertext beim Umbenennen"
   },
 
+  "districtSection": "Stadtteile",
+  "@districtSection": {
+    "description": "Heading for the district (Stadtteil) selection"
+  },
+  "districtLabel": "Stadtteil: {district}",
+  "@districtLabel": {
+    "description": "Label showing the district of a restaurant",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "foundRestaurant": "Neues Restaurant gründen",
+  "@foundRestaurant": {
+    "description": "Action to found a new restaurant in a free district"
+  },
+  "dissolved": "Aufgelöst",
+  "@dissolved": {
+    "description": "Badge for a dissolved (bankrupt) savegame"
+  },
+  "switchRestaurant": "Spielstand wechseln",
+  "@switchRestaurant": {
+    "description": "App-bar action to switch between savegames"
+  },
+  "districtLoadError": "Stadtteile konnten nicht geladen werden:\n{error}",
+  "@districtLoadError": {
+    "description": "Error text when the districts could not be loaded",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "districtOccupied": "In {district} gibt es bereits ein Restaurant.",
+  "@districtOccupied": {
+    "description": "Error when founding in an already occupied district",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "noOtherSavegames": "Keine weiteren Spielstände vorhanden.",
+  "@noOtherSavegames": {
+    "description": "Snackbar when there are no other savegames to switch to"
+  },
   "profileSection": "Profile",
   "@profileSection": {
     "description": "Überschrift für den Profilbereich"

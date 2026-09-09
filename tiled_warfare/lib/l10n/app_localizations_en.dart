@@ -73,6 +73,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newNameHint => 'Enter new name';
 
   @override
+  String get districtSection => 'Districts';
+
+  @override
+  String districtLabel(String district) {
+    return 'District: $district';
+  }
+
+  @override
+  String get foundRestaurant => 'Found new restaurant';
+
+  @override
+  String get dissolved => 'Dissolved';
+
+  @override
+  String get switchRestaurant => 'Switch save game';
+
+  @override
+  String districtLoadError(String error) {
+    return 'Districts could not be loaded:\n$error';
+  }
+
+  @override
+  String districtOccupied(String district) {
+    return 'There is already a restaurant in $district.';
+  }
+
+  @override
+  String get noOtherSavegames => 'No other save games available.';
+
+  @override
   String get profileSection => 'Profiles';
 
   @override

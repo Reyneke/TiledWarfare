@@ -92,6 +92,41 @@
     "description": "Placeholder text when renaming"
   },
 
+  "districtSection": "Districts",
+  "@districtSection": {
+    "description": "Heading for the district (Stadtteil) selection"
+  },
+  "districtLabel": "District: {district}",
+  "@districtLabel": {
+    "description": "Label showing the district of a restaurant",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "foundRestaurant": "Found new restaurant",
+  "@foundRestaurant": {
+    "description": "Action to found a new restaurant in a free district"
+  },
+  "dissolved": "Dissolved",
+  "@dissolved": {
+    "description": "Badge for a dissolved (bankrupt) savegame"
+  },
+  "switchRestaurant": "Switch save game",
+  "@switchRestaurant": {
+    "description": "App-bar action to switch between savegames"
+  },
+  "districtLoadError": "Districts could not be loaded:\n{error}",
+  "@districtLoadError": {
+    "description": "Error text when the districts could not be loaded",
+    "placeholders": { "error": { "type": "String" } }
+  },
+  "districtOccupied": "There is already a restaurant in {district}.",
+  "@districtOccupied": {
+    "description": "Error when founding in an already occupied district",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "noOtherSavegames": "No other save games available.",
+  "@noOtherSavegames": {
+    "description": "Snackbar when there are no other savegames to switch to"
+  },
   "profileSection": "Profiles",
   "@profileSection": {
     "description": "Heading for the profile section"
