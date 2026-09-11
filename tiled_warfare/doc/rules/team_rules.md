@@ -25,19 +25,22 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
 |-------|-------------|
 | Startbudget | Wird zu Spielbeginn festgelegt (z. B. 10.000 €) |
 | Negativgrenze | Das Budget kann bis zum **doppelten Startwert ins Negative** gehen (z. B. −20.000 €) |
-| Negativzinsen | Solange das Budget negativ ist, fallen **pro Spiel** (pro Gefecht) Negativzinsen an |
+| Negativzinsen | Solange das Budget negativ ist, fallen **pro Gefecht** und **bei jeder Wochenabrechnung** (V8) Negativzinsen an (10 % auf den negativen Bestand) |
 | Permadeath | Wird der doppelte Startwert im Negativen überschritten, lösen die Investoren das Restaurant auf – das Spiel endet dauerhaft. Der Spieler muss ein neues Restaurant erstellen |
 
-**Einnahmequellen (vorgeschlagen):**
-- Erfolgreich abgeschlossene Gefechte bringen Belohnungen (abhängig von Gegnern und Schwierigkeit)
-- Besiegte Gegner gewähren `moneyValue` (im Code als `ObjectToken.moneyValue` definiert)
-- Optional: Passive Einnahmen durch das Restaurant zwischen Gefechten
+**Einnahmequellen (implementiert, V2):**
+- **Gefechtsbelohnung:** Basisprämie (Sieg höher als Niederlage) **plus** `moneyValue` der besiegten Gegner (`ObjectToken.moneyValue`).
+- **Passives Einkommen** des Restaurants zwischen den Gefechten (Fuzzy-Inferenz, § 8 des Feature-Dokuments): aus **Attraktivität** (Stadtteil-Prestige + Personalzahl), **Kundenzufriedenheit** (Teamgesundheit + letztes Gefechtsergebnis) und **Kapazität** (Ø `moneyValue` des Personals) → Kunden/Woche × €/Kunde. **Ohne Personal entsteht kein Einkommen.**
+- Alle Beträge/Sätze stehen zentral in `EconomyBalance` (V7).
 
 **Ausgaben:**
-- Anheuerung neuer Lehrlinge
-- Fortbildungskosten (Lehrling → Line Cook)
-- Ausrüstung und Gegenstände
+- Anheuerung neuer Lehrlinge (einmalig)
+- Fortbildungskosten (Lehrling → Line Cook, einmalig)
+- Wiederbelebung durch den Teamarzt (einmalig, pro wiederholtem Rettungswurf)
+- **Laufend (wöchentlich):** Teamarzt-Kosten (`costPerWeek`), Unterhalt der Restauranterweiterungen
 - Negativzinsen bei verschuldetem Budget
+
+**Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. Restaurant-Wechsel nachgeholt (Catch-up). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
 
 ### 2.3 Charakterklassen & Brigade-Rollen
 
@@ -55,7 +58,7 @@ Der Spieler kann Charaktere verschiedener Klassen anheuern und weiterentwickeln.
 
 - Der Spieler kann jederzeit zwischen Gefechten neue Lehrlinge anheuern
 - Jeder Lehrling kostet eine festgelegte Summe aus dem Budget
-- Die Namen werden per Zufallsgenerator erzeugt (siehe `RandomNames(Zone.italy)` im Code)
+- Die Namen werden passend zur **Küche des Restaurants** über den Zufallsgenerator erzeugt: `RandomNames(<Zone>)` mit Mapping Küche → Zone. **Italienisch** → `Zone.italy` (Default; Alt-Spielstände) · **Japanisch** → `Zone.japan` · **Chinesisch** → `Zone.china` · **Deutsch** → `Zone.germany` · **Kanadisch** → `Zone.canada` · **Mexikanisch** → `Zone.spain` (die Bibliothek hat kein `Zone.mexico`).
 - Der Spieler kann beliebig viele Charaktere besitzen, muss aber vor dem Gefecht auswählen, welche er mitnimmt
 
 ### 2.5 Kündigung & Entlassung
@@ -130,7 +133,7 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
    - +5 pro `defenseValue` über 30
    - −10 bei `overkilled`-Schaden (doppelter Schaden)
 
-**Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert deutlich (z. B. +20) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
+**Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert um seinen Qualitätsbonus (**+10 / +20 / +30**, `MedicQuality.survivalBonus`) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
 
 ### 4.3 Heilung
 
@@ -159,13 +162,13 @@ Sollte ein verletztes Teammitglied wieder ins Gefecht ziehen, bevor es den Statu
 Der Spieler kann zwischen Gefechten einen Teamarzt anheuern, der die Überlebenschancen und Heilung des Teams verbessert (siehe Verweise in 4.2 und 4.3).
 
 **Anheuerung & Kosten:**
-- Teamärzte sind teuer und kommen in verschiedenen **Qualitätsstufen** (niedrig, mittel, hoch) – höhere Stufen verbessern Rettungswurf-Bonus und Heilungsrate weiter.
-- Die Kosten richten sich nach Qualität, Mannschaftsgröße und -zusammensetzung (ein Team aus Lehrlingen kostet weniger als eines mit Line Cooks).
-- Die Bezahlung erfolgt **pro Echtzeitwoche**.
+- Teamärzte kommen in verschiedenen **Qualitätsstufen** (**niedrig / mittel / hoch**) mit Kostenmultiplikator **1.0 / 2.0 / 3.0** – höhere Stufen verbessern Rettungswurf-Bonus und Heilungsrate weiter.
+- Die Wochenkosten berechnen sich als `medicBaseCostPerWeek (500 €) × Qualitätsmultiplikator × (1 + Teamgröße × 0,05)` – **Qualität und Teamgröße** fließen ein (größere/dienstältere Teams kosten mehr). Alle Werte stehen in `EconomyBalance` (V7).
+- Die Bezahlung erfolgt **pro Echtzeitwoche** (`costPerWeek`) und wird im **Wochentick (V8)** abgebucht. Die erste Abbuchung erfolgt erst zum nächsten Wochentick (kein anteiliger Einzug).
 
-**Effekte (Basis, ohne Qualitätsabstufungen):**
-- Heilung: 1 Verletzungsstufe pro **Echtzeitstunde** (statt 1 pro Tag)
-- Rettungswurf: +20 auf den Zielwert, einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht
+**Effekte:**
+- Heilung: 1 Verletzungsstufe pro **Echtzeitstunde** (statt 1 pro Tag); je höher die Qualität, desto schneller (`MedicQuality.healTimePerStage`).
+- Rettungswurf: **+10 / +20 / +30** auf den Zielwert je nach Qualität (`MedicQuality.survivalBonus`), einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht.
 
 **Notfall-Spritze:**
 Der Teamarzt kann einem Verletzten eine Spritze verabreichen, die ihn **sofort** wieder voll einsatzfähig macht. Die Spritze ist jedoch teuer (einmalige Zusatzkosten) und schiebt den Schaden nur **temporär** auf:

@@ -5,7 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tiled_warfare/l10n/locale_provider.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
+import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/district.dart';
 import 'package:tiled_warfare/services/district_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
@@ -293,27 +295,96 @@ class _ScreenStartState extends State<ScreenStart> {
       return;
     }
 
-    final result = await _showTextFormDialog(
-      title: l10n.newRestaurant,
-      labelText: l10n.restaurantName,
-      hintText: l10n.restaurantNameHint,
-      confirmText: l10n.create,
+    final nameController = TextEditingController();
+    var selectedCuisine = Cuisine.italian;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) => AlertDialog(
+          title: Text(l10n.newRestaurant),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: l10n.restaurantName,
+                  hintText: l10n.restaurantNameHint,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text('${l10n.cuisineSection}: '),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButton<Cuisine>(
+                      value: selectedCuisine,
+                      isExpanded: true,
+                      items: [
+                        for (final cuisine in Cuisine.values)
+                          DropdownMenuItem(
+                            value: cuisine,
+                            child: Text(_cuisineName(l10n, cuisine)),
+                          ),
+                      ],
+                      onChanged: (cuisine) => setLocalState(
+                        () => selectedCuisine = cuisine ?? Cuisine.italian,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.create),
+            ),
+          ],
+        ),
+      ),
     );
 
-    if (result != null && result.isNotEmpty) {
-      final id =
-          CRC32.compute('$result${DateTime.now().toIso8601String()}');
+    final name = nameController.text.trim();
+    if (confirmed == true && name.isNotEmpty) {
+      final id = CRC32.compute('$name${DateTime.now().toIso8601String()}');
       setState(() {
         _selectedProfile!.restaurants.add(RestaurantData(
           id: id,
-          name: result,
+          name: name,
           district: district,
+          cuisine: selectedCuisine,
         ));
         _selectedRestaurantId = id;
       });
       await ProfileStorage.saveProfile(_selectedProfile!);
       await _loadProfiles();
       _updateSelectedProfile();
+    }
+  }
+
+  /// Übersetzt eine [Cuisine] in den lokalisierten Anzeigenamen.
+  String _cuisineName(AppLocalizations l10n, Cuisine cuisine) {
+    switch (cuisine) {
+      case Cuisine.italian:
+        return l10n.cuisineItalian;
+      case Cuisine.japanese:
+        return l10n.cuisineJapanese;
+      case Cuisine.chinese:
+        return l10n.cuisineChinese;
+      case Cuisine.german:
+        return l10n.cuisineGerman;
+      case Cuisine.canadian:
+        return l10n.cuisineCanadian;
+      case Cuisine.mexican:
+        return l10n.cuisineMexican;
     }
   }
 
@@ -398,7 +469,11 @@ class _ScreenStartState extends State<ScreenStart> {
         );
     if (selected == null || selected.isDissolved) return;
 
+    // Echtzeit-Catch-up (V8): verpasste Wochen vor dem ersten Frame abrechnen.
+    GameClockService.catchUp(selected, DateTime.now());
+
     ObjectProfile().loadFromData(freshProfile, restaurantId: selected.id);
+    await ObjectProfile().saveToStorage();
 
     if (!mounted) return;
     await Navigator.push(

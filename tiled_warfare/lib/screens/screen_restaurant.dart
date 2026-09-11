@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/models/cuisine.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
@@ -10,6 +12,10 @@ import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/services/map_registry.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,7 +28,8 @@ class ScreenRestaurant extends StatefulWidget {
   State<ScreenRestaurant> createState() => _ScreenRestaurantState();
 }
 
-class _ScreenRestaurantState extends State<ScreenRestaurant> {
+class _ScreenRestaurantState extends State<ScreenRestaurant>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ObjectProfile _profile = ObjectProfile();
   String _profileImagePath = 'assets/images/echo_standard.png';
   bool _hasCustomImage = false;
@@ -31,10 +38,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
   bool _isLoadingMaps = true;
   String? _mapLoadingError;
   int? _selectedMapIndex;
+  bool _bankruptcyHandled = false;
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _tabController = TabController(length: 4, vsync: this);
     if (_profile.restaurantLogoPath != null &&
         _profile.restaurantLogoPath!.isNotEmpty) {
       _profileImagePath = _profile.restaurantLogoPath!;
@@ -42,12 +53,65 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     }
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
     _discoverMaps();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkBankruptcy());
+  }
+
+  /// Zeigt bei Bankrott den Permadeath-Dialog und startet danach einen neuen
+  /// Spielstand (V2-Flow: Investoren lösen das Restaurant auf).
+  Future<void> _checkBankruptcy() async {
+    if (!mounted || _bankruptcyHandled || !_profile.isBankrupt) return;
+    _bankruptcyHandled = true;
+    final l10n = AppLocalizations.of(context)!;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.bankruptDialogTitle),
+        content: Text(l10n.bankruptDialogMessage),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(l10n.bankruptNewRestaurant),
+          ),
+        ],
+      ),
+    );
+    _profile.reset();
+    await _saveState();
+    if (!mounted) return;
+    setState(() {
+      _battleReadyCharacters.clear();
+      _profileImagePath = 'assets/images/echo_standard.png';
+      _hasCustomImage = false;
+    });
   }
 
   @override
   void dispose() {
     AppTheme.themeModeNotifier.removeListener(_onThemeChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _runResumeCatchUp();
+    }
+  }
+
+  /// Holt beim Wiederaufnehmen der App fällige Wochen nach (V8) und
+  /// aktualisiert die Ansicht (inkl. Bankrott-Prüfung).
+  Future<void> _runResumeCatchUp() async {
+    if (!mounted) return;
+    final result = _profile.runCatchUp(DateTime.now());
+    if (result.weeks <= 0) return;
+    await _saveState();
+    if (!mounted) return;
+    setState(() {});
+    _checkBankruptcy();
   }
 
   void _onThemeChanged() {
@@ -105,9 +169,20 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
         );
     if (data == null) return;
 
+    // Echtzeit-Catch-up (V8) für den gewechselten Spielstand.
+    final target = data.restaurants.cast<RestaurantData?>().firstWhere(
+          (r) => r!.id == restaurantId,
+          orElse: () => null,
+        );
+    if (target != null) {
+      GameClockService.catchUp(target, DateTime.now());
+      await ProfileStorage.saveProfile(data);
+    }
+
     _profile.loadFromData(data, restaurantId: restaurantId);
     setState(() {
       _battleReadyCharacters.clear();
+      _tabController.index = 0;
       final logo = _profile.restaurantLogoPath;
       if (logo != null && logo.isNotEmpty) {
         _profileImagePath = logo;
@@ -580,6 +655,301 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
     );
   }
 
+  /// Übersetzt eine [Cuisine] in den lokalisierten Anzeigenamen.
+  String _cuisineName(AppLocalizations l10n, Cuisine cuisine) {
+    switch (cuisine) {
+      case Cuisine.italian:
+        return l10n.cuisineItalian;
+      case Cuisine.japanese:
+        return l10n.cuisineJapanese;
+      case Cuisine.chinese:
+        return l10n.cuisineChinese;
+      case Cuisine.german:
+        return l10n.cuisineGerman;
+      case Cuisine.canadian:
+        return l10n.cuisineCanadian;
+      case Cuisine.mexican:
+        return l10n.cuisineMexican;
+    }
+  }
+
+  /// Zeigt die aktuelle Küche, einen aktiven Rebranding-Malus und bietet den
+  /// (bezahlten) Küchenwechsel an.
+  Widget _buildCuisineRow(ThemeData theme, AppLocalizations l10n) {
+    final now = DateTime.now();
+    final penaltyUntil = _profile.rebrandingPenaltyUntil;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.cuisineLabel(_cuisineName(l10n, _profile.activeCuisine)),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (penaltyUntil != null && now.isBefore(penaltyUntil))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              l10n.rebrandingPenaltyActive(
+                (penaltyUntil.difference(now).inHours / 24).ceil(),
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _rebrandCuisine,
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: Text(l10n.rebrandCuisine),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Führt einen Küchenwechsel (Rebranding, § 9) durch: Auswahl → Bestätigung →
+  /// Kosten abbuchen → speichern.
+  Future<void> _rebrandCuisine() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<Cuisine>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.rebrandDialogTitle),
+        children: [
+          for (final cuisine in Cuisine.values)
+            if (cuisine != _profile.activeCuisine)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, cuisine),
+                child: Text(_cuisineName(l10n, cuisine)),
+              ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.rebrandDialogTitle),
+        content: Text(l10n.rebrandDialogMessage(EconomyBalance.rebrandingCost)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.rebrandConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    if (!_profile.rebrandCuisine(picked)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.rebrandNotEnoughBudget)),
+      );
+      return;
+    }
+    await _saveState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.rebrandSuccess)),
+    );
+    setState(() {});
+  }
+
+  /// Übersetzt einen [UpgradeType] in den lokalisierten Anzeigenamen.
+  String _upgradeName(AppLocalizations l10n, UpgradeType type) {
+    switch (type) {
+      case UpgradeType.tables:
+        return l10n.upgradeTables;
+      case UpgradeType.kitchen:
+        return l10n.upgradeKitchen;
+      case UpgradeType.signage:
+        return l10n.upgradeSignage;
+      case UpgradeType.decoration:
+        return l10n.upgradeDecoration;
+      case UpgradeType.jukebox:
+        return l10n.upgradeJukebox;
+    }
+  }
+
+  /// Abschnitt mit allen Restauranterweiterungen (§ 10).
+  Widget _buildUpgradesSection(ThemeData theme, AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text(l10n.upgradesSection, style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        for (final type in UpgradeType.values)
+          _buildUpgradeTile(theme, l10n, type),
+      ],
+    );
+  }
+
+  Widget _buildUpgradeTile(
+    ThemeData theme,
+    AppLocalizations l10n,
+    UpgradeType type,
+  ) {
+    final spec = EconomyBalance.upgrades[type]!;
+    final level = _profile.upgradeLevel(type);
+    final maxed = level >= spec.maxLevel;
+    final nextCost = maxed
+        ? 0
+        : EconomyService.upgradeCost(type, level + 1) -
+            EconomyService.upgradeCost(type, level);
+    final upkeep = EconomyService.upgradeUpkeepPerWeek(type, level);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _upgradeName(l10n, type),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  l10n.upgradeLevel(level, spec.maxLevel),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              maxed ? l10n.upgradeMaxReached : l10n.upgradeBuyCost(nextCost),
+              style: theme.textTheme.bodySmall,
+            ),
+            Text(
+              l10n.upgradeUpkeepCost(upkeep),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: maxed ? null : () => _buyUpgrade(type),
+                  child: Text(l10n.upgradeBuy),
+                ),
+                OutlinedButton(
+                  onPressed: level <= 0 ? null : () => _downgradeUpgrade(type),
+                  child: Text(l10n.upgradeDowngrade),
+                ),
+                OutlinedButton(
+                  onPressed: level <= 0 ? null : () => _sellUpgrade(type),
+                  child: Text(l10n.upgradeSell),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _buyUpgrade(UpgradeType type) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_profile.buyUpgrade(type)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.upgradeNotEnoughBudget)),
+      );
+      return;
+    }
+    await _saveState();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _downgradeUpgrade(UpgradeType type) async {
+    if (!_profile.downgradeUpgrade(type)) return;
+    await _saveState();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _sellUpgrade(UpgradeType type) async {
+    final l10n = AppLocalizations.of(context)!;
+    final refund = _profile.sellUpgrade(type);
+    if (refund <= 0) return;
+    await _saveState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.upgradeSold(refund))),
+    );
+    setState(() {});
+  }
+
+  /// Zeigt den Countdown bis zur nächsten Wochenabbuchung sowie Kunden/Woche,
+  /// passives Einkommen, Arztkosten und eine Warnung nahe der Negativgrenze.
+  Widget _buildEconomyInfo(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+    final now = DateTime.now();
+    final snapshot = _profile.activeRestaurantSnapshot();
+    final anchor = snapshot.lastSeenAt ?? now;
+    final nextTick = GameClockService.nextWeeklyTick(anchor, now);
+    final days = nextTick.difference(now).inDays;
+    final attractiveness = GameClockService.attractivenessOf(snapshot, now: now);
+    final satisfaction = GameClockService.satisfactionOf(snapshot);
+    final capacity = GameClockService.capacityOf(snapshot);
+    final customers = PassiveIncomeService.customersPerWeek(
+      attractiveness: attractiveness,
+      satisfaction: satisfaction,
+      capacity: capacity,
+    );
+    final passive = PassiveIncomeService.passiveIncomePerWeek(
+      attractiveness: attractiveness,
+      satisfaction: satisfaction,
+      capacity: capacity,
+    );
+    final medicCosts = snapshot.medics.fold<int>(
+      0,
+      (sum, medic) => sum + medic.costPerWeek,
+    );
+    final nearLimit = _profile.budget <= EconomyBalance.negativeLimit ~/ 2;
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Text(l10n.nextBillingCountdown(days < 0 ? 0 : days), style: style),
+        Text(
+          '${l10n.customersPerWeekLabel(customers)}  ·  '
+          '${l10n.passiveIncomeLabel(passive)}  ·  '
+          '${l10n.medicCostsLabel(medicCosts)}',
+          style: style,
+        ),
+        if (nearLimit)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              l10n.budgetWarning,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -614,11 +984,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
             Center(
               child: Stack(
                 children: [
@@ -703,7 +1076,44 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                   ),
                 ),
               ),
-            const SizedBox(height: 24),
+            _buildEconomyInfo(theme),
+            _buildCuisineRow(theme, l10n),
+              ],
+            ),
+          ),
+          TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabs: [
+              Tab(text: l10n.tabPersonnel),
+              Tab(text: l10n.tabMedics),
+              Tab(text: l10n.tabUpgrades),
+              Tab(text: l10n.tabBattle),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildPersonnelTab(theme, l10n),
+                _buildMedicsTab(theme, l10n),
+                _buildUpgradesTab(theme, l10n),
+                _buildBattleTab(theme, l10n),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reiter „Aktives Personal": Personal-Liste + Anheuern.
+  Widget _buildPersonnelTab(ThemeData theme, AppLocalizations l10n) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             Text(
               l10n.personnelCount(_profile.personalCount),
               style: theme.textTheme.headlineSmall,
@@ -742,7 +1152,77 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                 await _saveState();
               },
             ),
-            const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  /// Reiter „Teamarzt": angeheuerte Ärzte + Verwaltung.
+  Widget _buildMedicsTab(ThemeData theme, AppLocalizations l10n) {
+    final medics = _profile.hiredMedics;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(l10n.personnelManagement, style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          if (medics.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Center(
+                  child: Text(
+                    l10n.noCandidatesAvailable,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            for (final medic in medics)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.medical_services),
+                  title: Text(medic.displayName),
+                  subtitle: Text(l10n.costPerWeek(medic.costPerWeek)),
+                ),
+              ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            icon: const Icon(Icons.group_add),
+            label: Text(l10n.managePersonnel),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ScreenHireAndFire()),
+              );
+              if (mounted) setState(() {});
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reiter „Erweiterungen".
+  Widget _buildUpgradesTab(ThemeData theme, AppLocalizations l10n) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: _buildUpgradesSection(theme, l10n),
+    );
+  }
+
+  /// Reiter „Karte & Gefecht": Karten-Auswahl + Gefechtsbutton.
+  Widget _buildBattleTab(ThemeData theme, AppLocalizations l10n) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             Text(
               l10n.availableMaps,
               style: theme.textTheme.headlineSmall,
@@ -798,8 +1278,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant> {
                       ? _goToBattle
                       : null,
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

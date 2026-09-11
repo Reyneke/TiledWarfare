@@ -55,8 +55,9 @@ class WidgetCaretaker extends StatefulWidget {
   final List<({String name, double x, double y})> spawnPoints;
 
   /// Callback, der aufgerufen wird, wenn das Spiel vorbei ist (Sieg oder Niederlage).
-  /// Der übergebene Boolean ist `true` bei Sieg, `false` bei Niederlage.
-  final void Function(bool playerWon)? onGameOver;
+  /// Der Boolean ist `true` bei Sieg, `false` bei Niederlage; der Integer ist
+  /// die Beute (`moneyValue`-Summe) der besiegten Gegner (§ 2.2).
+  final void Function(bool playerWon, int loot)? onGameOver;
 
   /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der TMX-Karte.
   ///
@@ -150,6 +151,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
 
   /// Ob der Host am Zug ist.
   bool _isHostTurn = false;
+
+  /// Aufsummierte Beute (`moneyValue`) bereits entfernter besiegen Gegner (§ 2.2).
+  int _lootCollected = 0;
 
   /// Ob das Spiel beendet ist (eine Seite hat verloren).
   bool _isGameOver = false;
@@ -1358,6 +1362,16 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // damit der Battle Result Screen sie auslesen kann.
     // Das Rendering filtert sie bereits über _buildAllTokens().
 
+    // Beute der besiegten Gegner erfassen, bevor sie entfernt werden (§ 2.2).
+    for (final dumpster in _host.doughDumpsterList) {
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) _lootCollected += zombie.moneyValue;
+      }
+    }
+    for (final dumpster in _host.doughDumpsterList) {
+      if (dumpster.woundValue <= 0) _lootCollected += dumpster.moneyValue;
+    }
+
     // Tote Zombies aus allen Dumpstern entfernen
     for (final dumpster in _host.doughDumpsterList) {
       dumpster.zombieList.removeWhere((zombie) => zombie.woundValue <= 0);
@@ -1392,7 +1406,15 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // die woundValues toter Einheiten durch Rettungswürfe verändern, bevor
     // _computeResults() sie für die Überlebenden-/Gefallenen-Anzeige
     // auslesen kann.
-    widget.onGameOver?.call(hasAliveUnits);
+    // Noch nicht entfernte, bereits besiegte Gegner dieser Runde mitzählen.
+    var loot = _lootCollected;
+    for (final dumpster in _host.doughDumpsterList) {
+      if (dumpster.woundValue <= 0) loot += dumpster.moneyValue;
+      for (final zombie in dumpster.zombieList) {
+        if (zombie.woundValue <= 0) loot += zombie.moneyValue;
+      }
+    }
+    widget.onGameOver?.call(hasAliveUnits, loot);
   }
 
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.

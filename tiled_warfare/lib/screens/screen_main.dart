@@ -85,7 +85,7 @@ class _ScreenMainState extends State<ScreenMain>
     });
   }
 
-  void _onGameOver(bool playerWon) {
+  void _onGameOver(bool playerWon, int loot) {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -93,6 +93,7 @@ class _ScreenMainState extends State<ScreenMain>
         builder: (_) => ScreenBattleResult(
           playerWon: playerWon,
           opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
+          enemyLoot: loot,
         ),
       ),
     );
@@ -195,6 +196,7 @@ class _ScreenMainState extends State<ScreenMain>
         builder: (_) => ScreenBattleResult(
           playerWon: false,
           opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
+          enemyLoot: 0,
         ),
       ),
     );

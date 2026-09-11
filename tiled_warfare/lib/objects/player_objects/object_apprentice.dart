@@ -48,6 +48,7 @@ class ObjectApprentice extends ObjectToken {
   ObjectApprentice({
     String? name,
     String? imagePath,
+    Zone? nameZone,
     super.attackValue = 40,
     super.defenseValue = 20,
     super.movementValue = 6,
@@ -56,7 +57,7 @@ class ObjectApprentice extends ObjectToken {
     super.moneyValue = 100,
     super.xpValue = 25,
   }) : super(
-    name: name ?? "Apprentice: ${RandomNames(Zone.italy).name()}",
+    name: name ?? "Apprentice: ${RandomNames(nameZone ?? Zone.italy).name()}",
     imagePath: imagePath ?? "assets/images/token/token_cook_basic.png",
   );
 

@@ -534,5 +534,140 @@
       "range": { "type": "int" },
       "hp": { "type": "int" }
     }
+  },
+
+  "nextBillingCountdown": "Nächste Abbuchung in {days} Tagen",
+  "@nextBillingCountdown": {
+    "description": "Countdown bis zum nächsten Wochentick",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "budgetWarning": "Achtung: Das Budget nähert sich der Negativgrenze!",
+  "@budgetWarning": {
+    "description": "Warnung nahe der Negativgrenze"
+  },
+  "customersPerWeekLabel": "{count} Kunden/Woche",
+  "@customersPerWeekLabel": {
+    "description": "Anzeige Kunden pro Woche",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "passiveIncomeLabel": "Passiv: {income} €/Woche",
+  "@passiveIncomeLabel": {
+    "description": "Anzeige passives Einkommen pro Woche",
+    "placeholders": { "income": { "type": "int" } }
+  },
+  "medicCostsLabel": "Ärzte: {cost} €/Woche",
+  "@medicCostsLabel": {
+    "description": "Anzeige Teamarzt-Kosten pro Woche",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "weeklyLoadTotal": "Gesamtwochenlast: {cost} €",
+  "@weeklyLoadTotal": {
+    "description": "Summe der wöchentlichen Arztkosten",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "bankruptDialogTitle": "Bankrott!",
+  "@bankruptDialogTitle": {
+    "description": "Titel des Permadeath-Dialogs"
+  },
+  "bankruptDialogMessage": "Die Investoren lösen das Restaurant auf. Du startest mit einem neuen Restaurant.",
+  "@bankruptDialogMessage": {
+    "description": "Text des Permadeath-Dialogs"
+  },
+  "bankruptNewRestaurant": "Neues Restaurant starten",
+  "@bankruptNewRestaurant": {
+    "description": "Button für den Neustart nach Bankrott"
+  },
+
+  "cuisineSection": "Küche",
+  "@cuisineSection": { "description": "Beschriftung der Küchenauswahl" },
+  "cuisineLabel": "Küche: {cuisine}",
+  "@cuisineLabel": {
+    "description": "Anzeige der Küche im Header",
+    "placeholders": { "cuisine": { "type": "String" } }
+  },
+  "cuisineItalian": "Italienisch",
+  "@cuisineItalian": { "description": "Küche: Italienisch" },
+  "cuisineJapanese": "Japanisch",
+  "@cuisineJapanese": { "description": "Küche: Japanisch" },
+  "cuisineChinese": "Chinesisch",
+  "@cuisineChinese": { "description": "Küche: Chinesisch" },
+  "cuisineGerman": "Deutsch",
+  "@cuisineGerman": { "description": "Küche: Deutsch" },
+  "cuisineCanadian": "Kanadisch",
+  "@cuisineCanadian": { "description": "Küche: Kanadisch" },
+  "cuisineMexican": "Mexikanisch",
+  "@cuisineMexican": { "description": "Küche: Mexikanisch" },
+  "rebrandCuisine": "Küche wechseln (Rebranding)",
+  "@rebrandCuisine": { "description": "Aktion: Küche wechseln" },
+  "rebrandDialogTitle": "Küche wechseln?",
+  "@rebrandDialogTitle": { "description": "Titel des Rebranding-Dialogs" },
+  "rebrandDialogMessage": "Der Wechsel kostet {cost} € und zieht kurzfristig weniger Gäste an.",
+  "@rebrandDialogMessage": {
+    "description": "Text des Rebranding-Dialogs",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "rebrandConfirm": "Wechseln",
+  "@rebrandConfirm": { "description": "Bestätigen-Button für Rebranding" },
+  "rebrandSuccess": "Küche gewechselt!",
+  "@rebrandSuccess": { "description": "Snackbar nach erfolgreichem Rebranding" },
+  "rebrandNotEnoughBudget": "Budget reicht nicht für das Rebranding!",
+  "@rebrandNotEnoughBudget": { "description": "Fehlermeldung Rebranding" },
+
+  "upgradesSection": "Restauranterweiterungen",
+  "@upgradesSection": { "description": "Abschnittstitel Erweiterungen" },
+  "upgradeTables": "Mehr Tische",
+  "@upgradeTables": { "description": "Erweiterung: Mehr Tische" },
+  "upgradeKitchen": "Größere Küche",
+  "@upgradeKitchen": { "description": "Erweiterung: Größere Küche" },
+  "upgradeSignage": "Werbeplakate",
+  "@upgradeSignage": { "description": "Erweiterung: Werbeplakate" },
+  "upgradeDecoration": "Dekorationen",
+  "@upgradeDecoration": { "description": "Erweiterung: Dekorationen" },
+  "upgradeJukebox": "Musikautomat",
+  "@upgradeJukebox": { "description": "Erweiterung: Musikautomat" },
+  "upgradeLevel": "Stufe {level}/{max}",
+  "@upgradeLevel": {
+    "description": "Ausbaustufe einer Erweiterung",
+    "placeholders": { "level": { "type": "int" }, "max": { "type": "int" } }
+  },
+  "upgradeBuyCost": "Ausbau: {cost} €",
+  "@upgradeBuyCost": {
+    "description": "Anschaffungskosten der nächsten Stufe",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "upgradeUpkeepCost": "Unterhalt: {cost} €/Woche",
+  "@upgradeUpkeepCost": {
+    "description": "Wöchentlicher Unterhalt der Erweiterung",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "upgradeBuy": "Ausbauen",
+  "@upgradeBuy": { "description": "Button: Erweiterung ausbauen" },
+  "upgradeDowngrade": "Zurückbauen",
+  "@upgradeDowngrade": { "description": "Button: Erweiterung zurückbauen" },
+  "upgradeSell": "Verkaufen",
+  "@upgradeSell": { "description": "Button: Erweiterung verkaufen" },
+  "upgradeMaxReached": "Maximalstufe",
+  "@upgradeMaxReached": { "description": "Maximalstufe erreicht" },
+  "upgradeNotEnoughBudget": "Budget reicht nicht für den Ausbau!",
+  "@upgradeNotEnoughBudget": { "description": "Fehlermeldung Ausbau" },
+  "upgradeSold": "Verkauft: +{amount} €",
+  "@upgradeSold": {
+    "description": "Snackbar nach Verkauf",
+    "placeholders": { "amount": { "type": "int" } }
+  },
+
+  "tabPersonnel": "Aktives Personal",
+  "@tabPersonnel": { "description": "Reiter: Aktives Personal" },
+  "tabMedics": "Teamarzt",
+  "@tabMedics": { "description": "Reiter: Teamarzt" },
+  "tabUpgrades": "Erweiterungen",
+  "@tabUpgrades": { "description": "Reiter: Erweiterungen" },
+  "tabBattle": "Karte & Gefecht",
+  "@tabBattle": { "description": "Reiter: Karte & Gefecht" },
+
+  "rebrandingPenaltyActive": "Rebranding aktiv: Attraktivität −1 (noch {days} Tage)",
+  "@rebrandingPenaltyActive": {
+    "description": "Anzeige des aktiven Rebranding-Malus",
+    "placeholders": { "days": { "type": "int" } }
   }
 }

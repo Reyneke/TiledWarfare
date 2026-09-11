@@ -1,8 +1,13 @@
+import 'package:tiled_warfare/models/cuisine.dart';
+import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
+
 /// Default starting budget of a restaurant (EUR).
 ///
 /// Used when creating new restaurants and as the fallback value in the
 /// JSON deserializers. Referenced as `ObjectProfile.startBudget`.
-const int kDefaultRestaurantBudget = 10000;
+const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
@@ -233,6 +238,13 @@ class RestaurantData {
   /// district and profile.
   String? district;
 
+  /// Küche (Konzept) des Restaurants; bestimmt den Namensstamm des Personals
+  /// (§ 9). Alt-Spielstände ohne Feld sind italienisch.
+  Cuisine cuisine;
+
+  /// Bis wann der Attraktivitäts-Malus nach einem Rebranding gilt (§ 9).
+  DateTime? rebrandingPenaltyUntil;
+
   /// Budget of this savegame (starts at [kDefaultRestaurantBudget]).
   int budget;
 
@@ -251,31 +263,50 @@ class RestaurantData {
   /// Timestamp of the dissolution (optional, for display / V8).
   DateTime? dissolvedAt;
 
+  /// Ergebnis des jüngsten Gefechts (Quelle für den `resultBonus` des
+  /// passiven Einkommens, § 8).
+  MatchResult? lastMatchResult;
+
+  /// Ausbaustufen der Restaurant-Erweiterungen (§ 10).
+  Map<UpgradeType, int> upgrades;
+
   RestaurantData({
     this.id = -1,
     required this.name,
     this.logoPath,
     this.district,
+    this.cuisine = Cuisine.italian,
+    this.rebrandingPenaltyUntil,
     this.budget = kDefaultRestaurantBudget,
     List<StaffData>? staff,
     List<MedicData>? medics,
     this.lastSeenAt,
     this.isDissolved = false,
     this.dissolvedAt,
+    this.lastMatchResult,
+    Map<UpgradeType, int>? upgrades,
   })  : staff = staff ?? [],
-        medics = medics ?? [];
+        medics = medics ?? [],
+        upgrades = upgrades ?? {};
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         if (logoPath != null) 'logoPath': logoPath,
         if (district != null) 'district': district,
+        'cuisine': cuisine.name,
+        if (rebrandingPenaltyUntil != null)
+          'rebrandingPenaltyUntil': rebrandingPenaltyUntil!.toIso8601String(),
         'budget': budget,
         'staff': staff.map((s) => s.toJson()).toList(),
         'medics': medics.map((m) => m.toJson()).toList(),
         if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
         'isDissolved': isDissolved,
         if (dissolvedAt != null) 'dissolvedAt': dissolvedAt!.toIso8601String(),
+        if (lastMatchResult != null) 'lastMatchResult': lastMatchResult!.name,
+        'upgrades': {
+          for (final entry in upgrades.entries) entry.key.name: entry.value,
+        },
       };
 
   factory RestaurantData.fromJson(Map<String, dynamic> json) => RestaurantData(
@@ -283,6 +314,10 @@ class RestaurantData {
         name: json['name'] as String,
         logoPath: json['logoPath'] as String?,
         district: json['district'] as String?,
+        cuisine: Cuisine.fromName(json['cuisine'] as String?),
+        rebrandingPenaltyUntil: json['rebrandingPenaltyUntil'] == null
+            ? null
+            : DateTime.parse(json['rebrandingPenaltyUntil'] as String),
         budget: json['budget'] as int? ?? kDefaultRestaurantBudget,
         staff: (json['staff'] as List<dynamic>?)
                 ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
@@ -299,7 +334,33 @@ class RestaurantData {
         dissolvedAt: json['dissolvedAt'] == null
             ? null
             : DateTime.parse(json['dissolvedAt'] as String),
+        lastMatchResult: json['lastMatchResult'] == null
+            ? null
+            : MatchResult.values.firstWhere(
+                (e) => e.name == json['lastMatchResult'],
+                orElse: () => MatchResult.draw,
+              ),
+        upgrades: _upgradesFromJson(json['upgrades']),
       );
+
+  /// Liest die Erweiterungs-Stufen aus dem JSON (unbekannte Typen werden
+  /// ignoriert – abwärtskompatibel).
+  static Map<UpgradeType, int> _upgradesFromJson(dynamic json) {
+    final result = <UpgradeType, int>{};
+    if (json is Map) {
+      json.forEach((key, value) {
+        if (value is int) {
+          for (final type in UpgradeType.values) {
+            if (type.name == key) {
+              result[type] = value;
+              break;
+            }
+          }
+        }
+      });
+    }
+    return result;
+  }
 
   @override
   String toString() => 'RestaurantData(id=$id, name=$name, district=$district, '

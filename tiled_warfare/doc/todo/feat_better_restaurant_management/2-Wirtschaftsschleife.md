@@ -161,7 +161,7 @@ Neue Datei `lib/services/game_clock_service.dart`:
   - `int weeksElapsed(DateTime lastSeenAt, DateTime now)`
   - `DateTime nextWeeklyTick(DateTime lastSeenAt, DateTime now)`
   - `void catchUp(RestaurantData restaurant, DateTime now)` – schreibt `lastSeenAt` fort und liefert die fälligen Effekte (heute: Wochenabbuchung).
-- Wird beim **App-Start** (Login) und beim **Restaurant-Wechsel** ausgeführt, **bevor** der erste Frame gerendert wird – so kann der Spieler den Kosten nicht durch Standortwechsel entgehen.
+- Wird beim **App-Start** (Login), beim **Wiederaufnehmen** der App (`AppLifecycleState.resumed`) und beim **Restaurant-Wechsel** ausgeführt – so kann der Spieler den Kosten nicht durch Standortwechsel oder App-Wechsel entgehen.
 - Die UI nutzt `nextWeeklyTick()`, um den Countdown „nächste Abbuchung“ anzuzeigen.
 
 ### 3. Wirtschaftslogik (V2): `EconomyService`
@@ -178,7 +178,7 @@ Neue Datei `lib/services/economy_service.dart` – **reine, zustandslose Funktio
 
 - **Post-Gefecht** in `ScreenBattleResult._computeAndApplyResults()` (nach XP/Match-Records, vor `saveToStorage()`): Belohnung gutschreiben → Negativzinsen anwenden → Bankrott prüfen. Dafür muss der Ergebnis-Screen die `moneyValue`-Summe der besiegten Gegner kennen (siehe Hinweise).
 - **App-Start / Restaurant-Wechsel:** `GameClockService.catchUp(...)` über den geladenen Spielstand; bucht fällige Wochen ab und aktualisiert `lastSeenAt`.
-- **Arzt anheuern/entlassen:** Billing-Anker setzen (Anheuerzeitpunkt als Start der ersten Woche), damit die erste Abbuchung fair ist; `costPerWeek` beim Anheuern aus Qualität + aktueller Teamgröße berechnen.
+- **Arzt anheuern/entlassen:** Billing-Anker = Anheuerzeitpunkt (Start der ersten Woche); die erste Abbuchung erfolgt **erst zum nächsten Wochen-Tick** (keine anteilige Abrechnung). `costPerWeek` beim Anheuern aus Qualität + aktueller Teamgröße berechnen.
 - **Bankrott-Dialog:** Bei `isBankrupt` → Permadeath-Dialog (Investoren lösen das Restaurant auf) → `ObjectProfile.reset(district: ...)` startet einen neuen Spielstand (V1-Flow).
 
 ### 5. Fix der Arztpreis-Formel
@@ -207,20 +207,29 @@ Die Berechnung erfolgt über eine **Fuzzy-Inferenz** mit der im Projekt enthalte
 
 | Eingang | Basiswert | Quelle / Formel |
 |---|---|---|
-| **Attraktivität** | 1.0 | `1.0 + (districtPrestige[district] − 1.0) + personalAnzahl × staffAttractivityPerHead`, geclamped auf 0–10. `districtPrestige` ist eine kleine `Map<String, double>` in `EconomyBalance` (Default 1.0 für Stadtteile ohne Eintrag). |
-| **Kundenzufriedenheit** | 1.0 | `1.0 + teamHealth × satisfactionHealthWeight + resultBonus`, geclamped auf 0–10. `teamHealth = 1 − Ø(CharacterStatus.severity)/5` (0.0 = alle `ready` … 1.0 = alle `dying`); `resultBonus` = letztes Gefechtsergebnis (`+satisfactionWinBonus` / `−satisfactionLossPenalty`). |
+| **Attraktivität** | 1.0 | `1.0 + (districtPrestige[district] − 1.0) + personalAnzahl × staffAttractivityPerHead`, geclamped auf 0–4. `districtPrestige` ist eine kleine `Map<String, double>` in `EconomyBalance` (Default 1.0 für Stadtteile ohne Eintrag). |
+| **Kundenzufriedenheit** | 1.0 | `1.0 + teamHealth × satisfactionHealthWeight + resultBonus`, geclamped auf 0–4. `teamHealth = 1 − Ø(CharacterStatus.severity)/5` (0.0 = alle `ready` … 1.0 = alle `dying`); `resultBonus` = `RestaurantData.lastMatchResult` (letztes Gefechtsergebnis: `+satisfactionWinBonus` / `−satisfactionLossPenalty`). |
 | **Kapazität** | ~1.0 | `mean(moneyValue der Mitarbeiter) / capacityMoneyNorm` (`capacityMoneyNorm = 100`), geclamped auf 0–`capacityMax` (20). **Kein Personal → 0.** |
 
 *Hinweis:* `moneyValue` ist aktuell der „Geldwert bei Besiegung“ (`ObjectToken`) – Lehrling 100, Line Cook 1000. Dadurch hebt ein Line-Cook-Team die Kapazität um Faktor ~10; das ist gewollt (stärkeres Personal = mehr Gäste), die Obergrenze `capacityMax` fängt Ausreißer ab.
 
-**Fuzzy-Modell:** Drei Eingangs-`FuzzyVariable<double>` (Attraktivität, Zufriedenheit je 0–10; Kapazität 0–20) und eine Ausgangs-`FuzzyVariable<int>` **Kunden/Woche** (0–100). Beispielhafte Mengen und Regeln (Peaks sind Tuning-Werte):
+**Fuzzy-Modell:** Drei Eingangs-`FuzzyVariable<double>` (Attraktivität, Zufriedenheit je 0–4; Kapazität 0–20) und eine Ausgangs-`FuzzyVariable<int>` **Kunden/Woche** (0–100). Beispielhafte Mengen und Regeln (Peaks sind Tuning-Werte):
 
 ```dart
 class Attractiveness extends FuzzyVariable<double> {
-  var Niedrig = FuzzySet.LeftShoulder(0.0, 2.0, 5.0);
-  var Mittel  = FuzzySet.Triangle(2.0, 5.0, 8.0);
-  var Hoch    = FuzzySet.RightShoulder(5.0, 8.0, 10.0);
+  // Domäne 0–4 (Entscheidung, siehe Balancing-Hinweis).
+  var Niedrig = FuzzySet.LeftShoulder(0.0, 1.0, 2.0);
+  var Mittel  = FuzzySet.Triangle(1.0, 2.0, 3.0);
+  var Hoch    = FuzzySet.RightShoulder(2.0, 3.0, 4.0);
   Attractiveness() { sets = [Niedrig, Mittel, Hoch]; init(); }
+}
+
+class Satisfaction extends FuzzyVariable<double> {
+  // Domäne 0–4 (identisch zur Attraktivität).
+  var Niedrig = FuzzySet.LeftShoulder(0.0, 1.0, 2.0);
+  var Mittel  = FuzzySet.Triangle(1.0, 2.0, 3.0);
+  var Hoch    = FuzzySet.RightShoulder(2.0, 3.0, 4.0);
+  Satisfaction() { sets = [Niedrig, Mittel, Hoch]; init(); }
 }
 
 class CustomersPerWeek extends FuzzyVariable<int> {
@@ -278,7 +287,7 @@ Neue Datei `lib/services/passive_income_service.dart` (reine, testbare Funktione
 | D | Chinatown | 0.80 | Food-Destination, günstig |
 | D | Harlem | 0.70 | Kult-Relevanz, gentrifizierend |
 
-> **Balancing-Hinweis:** Mit diesen Werten liefert die Attraktivitäts-Formel typischerweise ~0.7–3.0 (Default-Stadtteil ≈ 1.0). Da die skizzierten Fuzzy-Eingangssets eine Domäne von 0–10 annehmen („Hoch“ ≈ 8–10), muss die Skala in Phase 3 abgestimmt werden – entweder die Fuzzy-Sets auf ~0–4 auslegen oder `staffAttractivityPerHead` / Prestige-Spreizung anheben. Ein Test erzwingt Baseline > 0 und Monotonie je Eingang.
+> **Balancing-Hinweis (Entscheidung):** Mit diesen Werten liefert die Attraktivitäts-Formel typischerweise ~0.7–3.0 (Default-Stadtteil ≈ 1.0). **Entschieden:** Die Fuzzy-Eingangssets für **Attraktivität und Kundenzufriedenheit** werden auf eine Domäne von **0–4** ausgelegt („Hoch“ ≈ 3–4); höhere crisp-Werte sättigen in „Hoch“. `staffAttractivityPerHead` und die Prestige-Spreizung bleiben unverändert. Die crisp-Clamps (siehe Tabelle oben) sind entsprechend von 0–10 auf 0–4 angeglichen. Ein Test erzwingt Baseline > 0 und Monotonie je Eingang.
 
 ### 9. Mehr als nur Pizza – Restaurant-Küchen & Namens-Stämme
 
@@ -294,29 +303,33 @@ Bisher sind alle Charaktere italienisch geprägt (Name **und** Stil; `RandomName
 | Chinesisch | `Zone.china` | – |
 | Deutsch | `Zone.germany` | – |
 | Kanadisch | `Zone.canada` | – |
-| Mexikanisch | `Zone.spain` | **Empfehlung:** die Bibliothek hat kein `Zone.mexico`; `Zone.spain` liefert spanischsprachige Namen |
+| Mexikanisch | `Zone.spain` | **Entscheidung:** die Bibliothek hat kein `Zone.mexico`; `Zone.spain` liefert spanischsprachige Namen |
 
 - **Daten:** neues Feld `RestaurantData.cuisine` (`enum Cuisine`, Default `italian`; Migration setzt Alt-Daten auf `italian`). Die Küche wird bei der Restaurant-Erstellung in `ScreenStart` gewählt und im `ScreenRestaurant`-Header angezeigt.
 - **Namenerzeugung:** `ObjectApprentice`/`ObjectTeamMedic` erhalten statt des hartkodierten `Zone.italy` einen `Zone`/`Cuisine`-Parameter (über `ObjectProfile` beim Anheuern übergeben).
 - **Stil:** Token-/Restaurant-Grafiken je Küche sind **Art-Assets** und bewusst nicht Teil dieses Code-Pakets – der Namensstamm ist der umsetzbare Kern.
+- **Rebranding (Entscheidung):** Ein Küchenwechsel ist nachträglich möglich, aber **deutlich teuer** und mit **wirtschaftlichen Folgen** verbunden (z. B. einmalige Kosten + zeitlich begrenzter Attraktivitäts-Malus; Balance-Werte in `EconomyBalance`). UI in `ScreenRestaurant`; setzt `RestaurantData.cuisine` neu und erzeugt künftige Namen im neuen Namensstamm (bestehendes Personal behält seinen Namen).
 - `team_rules.md` § 2.4 (`RandomNames(Zone.italy)`) entsprechend aktualisieren.
 
 ### 10. Restauranterweiterungen
 
-Als Browsergame-Annäherung soll das Restaurant mit **Erweiterungen** ausgebaut werden können. Diese wirken auf die drei Eingangswerte des passiven Einkommens (§ 8) – **Attraktivität, Kundenzufriedenheit, Kapazität** – und sind selbst weiter ausbaubar (Stufen). Jede Erweiterung kostet **Einkauf** und **Unterhalt** (wöchentlich, siehe § 2/§ 8).
+Als Browsergame-Annäherung soll das Restaurant mit **Erweiterungen** ausgebaut werden können. Diese wirken auf die drei Eingangswerte des passiven Einkommens (§ 8) – **Attraktivität, Kundenzufriedenheit, Kapazität** – und sind selbst weiter ausbaubar (Stufen). Jede Erweiterung kostet **Ankauf** und **Unterhalt** (wöchentlich, siehe § 2/§ 8).
 
-**Beispiele (Balance-Werte, Tuning in `EconomyBalance`):**
+**Erweiterungen (Balance-Werte, Tuning in `EconomyBalance`):**
 
-| Erweiterung | Effekt / Stufe | Max-Stufen (Empfehlung) |
-|---|---|---|
-| Mehr Tische | +1 % Kapazität, +1 % Kundenzufriedenheit | 5 |
-| Größere Küche | +5 % Kapazität | 5 |
-| Werbeplakate | +5 % Attraktivität | 5 |
-| Dekorationen | +2 % Attraktivität, +2 % Kundenzufriedenheit | 5 |
-| Musikautomat | +20 % Attraktivität | 1 |
+| Erweiterung | Effekt / Stufe | Max-Stufe | Ankauf (Basis) | Erhalt/Woche (Basis) |
+|---|---|---|---|---|
+| Mehr Tische | +1 % Kapazität, +1 % Kundenzufriedenheit | 5 | 100 € | 10 € |
+| Größere Küche | +5 % Kapazität | 5 | 200 € | 20 € |
+| Werbeplakate | +5 % Attraktivität | 5 | 150 € | 15 € |
+| Dekorationen | +2 % Attraktivität, +2 % Kundenzufriedenheit | 5 | 120 € | 12 € |
+| Musikautomat | +20 % Attraktivität | 1 | 500 € | 50 € |
 
+- **Kostenmodell (linear mit der Stufe, Entscheidung: kumulativ):** Der Ausbau **auf** Stufe `N` kostet `Ankauf-Basis × N`; **kumulativ** bis Stufe `N` sind `Σ Basis×k = Basis × N·(N+1)/2` investiert. Der wöchentliche Unterhalt **auf** Stufe `N` beträgt `Erhalt-Basis × N`. Beispiel (Ankauf 100 €, Erhalt 10 €): Stufe 1 = 100 € / 10 €, Stufe 2 = 200 € / 20 € (insgesamt 300 € investiert), Stufe 3 = 300 € / 30 € usw.
+- **Downgrade & Verkauf (Entscheidung):** Erweiterungen lassen sich stufenweise **zurückbauen** und ganz **verkaufen**, um laufende Kosten zu senken. Ein Verkauf erstattet **50 %** der investierten Anschaffungssumme (Entscheidung; Wert in `EconomyBalance` justierbar); der Unterhalt sinkt entsprechend der neuen Stufe.
 - **Wirkung (multiplikativ):** Die § 8-Formeln werden vor dem Clamp mit dem Erweiterungsfaktor multipliziert: `Basiswert × (1 + Σ Bonus)`. Reine Funktion `upgradeEffects(levels)` in `EconomyService` liefert die drei Summenboni.
-- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Kaufpreis, Unterhalt/Woche, MaxLevel, Boni) in `EconomyBalance.upgrades` (V7).
+- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Ankauf-Basis, Erhalt-Basis/Woche, MaxLevel, Boni) in `EconomyBalance.upgrades` (V7).
+- **Funktionen (`EconomyService`):** `upgradeEffects(levels)` (drei Summenboni), `upgradeCost(upgrade, toLevel)` (kumulativ), `upgradeUpkeepPerWeek(upgrade, level)`, `sellRefund(upgrade, level)`.
 - **Kauf/Ausbau:** Budget-Check wie `hireApprentice` (nicht unter die Negativgrenze), Persistenz via `_saveState()`.
 - **Unterhalt:** wird im **Wochen-Tick (V8)** mit abgebucht; Reihenfolge: passives Einkommen → Teamarzt-Kosten → **Erweiterungs-Unterhalt** → Negativzinsen → Bankrott-Check.
 
@@ -332,6 +345,28 @@ Der `ScreenRestaurant` stapelt heute alles in einer langen Column (Personal-List
   4. **Karte & Gefecht** – Karten-Auswahl + Gefechtsbutton.
 - **Zustand:** neuer lokaler Zustand `_activeTab`; beim Restaurant-Wechsel (`_switchRestaurant`) wird auf „Aktives Personal" zurückgesetzt; `_battleReadyCharacters`/`_selectedMapIndex` bleiben wie bisher erhalten.
 - Neue l10n-Strings für die Reiter-Titel.
+
+### Tickzeiten (Entscheidung)
+
+**Ist-Zustand (vor V8):** Es läuft **kein** Tick-System. Alle Systeme ausserhalb des Gefechts sind rein ereignisgesteuert (einmalige Menü-Aktionen). `RestaurantData.lastSeenAt` wird beim Laden geschrieben, aber nie ausgewertet; `ObjectTeamMedic.costPerWeek` wird nur angezeigt; `applyNegativeInterest()`/`isBankrupt` haben keinen Aufrufer; die Heilung ist manuell/sofortig (`emergencyShot` setzt den Zustand direkt, der Rückfall „nach einem Tag" ist nur ein Kommentar).
+
+**Festgelegter Tick:** Abgerechnet wird ausschliesslich im **Wochentick** – 1 Tick = 1 Echtzeitwoche (koppelt an V8). Der `GameClockService` rechnet in Wochen-Einheiten; der Catch-up holt alle fälligen Wochen beim App-Start (Login), beim Wiederaufnehmen der App (`resumed`) und beim Restaurant-Wechsel nach.
+
+| Tick | Status | Verantwortlich für |
+|---|---|---|
+| **Wochentick** | **Geplant in V2/V8** – der einzige Tick der Wirtschaftsschleife | passives Einkommen, Teamarzt-Kosten, Erweiterungs-Unterhalt, Negativzinsen, Bankrott-Check (Reihenfolge siehe § 8/§ 10) |
+| **Tagestick** | dem Folge-Dokument (V3) vorbehalten | Echtzeit-Heilung, Rückfall der Notfall-Spritze |
+| **Intervalltick (alle 3 Stunden)** | dem Folge-Dokument (V3) vorbehalten | Heilung einer Verletzungsstufe (`MedicQuality.healTimePerStage`: 6 h/3 h/1 h) |
+
+Tagestick und Intervalltick sind **keine parallelen Tick-Systeme**, sondern Module auf demselben `GameClockService` (V8), die erst mit der Heilung (P3/V3) aktiviert werden. `MedicQuality.healTimePerStage`/`effectiveHealTime` existieren bereits als Daten, werden aber bis dahin von keinem Tick konsumiert.
+
+### Offene Fragen
+
+Aktuell sind **keine offenen Fragen** mehr vorhanden.
+
+**Entschieden (Phase 4): Beute-Ermittlung per Callback.** `WidgetCaretaker` summiert die `moneyValue`-Summe der besiegten Gegner und übergibt sie über `onGameOver(playerWon, loot)` an `ScreenMain` → `ScreenBattleResult(enemyLoot: ...)`, wo die Wirtschaftsabrechnung stattfindet.
+
+> Alle zuvor offenen Fragen sind entschieden und in die Fachabschnitte (§ 4, § 8, § 9, § 10) sowie in die „Umsetzungshinweise“ übernommen.
 
 ---
 
@@ -351,13 +386,13 @@ Der `ScreenRestaurant` stapelt heute alles in einer langen Column (Personal-List
 
 | Datei | Änderung |
 |---|---|
-| `lib/services/economy_balance.dart` | **Neu:** zentrale Balance-Konstanten (V7) inkl. `upgrades`-Definitionen (§ 10) |
+| `lib/services/economy_balance.dart` | **Neu:** zentrale Balance-Konstanten (V7) inkl. `upgrades`-Definitionen (§ 10) und Rebranding-Werten (§ 9) |
 | `lib/services/game_clock_service.dart` | **Neu:** Echtzeit-Tick + Catch-up (V8) |
-| `lib/services/economy_service.dart` | **Neu:** reine Wirtschaftsfunktionen (V2) inkl. `upgradeEffects` (§ 10) |
+| `lib/services/economy_service.dart` | **Neu:** reine Wirtschaftsfunktionen (V2) inkl. `upgradeEffects`, `upgradeCost`, `upgradeUpkeepPerWeek`, `sellRefund` (§ 10) |
 | `lib/models/cuisine.dart` | **Neu:** `enum Cuisine` + Mapping Küche → `Zone` (§ 9) |
 | `lib/models/restaurant_upgrade.dart` | **Neu:** `enum UpgradeType` + Upgrade-Datenmodell (§ 10) |
 | `lib/services/passive_income_service.dart` | **Neu:** Fuzzy-Inferenz „Kunden/Woche“ + passives Einkommen (§ 8) |
-| `lib/models/profile_data.dart` | ggf. Billing-Anker; `kDefaultRestaurantBudget` auf `EconomyBalance` zeigen lassen; `RestaurantData.cuisine` (§ 9) + `RestaurantData.upgrades` (§ 10) |
+| `lib/models/profile_data.dart` | ggf. Billing-Anker; `kDefaultRestaurantBudget` auf `EconomyBalance` zeigen lassen; `RestaurantData.cuisine` (§ 9), `RestaurantData.upgrades` (§ 10) + `RestaurantData.lastMatchResult` (§ 8) |
 | `lib/objects/object_profile.dart` | Literale → `EconomyBalance`; Budget-/Anker-Wirkung in `hireMedic`/`fireMedic`; Aufrufe von `EconomyService`; Fuzzy-Eingänge bereitstellen (Stadtteil, Personalstärke, Teamgesundheit); Küche/Erweiterungen anwenden (§ 9/§ 10) |
 | `lib/objects/object_team_medic.dart`, `lib/objects/object_apprentice.dart` | Teamgröße in die Wochenkosten einbeziehen; Namens-`Zone` als Parameter statt hartkodiert `Zone.italy` (§ 9) |
 | `lib/screens/screen_battle_result.dart` | Belohnung gutschreiben, Negativzinsen, Bankrott-Check |
@@ -381,26 +416,23 @@ Der `ScreenRestaurant` stapelt heute alles in einer langen Column (Personal-List
 - Das passive Einkommen reagiert nachvollziehbar auf Stadtteil-Prestige, Personalstärke, Teamgesundheit und letztes Gefechtsergebnis; **ohne Personal entsteht kein Einkommen**.
 - Fuzzy-Peaks und Sätze sind über `EconomyBalance` justierbar (V7).
 - Bei der Restaurant-Erstellung ist eine **Küche** wählbar (§ 9); neu angeheuertes Personal und Teamärzte tragen den passenden Namensstamm, Alt-Spielstände bleiben italienisch.
-- **Erweiterungen** (§ 10) sind gegen Budget kauf-/ausbaubar (nicht unter die Negativgrenze), wirken spürbar auf Attraktivität/Zufriedenheit/Kapazität (§ 8) und werden wöchentlich als Unterhalt abgebucht.
+- Ein nachträglicher Küchenwechsel (**Rebranding**, § 9) ist kostenpflichtig und hat spürbare wirtschaftliche Folgen.
+- **Erweiterungen** (§ 10) sind gegen Budget kauf-/ausbaubar sowie **downgrade-/verkaufbar** (nicht unter die Negativgrenze); Kosten skalieren **linear mit der Stufe**. Sie wirken spürbar auf Attraktivität/Zufriedenheit/Kapazität (§ 8) und werden wöchentlich als Unterhalt abgebucht.
 - Der Restaurant-Screen nutzt **Reiter** (§ 11: Aktives Personal · Passives Personal · Erweiterungen · Karte & Gefecht) und behält Kader-/Kartenauswahl sowie den Gefechtsbutton.
 
-### Nicht-blockierende Hinweise / offene Punkte
+### Umsetzungshinweise
 
-- **Anteilige Abrechnung** beim Anheuern mitten in der Woche: taggenau anteilig oder erst ab dem nächsten Wochen-Tick (siehe `0-Base.md` → „Offene Folgepunkte“). Empfehlung: erst zum nächsten Tick, Billing-Anker = Anheuerzeitpunkt.
-- **Beute-Ermittlung:** Wie die `moneyValue`-Summe der besiegten Gegner sauber aus `WidgetCaretaker`/`ObjectHost` zum Ergebnis-Screen gelangt (Callback vs. Auslesen), ist ein Implementierungsdetail und in Phase 4 zu entscheiden.
-- **Migration:** Bestehende Spielstände tragen bereits `costPerWeek`; neu berechnen oder unverändert lassen (Empfehlung: beim nächsten Anheuern neu berechnen, sonst Wert beibehalten).
 - **Heilung & Notfall-Spritze** (P3/V3) hängen am selben Zeitsystem (V8) und werden im Folge-Dokument behandelt; hier nur als Abhängigkeit erwähnt.
 - **Tick-Länge (Entscheidung):** 1 Tick = 1 Echtzeitwoche (koppelt an V8). Kürzere Ticks (Stunde/Tag) wären eine spätere Erweiterung.
-- **Letztes Gefechtsergebnis:** Quelle für `resultBonus` ist der jüngste `MatchRecord` über das Personal; alternativ ein leichtes Feld `lastMatchResult` in `RestaurantData` (Implementierungsdetail).
 - **Prestige-Daten:** Stadtteilnamen kommen aus `assets/world/theworld.tmx`; `districtPrestige` hat Default 1.0, damit neue/unbekannte Stadtteile funktionieren.
 - **Kapazitäts-Normalisierung:** `moneyValue` ist aktuell der Beutewert (`ObjectToken`); wird es später zu einer Service-Kennzahl umgedeutet, Formel/`capacityMoneyNorm` anpassen.
 - **`districtPrestige`-Keys = TMX-Namen:** Die Keys müssen exakt den Namen der „Nachbarschaften“-Ebene in `assets/world/theworld.tmx` entsprechen. Achtung: das Asset enthält den Tippfehler **„Greenwhich Village / West Village“** – wird er im TMX korrigiert, muss der Map-Key mitgezogen werden, sonst fällt der Stadtteil auf den Default 1.0 zurück.
-- **Skalen-Abgleich Prestige ↔ Fuzzy-Domäne:** Die Attraktivitäts-Werte (~0.7–3.0) und die skizzierte Fuzzy-Domäne (0–10) sind in Phase 3 aufeinander abzustimmen (siehe Balancing-Hinweis in § 8).
-- **Mexikanische Namen:** `random_name_generator` hat kein `Zone.mexico`; Empfehlung `Zone.spain` (§ 9). Alternative: eigene Namenslisten oder Erweiterung der Bibliothek.
+- **Skalen-Abgleich Prestige ↔ Fuzzy-Domäne:** **Entschieden (Phase 3):** Die Fuzzy-Eingangssets für Attraktivität und Kundenzufriedenheit liegen auf der Domäne **0–4** (siehe Balancing-Hinweis in § 8); dadurch passen die Attraktivitäts-Werte (~0.7–3.0) direkt in die Skala, höhere Werte sättigen in „Hoch“. Die crisp-Clamps wurden auf 0–4 angeglichen.
 - **Musikautomat:** Einzel-Level (max. 1) mit +20 % Attraktivität – die Roh-Notiz enthielt „20&" und keine „/Stufe"-Angabe.
-- **Küche änderbar?** Vorerst nur bei Erstellung wählbar; ein nachträglicher Wechsel („Rebranding") wäre ein optionales, bezahltes Feature.
-- **Erweiterungs-MaxLevel/Preise:** in `EconomyBalance` zu justieren; Vorschlag MaxLevel 5 (Musikautomat 1).
 - **Erweiterungs-Unterhalt:** wird nach dem passiven Einkommen, aber vor den Negativzinsen abgebucht (§ 10).
+- **Migration `costPerWeek` (Entscheidung):** beim nächsten Anheuern neu berechnen; bestehende Werte bis dahin beibehalten.
+- **Verkaufserlös Erweiterungen (Entscheidung):** 50 % der investierten Anschaffungssumme; exakte Höhe in `EconomyBalance` justierbar.
+- **Rebranding-Balance (Vorschlag):** einmalige Kosten (z. B. 5.000 €) plus zeitlich begrenzter Attraktivitäts-Malus – in Phase 7/3 zu justieren.
 
 > **Hinweis:** Die frühere Roh-Notiz „Wirtschaftssystemupgrades → passives Einkommen“ ist vollständig in Abschnitt 8 übernommen und präzisiert (Eingangswerte, Fuzzy-Modell, Integration, Tests). Die weiteren Roh-Notizen (Küchen, Restauranterweiterungen, Screen-Redesign) sind in die Abschnitte 9–11 eingearbeitet.
 

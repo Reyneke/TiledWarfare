@@ -3,8 +3,8 @@ import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 
 class ObjectLineCook extends ObjectApprentice {
-  ObjectLineCook() : super(
-    name: "Line Cook: ${RandomNames(Zone.italy).fullName()}",
+  ObjectLineCook({Zone? nameZone}) : super(
+    name: "Line Cook: ${RandomNames(nameZone ?? Zone.italy).fullName()}",
     imagePath: "assets/images/token/token_cook_basic.png",
     attackValue: 80,
     defenseValue: 40,

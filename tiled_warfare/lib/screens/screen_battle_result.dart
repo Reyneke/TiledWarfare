@@ -4,6 +4,7 @@ import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 
 /// Ergebnis-Bildschirm nach einem Kampf.
 ///
@@ -16,10 +17,14 @@ class ScreenBattleResult extends StatefulWidget {
   /// Name der Karte/Gegners (z. B. "Dough Dumpster").
   final String opponentName;
 
+  /// Beute (`moneyValue`-Summe) der besiegten Gegner (§ 2.2).
+  final int enemyLoot;
+
   const ScreenBattleResult({
     super.key,
     required this.playerWon,
     required this.opponentName,
+    this.enemyLoot = 0,
   });
 
   @override
@@ -33,6 +38,8 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   int _totalXpGained = 0;
   int _survivors = 0;
   int _fallen = 0;
+  int _reward = 0;
+  bool _bankrupt = false;
 
   @override
   void initState() {
@@ -85,11 +92,25 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
       result: widget.playerWon ? MatchResult.win : MatchResult.loss,
     );
 
+    // Wirtschafts-Abrechnung (V2): Belohnung gutschreiben → Negativzinsen →
+    // Bankrott prüfen. Die Rettungswürfe (inkl. Wiederbelebungskosten) laufen
+    // in syncUnitsAfterBattle unmittelbar danach.
+    final reward = EconomyService.battleReward(
+      playerWon: widget.playerWon,
+      enemyMoneyValues: [widget.enemyLoot],
+    );
+    _profile.budget += reward;
+    _profile.lastMatchResult =
+        widget.playerWon ? MatchResult.win : MatchResult.loss;
+    _profile.applyNegativeInterest();
+
     // Sync units + save (fire-and-forget with error handling)
     // Nur die Überlebenden (unitList) an syncUnitsAfterBattle übergeben,
     // da ObjectProfile._performSurvivalRolls() die Gefallenen aus _personal
     // selbst ermittelt und Rettungswürfe durchführt.
     _profile.syncUnitsAfterBattle(survivors);
+    _bankrupt = _profile.isBankrupt;
+    _reward = reward;
     _profile.saveToStorage().catchError((Object error) {
       debugPrint('Failed to save profile after battle: $error');
       return false;
@@ -169,6 +190,23 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.amber,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              Text(
+                'Belohnung: +$_reward €',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (_bankrupt)
+                Text(
+                  'Bankrott! Die Investoren lösen das Restaurant auf.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.red,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

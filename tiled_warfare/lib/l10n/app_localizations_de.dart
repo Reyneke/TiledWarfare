@@ -399,4 +399,160 @@ class AppLocalizationsDe extends AppLocalizations {
   ) {
     return 'AW: $attack | VW: $defense | BW: $movement | SW: $damage | RW: $range | LP: $hp';
   }
+
+  @override
+  String nextBillingCountdown(int days) {
+    return 'Nächste Abbuchung in $days Tagen';
+  }
+
+  @override
+  String get budgetWarning =>
+      'Achtung: Das Budget nähert sich der Negativgrenze!';
+
+  @override
+  String customersPerWeekLabel(int count) {
+    return '$count Kunden/Woche';
+  }
+
+  @override
+  String passiveIncomeLabel(int income) {
+    return 'Passiv: $income €/Woche';
+  }
+
+  @override
+  String medicCostsLabel(int cost) {
+    return 'Ärzte: $cost €/Woche';
+  }
+
+  @override
+  String weeklyLoadTotal(int cost) {
+    return 'Gesamtwochenlast: $cost €';
+  }
+
+  @override
+  String get bankruptDialogTitle => 'Bankrott!';
+
+  @override
+  String get bankruptDialogMessage =>
+      'Die Investoren lösen das Restaurant auf. Du startest mit einem neuen Restaurant.';
+
+  @override
+  String get bankruptNewRestaurant => 'Neues Restaurant starten';
+
+  @override
+  String get cuisineSection => 'Küche';
+
+  @override
+  String cuisineLabel(String cuisine) {
+    return 'Küche: $cuisine';
+  }
+
+  @override
+  String get cuisineItalian => 'Italienisch';
+
+  @override
+  String get cuisineJapanese => 'Japanisch';
+
+  @override
+  String get cuisineChinese => 'Chinesisch';
+
+  @override
+  String get cuisineGerman => 'Deutsch';
+
+  @override
+  String get cuisineCanadian => 'Kanadisch';
+
+  @override
+  String get cuisineMexican => 'Mexikanisch';
+
+  @override
+  String get rebrandCuisine => 'Küche wechseln (Rebranding)';
+
+  @override
+  String get rebrandDialogTitle => 'Küche wechseln?';
+
+  @override
+  String rebrandDialogMessage(int cost) {
+    return 'Der Wechsel kostet $cost € und zieht kurzfristig weniger Gäste an.';
+  }
+
+  @override
+  String get rebrandConfirm => 'Wechseln';
+
+  @override
+  String get rebrandSuccess => 'Küche gewechselt!';
+
+  @override
+  String get rebrandNotEnoughBudget =>
+      'Budget reicht nicht für das Rebranding!';
+
+  @override
+  String get upgradesSection => 'Restauranterweiterungen';
+
+  @override
+  String get upgradeTables => 'Mehr Tische';
+
+  @override
+  String get upgradeKitchen => 'Größere Küche';
+
+  @override
+  String get upgradeSignage => 'Werbeplakate';
+
+  @override
+  String get upgradeDecoration => 'Dekorationen';
+
+  @override
+  String get upgradeJukebox => 'Musikautomat';
+
+  @override
+  String upgradeLevel(int level, int max) {
+    return 'Stufe $level/$max';
+  }
+
+  @override
+  String upgradeBuyCost(int cost) {
+    return 'Ausbau: $cost €';
+  }
+
+  @override
+  String upgradeUpkeepCost(int cost) {
+    return 'Unterhalt: $cost €/Woche';
+  }
+
+  @override
+  String get upgradeBuy => 'Ausbauen';
+
+  @override
+  String get upgradeDowngrade => 'Zurückbauen';
+
+  @override
+  String get upgradeSell => 'Verkaufen';
+
+  @override
+  String get upgradeMaxReached => 'Maximalstufe';
+
+  @override
+  String get upgradeNotEnoughBudget => 'Budget reicht nicht für den Ausbau!';
+
+  @override
+  String upgradeSold(int amount) {
+    return 'Verkauft: +$amount €';
+  }
+
+  @override
+  String get tabPersonnel => 'Aktives Personal';
+
+  @override
+  String get tabMedics => 'Teamarzt';
+
+  @override
+  String get tabUpgrades => 'Erweiterungen';
+
+  @override
+  String get tabBattle => 'Karte & Gefecht';
+
+  @override
+  String rebrandingPenaltyActive(int days) {
+    return 'Rebranding aktiv: Attraktivität −1 (noch $days Tage)';
+  }
 }

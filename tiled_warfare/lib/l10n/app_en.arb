@@ -534,5 +534,140 @@
       "range": { "type": "int" },
       "hp": { "type": "int" }
     }
+  },
+
+  "nextBillingCountdown": "Next billing in {days} days",
+  "@nextBillingCountdown": {
+    "description": "Countdown until the next weekly tick",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "budgetWarning": "Warning: the budget is approaching the negative limit!",
+  "@budgetWarning": {
+    "description": "Warning near the negative limit"
+  },
+  "customersPerWeekLabel": "{count} customers/week",
+  "@customersPerWeekLabel": {
+    "description": "Customers per week display",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "passiveIncomeLabel": "Passive: {income} €/week",
+  "@passiveIncomeLabel": {
+    "description": "Passive income per week display",
+    "placeholders": { "income": { "type": "int" } }
+  },
+  "medicCostsLabel": "Medics: {cost} €/week",
+  "@medicCostsLabel": {
+    "description": "Team medic costs per week display",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "weeklyLoadTotal": "Total weekly load: {cost} €",
+  "@weeklyLoadTotal": {
+    "description": "Sum of weekly medic costs",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "bankruptDialogTitle": "Bankruptcy!",
+  "@bankruptDialogTitle": {
+    "description": "Title of the permadeath dialog"
+  },
+  "bankruptDialogMessage": "The investors dissolve the restaurant. You start with a new restaurant.",
+  "@bankruptDialogMessage": {
+    "description": "Body of the permadeath dialog"
+  },
+  "bankruptNewRestaurant": "Start new restaurant",
+  "@bankruptNewRestaurant": {
+    "description": "Button to restart after bankruptcy"
+  },
+
+  "cuisineSection": "Cuisine",
+  "@cuisineSection": { "description": "Label for the cuisine picker" },
+  "cuisineLabel": "Cuisine: {cuisine}",
+  "@cuisineLabel": {
+    "description": "Cuisine display in the header",
+    "placeholders": { "cuisine": { "type": "String" } }
+  },
+  "cuisineItalian": "Italian",
+  "@cuisineItalian": { "description": "Cuisine: Italian" },
+  "cuisineJapanese": "Japanese",
+  "@cuisineJapanese": { "description": "Cuisine: Japanese" },
+  "cuisineChinese": "Chinese",
+  "@cuisineChinese": { "description": "Cuisine: Chinese" },
+  "cuisineGerman": "German",
+  "@cuisineGerman": { "description": "Cuisine: German" },
+  "cuisineCanadian": "Canadian",
+  "@cuisineCanadian": { "description": "Cuisine: Canadian" },
+  "cuisineMexican": "Mexican",
+  "@cuisineMexican": { "description": "Cuisine: Mexican" },
+  "rebrandCuisine": "Change cuisine (rebrand)",
+  "@rebrandCuisine": { "description": "Action: change cuisine" },
+  "rebrandDialogTitle": "Change cuisine?",
+  "@rebrandDialogTitle": { "description": "Title of the rebrand dialog" },
+  "rebrandDialogMessage": "The change costs {cost} € and temporarily attracts fewer guests.",
+  "@rebrandDialogMessage": {
+    "description": "Body of the rebrand dialog",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "rebrandConfirm": "Change",
+  "@rebrandConfirm": { "description": "Confirm button for rebranding" },
+  "rebrandSuccess": "Cuisine changed!",
+  "@rebrandSuccess": { "description": "Snackbar after successful rebranding" },
+  "rebrandNotEnoughBudget": "Not enough budget for rebranding!",
+  "@rebrandNotEnoughBudget": { "description": "Rebranding error message" },
+
+  "upgradesSection": "Restaurant upgrades",
+  "@upgradesSection": { "description": "Section title upgrades" },
+  "upgradeTables": "More tables",
+  "@upgradeTables": { "description": "Upgrade: more tables" },
+  "upgradeKitchen": "Larger kitchen",
+  "@upgradeKitchen": { "description": "Upgrade: larger kitchen" },
+  "upgradeSignage": "Advertising signs",
+  "@upgradeSignage": { "description": "Upgrade: advertising signs" },
+  "upgradeDecoration": "Decorations",
+  "@upgradeDecoration": { "description": "Upgrade: decorations" },
+  "upgradeJukebox": "Jukebox",
+  "@upgradeJukebox": { "description": "Upgrade: jukebox" },
+  "upgradeLevel": "Level {level}/{max}",
+  "@upgradeLevel": {
+    "description": "Upgrade level",
+    "placeholders": { "level": { "type": "int" }, "max": { "type": "int" } }
+  },
+  "upgradeBuyCost": "Upgrade: {cost} €",
+  "@upgradeBuyCost": {
+    "description": "Purchase cost of the next level",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "upgradeUpkeepCost": "Upkeep: {cost} €/week",
+  "@upgradeUpkeepCost": {
+    "description": "Weekly upkeep of the upgrade",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "upgradeBuy": "Upgrade",
+  "@upgradeBuy": { "description": "Button: upgrade" },
+  "upgradeDowngrade": "Downgrade",
+  "@upgradeDowngrade": { "description": "Button: downgrade" },
+  "upgradeSell": "Sell",
+  "@upgradeSell": { "description": "Button: sell" },
+  "upgradeMaxReached": "Max level",
+  "@upgradeMaxReached": { "description": "Max level reached" },
+  "upgradeNotEnoughBudget": "Not enough budget for the upgrade!",
+  "@upgradeNotEnoughBudget": { "description": "Upgrade error message" },
+  "upgradeSold": "Sold: +{amount} €",
+  "@upgradeSold": {
+    "description": "Snackbar after selling",
+    "placeholders": { "amount": { "type": "int" } }
+  },
+
+  "tabPersonnel": "Active staff",
+  "@tabPersonnel": { "description": "Tab: active staff" },
+  "tabMedics": "Team medic",
+  "@tabMedics": { "description": "Tab: team medic" },
+  "tabUpgrades": "Upgrades",
+  "@tabUpgrades": { "description": "Tab: upgrades" },
+  "tabBattle": "Map & battle",
+  "@tabBattle": { "description": "Tab: map & battle" },
+
+  "rebrandingPenaltyActive": "Rebrand active: attractiveness −1 ({days} days left)",
+  "@rebrandingPenaltyActive": {
+    "description": "Display of the active rebrand penalty",
+    "placeholders": { "days": { "type": "int" } }
   }
 }

@@ -770,6 +770,264 @@ abstract class AppLocalizations {
     int range,
     int hp,
   );
+
+  /// Countdown bis zum nächsten Wochentick
+  ///
+  /// In de, this message translates to:
+  /// **'Nächste Abbuchung in {days} Tagen'**
+  String nextBillingCountdown(int days);
+
+  /// Warnung nahe der Negativgrenze
+  ///
+  /// In de, this message translates to:
+  /// **'Achtung: Das Budget nähert sich der Negativgrenze!'**
+  String get budgetWarning;
+
+  /// Anzeige Kunden pro Woche
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Kunden/Woche'**
+  String customersPerWeekLabel(int count);
+
+  /// Anzeige passives Einkommen pro Woche
+  ///
+  /// In de, this message translates to:
+  /// **'Passiv: {income} €/Woche'**
+  String passiveIncomeLabel(int income);
+
+  /// Anzeige Teamarzt-Kosten pro Woche
+  ///
+  /// In de, this message translates to:
+  /// **'Ärzte: {cost} €/Woche'**
+  String medicCostsLabel(int cost);
+
+  /// Summe der wöchentlichen Arztkosten
+  ///
+  /// In de, this message translates to:
+  /// **'Gesamtwochenlast: {cost} €'**
+  String weeklyLoadTotal(int cost);
+
+  /// Titel des Permadeath-Dialogs
+  ///
+  /// In de, this message translates to:
+  /// **'Bankrott!'**
+  String get bankruptDialogTitle;
+
+  /// Text des Permadeath-Dialogs
+  ///
+  /// In de, this message translates to:
+  /// **'Die Investoren lösen das Restaurant auf. Du startest mit einem neuen Restaurant.'**
+  String get bankruptDialogMessage;
+
+  /// Button für den Neustart nach Bankrott
+  ///
+  /// In de, this message translates to:
+  /// **'Neues Restaurant starten'**
+  String get bankruptNewRestaurant;
+
+  /// Beschriftung der Küchenauswahl
+  ///
+  /// In de, this message translates to:
+  /// **'Küche'**
+  String get cuisineSection;
+
+  /// Anzeige der Küche im Header
+  ///
+  /// In de, this message translates to:
+  /// **'Küche: {cuisine}'**
+  String cuisineLabel(String cuisine);
+
+  /// Küche: Italienisch
+  ///
+  /// In de, this message translates to:
+  /// **'Italienisch'**
+  String get cuisineItalian;
+
+  /// Küche: Japanisch
+  ///
+  /// In de, this message translates to:
+  /// **'Japanisch'**
+  String get cuisineJapanese;
+
+  /// Küche: Chinesisch
+  ///
+  /// In de, this message translates to:
+  /// **'Chinesisch'**
+  String get cuisineChinese;
+
+  /// Küche: Deutsch
+  ///
+  /// In de, this message translates to:
+  /// **'Deutsch'**
+  String get cuisineGerman;
+
+  /// Küche: Kanadisch
+  ///
+  /// In de, this message translates to:
+  /// **'Kanadisch'**
+  String get cuisineCanadian;
+
+  /// Küche: Mexikanisch
+  ///
+  /// In de, this message translates to:
+  /// **'Mexikanisch'**
+  String get cuisineMexican;
+
+  /// Aktion: Küche wechseln
+  ///
+  /// In de, this message translates to:
+  /// **'Küche wechseln (Rebranding)'**
+  String get rebrandCuisine;
+
+  /// Titel des Rebranding-Dialogs
+  ///
+  /// In de, this message translates to:
+  /// **'Küche wechseln?'**
+  String get rebrandDialogTitle;
+
+  /// Text des Rebranding-Dialogs
+  ///
+  /// In de, this message translates to:
+  /// **'Der Wechsel kostet {cost} € und zieht kurzfristig weniger Gäste an.'**
+  String rebrandDialogMessage(int cost);
+
+  /// Bestätigen-Button für Rebranding
+  ///
+  /// In de, this message translates to:
+  /// **'Wechseln'**
+  String get rebrandConfirm;
+
+  /// Snackbar nach erfolgreichem Rebranding
+  ///
+  /// In de, this message translates to:
+  /// **'Küche gewechselt!'**
+  String get rebrandSuccess;
+
+  /// Fehlermeldung Rebranding
+  ///
+  /// In de, this message translates to:
+  /// **'Budget reicht nicht für das Rebranding!'**
+  String get rebrandNotEnoughBudget;
+
+  /// Abschnittstitel Erweiterungen
+  ///
+  /// In de, this message translates to:
+  /// **'Restauranterweiterungen'**
+  String get upgradesSection;
+
+  /// Erweiterung: Mehr Tische
+  ///
+  /// In de, this message translates to:
+  /// **'Mehr Tische'**
+  String get upgradeTables;
+
+  /// Erweiterung: Größere Küche
+  ///
+  /// In de, this message translates to:
+  /// **'Größere Küche'**
+  String get upgradeKitchen;
+
+  /// Erweiterung: Werbeplakate
+  ///
+  /// In de, this message translates to:
+  /// **'Werbeplakate'**
+  String get upgradeSignage;
+
+  /// Erweiterung: Dekorationen
+  ///
+  /// In de, this message translates to:
+  /// **'Dekorationen'**
+  String get upgradeDecoration;
+
+  /// Erweiterung: Musikautomat
+  ///
+  /// In de, this message translates to:
+  /// **'Musikautomat'**
+  String get upgradeJukebox;
+
+  /// Ausbaustufe einer Erweiterung
+  ///
+  /// In de, this message translates to:
+  /// **'Stufe {level}/{max}'**
+  String upgradeLevel(int level, int max);
+
+  /// Anschaffungskosten der nächsten Stufe
+  ///
+  /// In de, this message translates to:
+  /// **'Ausbau: {cost} €'**
+  String upgradeBuyCost(int cost);
+
+  /// Wöchentlicher Unterhalt der Erweiterung
+  ///
+  /// In de, this message translates to:
+  /// **'Unterhalt: {cost} €/Woche'**
+  String upgradeUpkeepCost(int cost);
+
+  /// Button: Erweiterung ausbauen
+  ///
+  /// In de, this message translates to:
+  /// **'Ausbauen'**
+  String get upgradeBuy;
+
+  /// Button: Erweiterung zurückbauen
+  ///
+  /// In de, this message translates to:
+  /// **'Zurückbauen'**
+  String get upgradeDowngrade;
+
+  /// Button: Erweiterung verkaufen
+  ///
+  /// In de, this message translates to:
+  /// **'Verkaufen'**
+  String get upgradeSell;
+
+  /// Maximalstufe erreicht
+  ///
+  /// In de, this message translates to:
+  /// **'Maximalstufe'**
+  String get upgradeMaxReached;
+
+  /// Fehlermeldung Ausbau
+  ///
+  /// In de, this message translates to:
+  /// **'Budget reicht nicht für den Ausbau!'**
+  String get upgradeNotEnoughBudget;
+
+  /// Snackbar nach Verkauf
+  ///
+  /// In de, this message translates to:
+  /// **'Verkauft: +{amount} €'**
+  String upgradeSold(int amount);
+
+  /// Reiter: Aktives Personal
+  ///
+  /// In de, this message translates to:
+  /// **'Aktives Personal'**
+  String get tabPersonnel;
+
+  /// Reiter: Teamarzt
+  ///
+  /// In de, this message translates to:
+  /// **'Teamarzt'**
+  String get tabMedics;
+
+  /// Reiter: Erweiterungen
+  ///
+  /// In de, this message translates to:
+  /// **'Erweiterungen'**
+  String get tabUpgrades;
+
+  /// Reiter: Karte & Gefecht
+  ///
+  /// In de, this message translates to:
+  /// **'Karte & Gefecht'**
+  String get tabBattle;
+
+  /// Anzeige des aktiven Rebranding-Malus
+  ///
+  /// In de, this message translates to:
+  /// **'Rebranding aktiv: Attraktivität −1 (noch {days} Tage)'**
+  String rebrandingPenaltyActive(int days);
 }
 
 class _AppLocalizationsDelegate

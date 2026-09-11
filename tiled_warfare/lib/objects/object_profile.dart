@@ -1,12 +1,17 @@
 import 'dart:math';
 
+import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
 
@@ -55,6 +60,23 @@ class ObjectProfile {
   /// District of the active restaurant (location from `theworld.tmx`).
   String? activeDistrict;
 
+  /// Ergebnis des jüngsten Gefechts (Quelle für den `resultBonus` des
+  /// passiven Einkommens, § 8).
+  MatchResult? lastMatchResult;
+
+  /// Anker des Echtzeit-Zeitsystems (V8) für den aktiven Spielstand – Basis
+  /// für den Countdown bis zur nächsten Wochenabbuchung.
+  DateTime? lastSeenAt;
+
+  /// Küche (Konzept) des aktiven Restaurants (§ 9).
+  Cuisine activeCuisine = Cuisine.italian;
+
+  /// Bis wann der Rebranding-Attraktivitätsmalus gilt (§ 9).
+  DateTime? rebrandingPenaltyUntil;
+
+  /// Ausbaustufen der Restaurant-Erweiterungen (§ 10); fehlender Key = Stufe 0.
+  Map<UpgradeType, int> activeUpgrades = {};
+
   /// Full profile data from the last load - basis for the merge in
   /// [toProfileData] (all other savegames stay untouched while saving).
   ProfileData? _profileData;
@@ -66,11 +88,11 @@ class ObjectProfile {
   List<RestaurantData> get profileRestaurants =>
       _profileData?.restaurants ?? const [];
 
-  /// Startbudget (wird zu Spielbeginn festgelegt).
-  static const int startBudget = kDefaultRestaurantBudget;
+  /// Startbudget (wird zu Spielbeginn festgelegt, V7).
+  static const int startBudget = EconomyBalance.startBudget;
 
-  /// Maximale Negativgrenze (doppelter Startwert).
-  static const int negativeLimit = -20000;
+  /// Maximale Negativgrenze (doppelter Startwert, V7).
+  static const int negativeLimit = EconomyBalance.negativeLimit;
 
   /// Referenz auf den [ObjectPlayer] für den Gefechts-Austausch.
   ObjectPlayer _player = ObjectPlayer();
@@ -102,7 +124,13 @@ class ObjectProfile {
   int get hiredMedicsCount => _hiredMedics.length;
 
   /// Stellt einen Teamarzt ein.
+  ///
+  /// Die Wochenkosten werden aus Qualität und **aktueller Teamgröße** neu
+  /// berechnet (§ 4.5). Die erste Abbuchung erfolgt erst zum nächsten
+  /// Wochen-Tick (kein anteiliger Einzug).
   void hireMedic(ObjectTeamMedic medic) {
+    medic.costPerWeek =
+        EconomyService.weeklyMedicCost(medic.quality, personalCount);
     _hiredMedics.add(medic);
   }
 
@@ -116,12 +144,12 @@ class ObjectProfile {
   ///
   /// Gibt `true` zurück, wenn die Anheuerung erfolgreich war, andernfalls
   /// `false` (z. B. bei unzureichendem Budget trotz Negativgrenze).
-  bool hireApprentice({int cost = 100}) {
+  bool hireApprentice({int cost = EconomyBalance.hireApprenticeCost}) {
     if (budget - cost < negativeLimit) {
       return false; // Negativgrenze würde überschritten
     }
     budget -= cost;
-    final apprentice = ObjectApprentice();
+    final apprentice = ObjectApprentice(nameZone: activeCuisine.zone);
     _personal.add(apprentice);
     return true;
   }
@@ -139,7 +167,8 @@ class ObjectProfile {
   /// Die Fortbildung kostet Geld (deutlich teurer als Neuanheuerung).
   /// Gibt `true` bei Erfolg zurück, `false` bei zu niedrigem Level oder
   /// unzureichendem Budget.
-  bool upgradeToLineCook(ObjectApprentice apprentice, {int cost = 500}) {
+  bool upgradeToLineCook(ObjectApprentice apprentice,
+      {int cost = EconomyBalance.upgradeToLineCookCost}) {
     if (apprentice.levelValue < 5) {
       return false; // Fortbildung erst ab Level 5 möglich
     }
@@ -155,7 +184,7 @@ class ObjectProfile {
 
     // Alten Lehrling entfernen und durch Line Cook ersetzen
     _personal.remove(apprentice);
-    final lineCook = ObjectLineCook();
+    final lineCook = ObjectLineCook(nameZone: activeCuisine.zone);
     lineCook.levelValue = currentLevel;
     lineCook.currentXPValue = currentXP;
     lineCook.woundValue = currentWound;
@@ -192,16 +221,13 @@ class ObjectProfile {
   /// Überprüft, ob das Budget die Negativgrenze überschritten hat.
   ///
   /// Wenn ja, wird das Restaurant aufgelöst und das Spiel endet dauerhaft.
-  bool get isBankrupt => budget < negativeLimit;
+  bool get isBankrupt => EconomyService.isBankrupt(budget);
 
-  /// Berechnet Negativzinsen, falls das Budget negativ ist.
+  /// Berechnet Negativzinsen, falls das Budget negativ ist (§ 2.2).
   ///
-  /// Soll nach jedem Gefecht aufgerufen werden.
+  /// Wird nach jedem Gefecht aufgerufen.
   void applyNegativeInterest() {
-    if (budget >= 0) return;
-    // Negativzinsen: 10 % des negativen Betrags
-    final interest = (budget.abs() * 0.1).ceil();
-    budget -= interest;
+    budget = EconomyService.applyNegativeInterest(budget);
   }
 
   /// Führt für alle Einheiten, die im Gefecht gefallen sind (`woundValue ≤ 0`),
@@ -227,16 +253,17 @@ class ObjectProfile {
     for (final unit in _personal.toList()) {
       if (unit.woundValue > 0) continue; // Einheit lebt noch
 
-      // Zielwert berechnen
-      int targetValue = 50; // Basis
-      targetValue += unit.levelValue * 10; // +10 pro Level
-      if (unit.defenseValue > 30) {
-        targetValue += (unit.defenseValue - 30) * 5; // +5 pro Punkt über 30
+      // Zielwert berechnen (Werte aus EconomyBalance, V7).
+      int targetValue = EconomyBalance.survivalBase;
+      targetValue += unit.levelValue * EconomyBalance.survivalPerLevel;
+      if (unit.defenseValue > EconomyBalance.survivalDefenseThreshold) {
+        targetValue += (unit.defenseValue -
+                EconomyBalance.survivalDefenseThreshold) *
+            EconomyBalance.survivalPerDefenseOverThreshold;
       }
-      // −10 bei übermäßigem Schaden (Verlust von mehr als woundValue)
-      // Vereinfacht: wenn die Einheit durch `overkilled`-Schaden starb
+      // Strafe bei übermäßigem Schaden (overkilled).
       if (unit.status == CharacterStatus.overkilled) {
-        targetValue -= 10;
+        targetValue -= EconomyBalance.survivalOverkillPenalty;
       }
       targetValue += medicBonus; // Teamarzt-Bonus
 
@@ -250,8 +277,8 @@ class ObjectProfile {
       }
 
       // Bei Misserfolg und vorhandenem Teamarzt: Wiederholung gegen Bezahlung
-      if (hasMedic && budget >= 200) {
-        budget -= 200; // Kosten für Wiederbelebung
+      if (hasMedic && budget >= EconomyBalance.revivalCost) {
+        budget -= EconomyBalance.revivalCost; // Kosten für Wiederbelebung
         roll = random.nextInt(100) + 1;
         if (roll <= targetValue.clamp(1, 100)) {
           unit.woundValue = 1;
@@ -350,6 +377,11 @@ class ObjectProfile {
     restaurantLogoPath = null;
     budget = startBudget;
     hasCustomImage = false;
+    lastMatchResult = null;
+    lastSeenAt = DateTime.now();
+    activeCuisine = Cuisine.italian;
+    rebrandingPenaltyUntil = null;
+    activeUpgrades = {};
     _personal.clear();
     _hiredMedics.clear();
     _player = ObjectPlayer();
@@ -377,6 +409,11 @@ class ObjectProfile {
       restaurantName = '';
       restaurantLogoPath = null;
       budget = startBudget;
+      lastMatchResult = null;
+      lastSeenAt = null;
+      activeCuisine = Cuisine.italian;
+      rebrandingPenaltyUntil = null;
+      activeUpgrades = {};
       _personal.clear();
       _hiredMedics.clear();
       return;
@@ -387,6 +424,11 @@ class ObjectProfile {
     restaurantName = restaurant.name;
     restaurantLogoPath = restaurant.logoPath;
     budget = restaurant.budget;
+    lastMatchResult = restaurant.lastMatchResult;
+    lastSeenAt = restaurant.lastSeenAt;
+    activeCuisine = restaurant.cuisine;
+    rebrandingPenaltyUntil = restaurant.rebrandingPenaltyUntil;
+    activeUpgrades = Map.of(restaurant.upgrades);
 
     // Restore team.
     _personal.clear();
@@ -447,10 +489,17 @@ class ObjectProfile {
       name: restaurantName,
       logoPath: restaurantLogoPath,
       district: activeDistrict,
+      cuisine: activeCuisine,
+      rebrandingPenaltyUntil: rebrandingPenaltyUntil,
       budget: budget,
       staff: _personal.map(_apprenticeToStaffData).toList(),
       medics: _hiredMedics.map(_medicToMedicData).toList(),
-      lastSeenAt: DateTime.now(),
+      upgrades: Map.of(activeUpgrades),
+      lastSeenAt: existingIndex >= 0 &&
+              restaurants[existingIndex].lastSeenAt != null
+          ? restaurants[existingIndex].lastSeenAt
+          : DateTime.now(),
+      lastMatchResult: lastMatchResult,
       isDissolved: existingIndex >= 0
           ? restaurants[existingIndex].isDissolved
           : false,
@@ -473,6 +522,99 @@ class ObjectProfile {
       profileImagePath: profileImagePath,
       restaurants: restaurants,
     );
+  }
+
+  /// Liefert einen Snapshot des aktiven Restaurants (ohne zu speichern) –
+  /// für Ableitungen wie Countdown und passives Einkommen in der UI.
+  RestaurantData activeRestaurantSnapshot() => RestaurantData(
+        id: activeRestaurantId,
+        name: restaurantName,
+        logoPath: restaurantLogoPath,
+        district: activeDistrict,
+        cuisine: activeCuisine,
+        rebrandingPenaltyUntil: rebrandingPenaltyUntil,
+        budget: budget,
+        staff: _personal.map(_apprenticeToStaffData).toList(),
+        medics: _hiredMedics.map(_medicToMedicData).toList(),
+        upgrades: Map.of(activeUpgrades),
+        lastSeenAt: lastSeenAt,
+        lastMatchResult: lastMatchResult,
+      );
+
+  // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
+
+  /// Aktuelle Ausbaustufe einer Erweiterung (0 = nicht gebaut).
+  int upgradeLevel(UpgradeType type) => activeUpgrades[type] ?? 0;
+
+  /// Baut [type] eine Stufe aus (kostet `Ankauf-Basis × neue Stufe`).
+  ///
+  /// Gibt `false` zurück, wenn die Maximalstufe erreicht ist oder das Budget
+  /// die Negativgrenze überschreiten würde.
+  bool buyUpgrade(UpgradeType type) {
+    final spec = EconomyBalance.upgrades[type];
+    if (spec == null) return false;
+    final current = upgradeLevel(type);
+    if (current >= spec.maxLevel) return false;
+    final cost = EconomyService.upgradeCost(type, current + 1) -
+        EconomyService.upgradeCost(type, current);
+    if (budget - cost < negativeLimit) return false;
+    budget -= cost;
+    activeUpgrades[type] = current + 1;
+    return true;
+  }
+
+  /// Baut [type] eine Stufe zurück (senkt den wöchentlichen Unterhalt, ohne
+  /// Erstattung).
+  bool downgradeUpgrade(UpgradeType type) {
+    final current = upgradeLevel(type);
+    if (current <= 0) return false;
+    if (current == 1) {
+      activeUpgrades.remove(type);
+    } else {
+      activeUpgrades[type] = current - 1;
+    }
+    return true;
+  }
+
+  /// Verkauft [type] vollständig und erstattet [EconomyService.sellRefund].
+  ///
+  /// Gibt die Erstattung in Euro zurück (0, wenn nicht gebaut).
+  int sellUpgrade(UpgradeType type) {
+    final current = upgradeLevel(type);
+    if (current <= 0) return 0;
+    final refund = EconomyService.sellRefund(type, current);
+    budget += refund;
+    activeUpgrades.remove(type);
+    return refund;
+  }
+
+  // ── Echtzeit-Catch-up (V8) ────────────────────────────────────────────
+
+  /// Holt fällige Wochen für das aktive Restaurant nach und schreibt Budget
+  /// und Zeitanker zurück. Wird beim Login, beim Restaurant-Wechsel und beim
+  /// Wiederaufnehmen der App (App-Resume) aufgerufen.
+  WeeklyTickResult runCatchUp(DateTime now) {
+    final snapshot = activeRestaurantSnapshot();
+    final result = GameClockService.catchUp(snapshot, now);
+    budget = snapshot.budget;
+    lastSeenAt = snapshot.lastSeenAt;
+    return result;
+  }
+
+  /// Wechselt die Küche des aktiven Restaurants (Rebranding, § 9).
+  ///
+  /// Kostet [EconomyBalance.rebrandingCost] und setzt einen zeitlich
+  /// begrenzten Attraktivitäts-Malus. Gibt `false` zurück, wenn die Küche
+  /// bereits aktiv ist oder das Budget nicht reicht.
+  bool rebrandCuisine(Cuisine newCuisine) {
+    if (newCuisine == activeCuisine) return false;
+    if (budget - EconomyBalance.rebrandingCost < negativeLimit) return false;
+    budget -= EconomyBalance.rebrandingCost;
+    activeCuisine = newCuisine;
+    rebrandingPenaltyUntil = DateTime.now().add(
+      const Duration(days: 7 * EconomyBalance.rebrandingPenaltyWeeks),
+    );
+    return true;
   }
 
   /// Speichert den aktuellen Zustand asynchron in den ProfileStorage.

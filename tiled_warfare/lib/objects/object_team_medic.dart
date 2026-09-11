@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
@@ -116,29 +117,18 @@ class ObjectTeamMedic {
   /// berechnet.
   /// [quality] wird zufällig gewählt – [costPerWeek] wird daraus konsistent
   /// berechnet (beide nutzen denselben Qualitätswert).
-  /// [personalCostMultiplier] gibt an, wie stark die Teamgröße die Kosten
-  /// beeinflusst (Standard: 1.0, höher für größere Teams).
-  ObjectTeamMedic({double personalCostMultiplier = 1.0})
-      : name = RandomNames(Zone.italy).fullName(),
+  /// [teamSize] ist die aktuelle Teamgröße des Restaurants; sie geht in die
+  /// Wochenkosten ein (größeres Team = höhere Kosten, § 4.5).
+  ObjectTeamMedic({int teamSize = 0, Zone? nameZone})
+      : name = RandomNames(nameZone ?? Zone.italy).fullName(),
         id = 0, // temporary; will be computed in constructor body
         enneagramProfile =
             EnneagramProfile.all[Random().nextInt(EnneagramProfile.all.length)],
         quality = MedicQuality.values[Random().nextInt(MedicQuality.values.length)] {
     // Compute ID from the actual name and current timestamp (not a duplicate random name).
     id = CRC32.compute('$name${DateTime.now().toIso8601String()}');
-    costPerWeek = _computeWeeklyCost(quality, personalCostMultiplier);
+    costPerWeek = EconomyService.weeklyMedicCost(quality, teamSize);
     _initializeFuzzyRules();
-  }
-
-  /// Berechnet die wöchentlichen Kosten basierend auf Qualität und Teamgröße.
-  ///
-  /// Gemäß team_rules.md Abschnitt 4.5:
-  /// - Höhere Qualität kostet mehr (über [MedicQuality.costMultiplier]).
-  /// - Größere/mächtigere Teams erhöhen die Kosten.
-  static int _computeWeeklyCost(MedicQuality quality, double teamMultiplier) {
-    // Basis: 500 €/Woche für niedrigste Qualität und kleinstes Team.
-    const baseCost = 500;
-    return (baseCost * quality.costMultiplier * teamMultiplier).round();
   }
 
   /// Initialisiert die Fuzzy-Regeln basierend auf dem Enneagramm-Profil.

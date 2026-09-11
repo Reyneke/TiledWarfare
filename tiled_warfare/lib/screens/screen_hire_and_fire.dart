@@ -24,7 +24,10 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   void _generateAvailablePersonnel() {
     _availablePersonnel.clear();
     for (var i = 0; i < _poolSize; i++) {
-      _availablePersonnel.add(ObjectTeamMedic());
+      _availablePersonnel.add(ObjectTeamMedic(
+        teamSize: _profile.personalCount,
+        nameZone: _profile.activeCuisine.zone,
+      ));
     }
   }
 
@@ -79,7 +82,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
               ),
             ),
             SizedBox(
-              height: 180,
+              height: 200,
               child: _buildPersonnelList(
                 context,
                 _profile.hiredMedics,
@@ -87,6 +90,23 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
               ),
             ),
             const Divider(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  l10n.weeklyLoadTotal(
+                    _profile.hiredMedics.fold<int>(
+                      0,
+                      (sum, medic) => sum + medic.costPerWeek,
+                    ),
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            ),
           ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -249,10 +269,13 @@ class _PersonnelCard extends StatelessWidget {
                 children: [
                   Icon(Icons.euro, size: 16, color: colorScheme.onSurface),
                   const SizedBox(width: 4),
-                  Text(
-                    l10n.costPerWeek(medic.costPerWeek),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      l10n.costPerWeek(medic.costPerWeek),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
