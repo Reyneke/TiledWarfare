@@ -552,4 +552,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String rebrandingPenaltyActive(int days) {
     return 'Rebrand active: attractiveness −1 ($days days left)';
   }
+
+  @override
+  String healCountdown(int hours, int minutes) {
+    return 'Fully healed in ~$hours h $minutes min';
+  }
+
+  @override
+  String shotCountdown(int hours, int minutes) {
+    return 'Relapse in ~$hours h $minutes min';
+  }
+
+  @override
+  String get healingComplete => 'Fully fit for duty';
 }

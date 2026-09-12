@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
-import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
@@ -187,16 +186,16 @@ class ObjectTeamMedic {
   /// Gibt den Anzeigenamen des Teamarztes zurück.
   String get displayName => 'Dr. $name (${enneagramProfile.name})';
 
-  /// Behandelt einen verletzten Charakter und heilt ihn um eine Stufe.
+  /// Stößt die Behandlung eines verletzten Charakters an (V3).
   ///
   /// Gibt `true` zurück, wenn die Behandlung erfolgreich war, andernfalls
   /// `false` (z. B. weil der Arzt nicht hilfsbereit genug ist oder die
   /// Behandlung fehlschlägt).
   ///
-  /// Gemäß team_rules.md Abschnitt 4.3 heilt der Teamarzt eine
-  /// Verletzungsstufe pro Echtzeitstunde. Diese Methode heilt den
-  /// [CharacterStatus] des Charakters um eine Stufe in der
-  /// Heilungsreihenfolge: `dying → injured → hurt → reeling → ready`.
+  /// Die eigentliche Stufenheilung läuft **deterministisch in Echtzeit** über
+  /// das Zeitsystem (`GameClockService.advanceHealing`, § 4.3): diese Methode
+  /// startet lediglich die Verletzungsuhr (`injuryStartedAt`), falls sie noch
+  /// nicht läuft.
   ///
   /// Die Erfolgswahrscheinlichkeit hängt von der aktuellen [helpfulness] und
   /// [treatmentQuality] ab, die wiederum durch das Enneagramm und die
@@ -222,60 +221,12 @@ class ObjectTeamMedic {
       return false; // Behandlung schlägt fehl.
     }
 
-    // Behandlung erfolgreich – Charakter um eine Stufe heilen.
-    // Heilungsreihenfolge: dying → injured → hurt → reeling → ready
-    switch (character.status) {
-      case CharacterStatus.dying:
-        character.status = CharacterStatus.injured;
-        break;
-      case CharacterStatus.injured:
-        character.status = CharacterStatus.hurt;
-        break;
-      case CharacterStatus.hurt:
-        character.status = CharacterStatus.reeling;
-        break;
-      case CharacterStatus.reeling:
-        character.status = CharacterStatus.ready;
-        break;
-      default:
-        return false; // Keine Heilung nötig
+    // Behandlung angestoßen: Die Heilung läuft jetzt in Echtzeit (V3, § 4.3);
+    // eine bereits laufende Verletzungsuhr bleibt unangetastet.
+    if (character.injuryStartedAt == null) {
+      character.injuryStartedAt = DateTime.now();
+      character.injuryStartStatus = character.status;
     }
-    return true;
-  }
-
-  /// Führt eine Notfall-Spritze durch, die einen schwer verletzten oder
-  /// sterbenden Charakter sofort wieder voll einsatzfähig macht (temporärer Effekt).
-  ///
-  /// Gibt `true` zurück, wenn die Spritze verabreicht wurde.
-  ///
-  /// Gemäß team_rules.md Abschnitt 4.5:
-  /// - Die Spritze schiebt den Schaden nur temporär auf.
-  /// - Nach einem Echtzeit-Tag kehren die unterdrückten Verletzungen zurück.
-  /// - Die Spritze ist teuer (einmalige Zusatzkosten).
-  bool emergencyShot(ObjectToken character) {
-    // Nur bei toten (woundValue <= 0) oder sterbenden Charakteren sinnvoll
-    final bool isDying = character is ObjectApprentice &&
-        character.status == CharacterStatus.dying;
-    if (character.woundValue > 0 && !isDying) {
-      return false;
-    }
-
-    // Hilfsbereitschaft prüfen.
-    final helpfulnessScore = _evaluateHelpfulness();
-    if (_random.nextInt(100) + 1 > helpfulnessScore) {
-      return false;
-    }
-
-    // Charakter provisorisch auf 1 Wundstufe setzen (lebend, aber verletzt).
-    character.woundValue = 1;
-
-    // Status zurücksetzen, falls es ein ObjectApprentice ist
-    if (character is ObjectApprentice) {
-      character.status = CharacterStatus.ready;
-    }
-
-    // Hinweis: Der zurückkehrende Schaden nach einem Tag muss durch
-    // einen Timer/ein Event-System außerhalb dieser Klasse behandelt werden.
     return true;
   }
 
@@ -289,22 +240,6 @@ class ObjectTeamMedic {
     final baseBonus = quality.survivalBonus;
     final qualityModifier = _evaluateTreatmentQuality() ~/ 10;
     return baseBonus + qualityModifier;
-  }
-
-  /// Gibt die Dauer zurück, die dieser Teamarzt für die Heilung einer
-  /// Verletzungsstufe benötigt.
-  ///
-  /// Gemäß team_rules.md Abschnitt 4.3:
-  /// - Basis: 1 Stunde pro Stufe (statt 1 Tag ohne Arzt).
-  /// - Modifiziert durch die aktuelle Behandlungsqualität.
-  Duration get effectiveHealTime {
-    final baseTime = quality.healTimePerStage;
-    final qualityModifier = _evaluateTreatmentQuality();
-    // Bessere Qualität = schnellere Heilung (Faktor 0.5 bis 1.5).
-    final factor = 1.5 - (qualityModifier / 100.0);
-    return Duration(
-      milliseconds: (baseTime.inMilliseconds * factor).round(),
-    );
   }
 
   /// Gibt einen deterministischen Score für das Enneagramm-Profil (0–100).

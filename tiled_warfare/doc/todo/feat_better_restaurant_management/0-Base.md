@@ -162,11 +162,11 @@ Kurz zusammengefasst: Es gibt bereits viele Bausteine (Profile, Restaurants, Per
 
 ### V3 (→ P3): Heilung & Zeit konsistent machen
 
-- `treatCharacter()`/`emergencyShot()` müssen auch `woundValue` passend wiederherstellen – oder `woundValue` wird konsistent aus `status` abgeleitet (eine Quelle der Wahrheit).
-- **Echtzeit-Heilung** über das Zeitsystem (V8): 1 Stufe pro Echtzeitstunde (gemäß team_rules § 4.3/4.5); beim App-Start werden verpasste Stunden nachgeholt (Catch-up).
-- **Notfall-Spritze:** Rückfall nach 1 Echtzeit-Tag – wird beim Catch-up auf betroffene Charaktere angewendet (Schaden kehrt zurück, vgl. team_rules § 4.5).
+- `woundValue` wird beim Gefechtsstart konsistent aus `status` abgeleitet (eine Quelle der Wahrheit); `treatCharacter()` und die Notfall-Spritze fassen `woundValue` nicht mehr an.
+- **Echtzeit-Heilung** über das Zeitsystem (V8): ohne Arzt 24 h pro Stufe, mit Arzt `MedicQuality.healTimePerStage` (6 h / 3 h / 1 h); Kette `dying → injured → hurt → afraid → reeling → ready` (gemäß team_rules § 4.3/4.5). Beim App-Start werden verpasste Stunden ab `injuryStartedAt` nachgeholt (Catch-up).
+- **Notfall-Spritze:** wird automatisch beim Verletzungsbeginn verabreicht und nach 1 Echtzeit-Tag beim Catch-up zurückgenommen (Schaden kehrt zurück, vgl. team_rules § 4.5).
 
-**Abnahmekriterium:** Ein geheilter Charakter hat wieder volle Wundwerte; Heilung schreitet in Echtzeit fort (auch nach Auszeit der App); die Notfall-Spritze wirkt nur temporär (Schaden kehrt nach einem Tag zurück).
+**Abnahmekriterium:** Ein geheilter Charakter hat wieder volle Wundwerte; Heilung schreitet in Echtzeit fort (auch nach Auszeit der App, inkl. `afraid`); die Notfall-Spritze wird automatisch verabreicht und wirkt nur temporär (Schaden kehrt nach einem Tag zurück).
 
 ### V4 (→ P4): Zustand vereinheitlichen
 

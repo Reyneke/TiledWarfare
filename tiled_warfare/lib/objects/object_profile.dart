@@ -182,6 +182,11 @@ class ObjectProfile {
     final int currentLevel = apprentice.levelValue;
     final int currentXP = apprentice.currentXPValue;
     final int currentWound = apprentice.woundValue;
+    final CharacterStatus currentStatus = apprentice.status;
+    final DateTime? currentInjury = apprentice.injuryStartedAt;
+    final CharacterStatus? currentInjuryStart = apprentice.injuryStartStatus;
+    final DateTime? currentShot = apprentice.emergencyShotAt;
+    final CharacterStatus? currentSuppressed = apprentice.suppressedStatus;
 
     // Alten Lehrling entfernen und durch Line Cook ersetzen
     _personal.remove(apprentice);
@@ -190,6 +195,11 @@ class ObjectProfile {
     lineCook.levelValue = currentLevel;
     lineCook.currentXPValue = currentXP;
     lineCook.woundValue = currentWound;
+    lineCook.status = currentStatus;
+    lineCook.injuryStartedAt = currentInjury;
+    lineCook.injuryStartStatus = currentInjuryStart;
+    lineCook.emergencyShotAt = currentShot;
+    lineCook.suppressedStatus = currentSuppressed;
     _personal.add(lineCook);
     return true;
   }
@@ -208,9 +218,12 @@ class ObjectProfile {
     final validSelection =
         selected.where((c) => c.status != CharacterStatus.dying).toList();
 
-    // Teammitglieder an ObjectPlayer übergeben
+    // Teammitglieder an ObjectPlayer übergeben. Die Trefferpunkte werden beim
+    // Gefechtsstart konsistent aus dem Management-Status abgeleitet (V3): eine
+    // Quelle der Wahrheit, damit ein `ready`-Charakter voll einsatzfähig startet.
     _player.unitList.clear();
     for (final character in validSelection) {
+      character.woundValue = GameClockService.woundValueFor(character.status);
       _player.unitList.add(character);
     }
 
@@ -272,8 +285,13 @@ class ObjectProfile {
       // Erster Rettungswurf
       int roll = random.nextInt(100) + 1;
       if (roll <= targetValue.clamp(1, 100)) {
-        // Gerettet! Verletzungsstatus setzen (nicht tot)
-        unit.woundValue = 1; // Minimal überleben
+        // Gerettet! Verletzungsstatus setzen (nicht tot).
+        // V3: `injuryStartedAt` ist der Anker der Echtzeit-Heilung; alte
+        // Spritzen-Marker werden verworfen (neue Verletzung).
+        unit.injuryStartedAt = DateTime.now();
+        unit.injuryStartStatus = CharacterStatus.dying;
+        unit.emergencyShotAt = null;
+        unit.suppressedStatus = null;
         unit.status = CharacterStatus.dying;
         continue;
       }
@@ -283,7 +301,10 @@ class ObjectProfile {
         budget -= EconomyBalance.revivalCost; // Kosten für Wiederbelebung
         roll = random.nextInt(100) + 1;
         if (roll <= targetValue.clamp(1, 100)) {
-          unit.woundValue = 1;
+          unit.injuryStartedAt = DateTime.now();
+          unit.injuryStartStatus = CharacterStatus.dying;
+          unit.emergencyShotAt = null;
+          unit.suppressedStatus = null;
           unit.status = CharacterStatus.dying;
           continue;
         }
@@ -347,6 +368,32 @@ class ObjectProfile {
 
     // Rettungswürfe für alle Einheiten mit woundValue ≤ 0 durchführen
     _performSurvivalRolls();
+
+    // V3: Unmittelbar nach dem Rettungswurf erhält jeder `dying`-Charakter
+    // automatisch die Notfall-Spritze – sofern ein Teamarzt angestellt ist und
+    // das Budget die Kosten trägt. Der Rückfall läuft im Zeit-Tick.
+    _applyAutomaticEmergencyShots();
+  }
+
+  /// Verabreicht allen `dying`-Charakteren automatisch die Notfall-Spritze (V3).
+  ///
+  /// Bucht [EconomyBalance.emergencyShotCost] vom Budget ab, merkt sich den
+  /// unterdrückten Status ([ObjectApprentice.suppressedStatus]) und setzt den
+  /// Charakter vorläufig auf `ready`. Ohne Teamarzt oder bei zu geringem Budget
+  /// passiert nichts (die Verletzung bleibt bestehen).
+  void _applyAutomaticEmergencyShots({DateTime? now}) {
+    if (_hiredMedics.isEmpty) return;
+    final shotAt = now ?? DateTime.now();
+    for (final character in _personal) {
+      if (character.status != CharacterStatus.dying) continue;
+      if (budget - EconomyBalance.emergencyShotCost < negativeLimit) continue;
+      budget -= EconomyBalance.emergencyShotCost;
+      character.suppressedStatus = character.status;
+      character.injuryStartStatus ??= character.status;
+      character.emergencyShotAt = shotAt;
+      character.injuryStartedAt ??= shotAt;
+      character.status = CharacterStatus.ready;
+    }
   }
 
   /// Resets to a fresh restaurant savegame (restaurant restart).
@@ -497,10 +544,11 @@ class ObjectProfile {
       staff: _personal.map(_apprenticeToStaffData).toList(),
       medics: _hiredMedics.map(_medicToMedicData).toList(),
       upgrades: Map.of(activeUpgrades),
-      lastSeenAt: existingIndex >= 0 &&
-              restaurants[existingIndex].lastSeenAt != null
-          ? restaurants[existingIndex].lastSeenAt
-          : DateTime.now(),
+      // V3/V8: den (ggf. durch den Catch-up fortgeschriebenen) Zeitanker
+      // persistieren, damit verpasste Zeit nicht erneut abgerechnet wird.
+      lastSeenAt: lastSeenAt ??
+          (existingIndex >= 0 ? restaurants[existingIndex].lastSeenAt : null) ??
+          DateTime.now(),
       lastMatchResult: lastMatchResult,
       isDissolved: existingIndex >= 0
           ? restaurants[existingIndex].isDissolved
@@ -600,7 +648,37 @@ class ObjectProfile {
     final result = GameClockService.catchUp(snapshot, now);
     budget = snapshot.budget;
     lastSeenAt = snapshot.lastSeenAt;
+    // V3: geheilten Status/Spritzen-Zustand in die In-Memory-Charaktere
+    // zurückschreiben (beide Listen sind 1:1 über die Konvertierung geordnet).
+    _syncStaffFromSnapshot(snapshot);
     return result;
+  }
+
+  /// Schreibt den durch den Catch-up veränderten Heilungs-/Spritzenzustand aus
+  /// [snapshot] zurück in die In-Memory-Charaktere (V3).
+  void _syncStaffFromSnapshot(RestaurantData snapshot) {
+    for (var i = 0; i < _personal.length && i < snapshot.staff.length; i++) {
+      final sd = snapshot.staff[i];
+      final character = _personal[i];
+      character.status = CharacterStatus.values.firstWhere(
+        (e) => e.name == sd.status,
+        orElse: () => character.status,
+      );
+      character.injuryStartedAt = sd.injuryStartedAt;
+      character.injuryStartStatus = sd.injuryStartStatus == null
+          ? null
+          : CharacterStatus.values.firstWhere(
+              (e) => e.name == sd.injuryStartStatus,
+              orElse: () => CharacterStatus.dying,
+            );
+      character.emergencyShotAt = sd.emergencyShotAt;
+      character.suppressedStatus = sd.suppressedStatus == null
+          ? null
+          : CharacterStatus.values.firstWhere(
+              (e) => e.name == sd.suppressedStatus,
+              orElse: () => CharacterStatus.dying,
+            );
+    }
   }
 
   /// Wechselt die Küche des aktiven Restaurants (Rebranding, § 9).
@@ -655,6 +733,10 @@ class ObjectProfile {
         moneyValue: a.moneyValue,
         xpValue: a.xpValue,
         status: a.status.name,
+        injuryStartedAt: a.injuryStartedAt,
+        injuryStartStatus: a.injuryStartStatus?.name,
+        emergencyShotAt: a.emergencyShotAt,
+        suppressedStatus: a.suppressedStatus?.name,
         matchHistory: a.matchHistory.map((m) => m.toJson()).toList(),
       );
 
@@ -698,6 +780,20 @@ class ObjectProfile {
       (e) => e.name == sd.status,
       orElse: () => CharacterStatus.ready,
     );
+    apprentice.injuryStartedAt = sd.injuryStartedAt;
+    apprentice.injuryStartStatus = sd.injuryStartStatus == null
+        ? null
+        : CharacterStatus.values.firstWhere(
+            (e) => e.name == sd.injuryStartStatus,
+            orElse: () => CharacterStatus.dying,
+          );
+    apprentice.emergencyShotAt = sd.emergencyShotAt;
+    apprentice.suppressedStatus = sd.suppressedStatus == null
+        ? null
+        : CharacterStatus.values.firstWhere(
+            (e) => e.name == sd.suppressedStatus,
+            orElse: () => CharacterStatus.dying,
+          );
     // Match-Historie wiederherstellen
     apprentice.matchHistory = sd.matchHistory
         .map((m) => MatchRecord.fromJson(m))

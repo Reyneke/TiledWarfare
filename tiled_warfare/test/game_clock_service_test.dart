@@ -43,6 +43,18 @@ void main() {
         base.add(const Duration(days: 14)),
       );
     });
+
+    test('hoursElapsed liefert die verstrichene Dauer (V3)', () {
+      expect(GameClockService.hoursElapsed(base, base), Duration.zero);
+      expect(
+        GameClockService.hoursElapsed(base, base.add(const Duration(hours: 5))),
+        const Duration(hours: 5),
+      );
+      expect(
+        GameClockService.hoursElapsed(base, base.subtract(const Duration(hours: 1))),
+        Duration.zero,
+      );
+    });
   });
 
   group('GameClockService.catchUp', () {
@@ -146,6 +158,37 @@ void main() {
         GameClockService.attractivenessOf(downtown),
         greaterThan(GameClockService.attractivenessOf(suburb)),
       );
+    });
+
+    test('heilt auch bei 0 fälligen Wochen (V3)', () {
+      final r = RestaurantData(
+        name: 'Heilung',
+        lastSeenAt: base,
+        medics: [
+          MedicData(
+            id: 1,
+            name: 'Dr. X',
+            quality: 'hoch',
+            costPerWeek: 500,
+            enneagramProfileName: 'Der Chaot',
+          ),
+        ],
+        staff: [
+          StaffData(
+            name: 'Testkoch',
+            imagePath: 'x.png',
+            type: 'apprentice',
+            status: 'dying',
+            injuryStartedAt: base,
+          ),
+        ],
+      );
+      final result = GameClockService.catchUp(
+        r,
+        base.add(const Duration(hours: 2)),
+      );
+      expect(result.weeks, 0);
+      expect(r.staff.first.status, 'hurt');
     });
   });
 }

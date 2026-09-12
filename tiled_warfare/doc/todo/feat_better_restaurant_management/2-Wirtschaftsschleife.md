@@ -360,7 +360,7 @@ Der `ScreenRestaurant` stapelt heute alles in einer langen Column (Personal-List
 | **Tagestick** | dem Folge-Dokument (V3) vorbehalten | Echtzeit-Heilung, Rückfall der Notfall-Spritze |
 | **Intervalltick (alle 3 Stunden)** | dem Folge-Dokument (V3) vorbehalten | Heilung einer Verletzungsstufe (`MedicQuality.healTimePerStage`: 6 h/3 h/1 h) |
 
-Tagestick und Intervalltick sind **keine parallelen Tick-Systeme**, sondern Module auf demselben `GameClockService` (V8), die erst mit der Heilung (P3/V3) aktiviert werden. `MedicQuality.healTimePerStage`/`effectiveHealTime` existieren bereits als Daten, werden aber bis dahin von keinem Tick konsumiert.
+Tagestick und Intervalltick sind **keine parallelen Tick-Systeme**, sondern Module auf demselben `GameClockService` (V8), die erst mit der Heilung (P3/V3) aktiviert werden. `MedicQuality.healTimePerStage` existiert bereits als Datum, wird aber bis dahin von keinem Tick konsumiert; der Fuzzy-Modifier `effectiveHealTime` entfällt mit V3 (siehe `3_Heilung_und_Zeit.md`).
 
 ### Offene Fragen
 

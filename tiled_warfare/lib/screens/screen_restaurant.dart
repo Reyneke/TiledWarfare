@@ -107,12 +107,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     }
   }
 
-  /// Holt beim Wiederaufnehmen der App fällige Wochen nach (V8) und
-  /// aktualisiert die Ansicht (inkl. Bankrott-Prüfung).
+  /// Holt beim Wiederaufnehmen der App fällige Wochen nach (V8) **und** die
+  /// Echtzeit-Heilung/den Spritzen-Rückfall (V3); aktualisiert die Ansicht
+  /// (inkl. Bankrott-Prüfung).
   Future<void> _runResumeCatchUp() async {
     if (!mounted) return;
-    final result = _profile.runCatchUp(DateTime.now());
-    if (result.weeks <= 0) return;
+    // V3: Heilung läuft auch ohne fällige Woche weiter, daher immer speichern.
+    _profile.runCatchUp(DateTime.now());
     await _saveState();
     if (!mounted) return;
     setState(() {});
@@ -537,8 +538,10 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
             ),
             subtitle: Text(
               [
-                '❤️ ${character.woundValue}',
+                '❤️ ${GameClockService.woundValueFor(character.status)}',
                 _statusText(l10n, character.status),
+                if (character.status != CharacterStatus.ready)
+                  _healingInfoText(character, l10n),
                 '⚔️ ${character.attackValue}',
                 '🛡️ ${character.defenseValue}',
                 '🏃 ${character.movementValue}',
@@ -575,39 +578,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                           ..showSnackBar(
                             SnackBar(
                               content: Text(l10n.treatmentFailed),
-                            ),
-                          );
-                      }
-                    },
-                  ),
-                if (hasMedic &&
-                    (character.woundValue <= 0 ||
-                     character.status == CharacterStatus.dying))
-                  IconButton(
-                    icon: const Icon(Icons.emergency,
-                        color: Colors.red),
-                    tooltip: l10n.emergencyShot,
-                    onPressed: () async {
-                      final medic =
-                          _profile.hiredMedics.first;
-                      if (medic.emergencyShot(character)) {
-                        setState(() {});
-                        await _saveState();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.emergencyShotSuccess(character.name)),
-                            ),
-                          );
-                      } else {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.emergencyShotFailed),
                             ),
                           );
                       }
@@ -669,6 +639,29 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         );
       },
     );
+  }
+
+  /// Kompakter Heil-/Rückfall-Countdown für die Personal-Liste (V3).
+  String _healingInfoText(ObjectApprentice character, AppLocalizations l10n) {
+    final now = DateTime.now();
+    if (character.emergencyShotAt != null) {
+      final remaining =
+          GameClockService.remainingShotTime(character.emergencyShotAt, now);
+      return l10n.shotCountdown(remaining.inHours, remaining.inMinutes % 60);
+    }
+    if (character.status == CharacterStatus.ready) {
+      return l10n.healingComplete;
+    }
+    final perStage = GameClockService.healTimePerStageFor(
+      quality: GameClockService.bestHiredQuality(_profile.hiredMedics),
+    );
+    final remaining = GameClockService.remainingHealingTime(
+      status: character.status,
+      injuryStartedAt: character.injuryStartedAt,
+      perStage: perStage,
+      now: now,
+    );
+    return l10n.healCountdown(remaining.inHours, remaining.inMinutes % 60);
   }
 
   /// Übersetzt eine [Cuisine] in den lokalisierten Anzeigenamen.

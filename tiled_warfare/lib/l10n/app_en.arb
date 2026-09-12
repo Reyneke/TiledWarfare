@@ -669,5 +669,18 @@
   "@rebrandingPenaltyActive": {
     "description": "Display of the active rebrand penalty",
     "placeholders": { "days": { "type": "int" } }
-  }
+  },
+
+  "healCountdown": "Fully healed in ~{hours} h {minutes} min",
+  "@healCountdown": {
+    "description": "Countdown until fully healed (V3)",
+    "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
+  },
+  "shotCountdown": "Relapse in ~{hours} h {minutes} min",
+  "@shotCountdown": {
+    "description": "Countdown until the emergency shot wears off (V3)",
+    "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
+  },
+  "healingComplete": "Fully fit for duty",
+  "@healingComplete": { "description": "Character is fully healed (V3)" }
 }

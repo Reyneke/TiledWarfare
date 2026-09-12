@@ -119,6 +119,22 @@ class StaffData {
   int xpValue;
   String status;
 
+  /// Beginn der aktuellen Verletzung (V3) – Anker der Echtzeit-Heilung.
+  DateTime? injuryStartedAt;
+
+  /// Status zu Beginn der aktuellen Verletzung (V3).
+  ///
+  /// Nötig für die idempotente Neuberechnung: Der Heilungsfortschritt wird
+  /// immer aus diesem Ausgangsstatus + verstrichener Zeit hergeleitet, nie
+  /// fortgeschrieben.
+  String? injuryStartStatus;
+
+  /// Zeitpunkt der automatisch verabreichten Notfall-Spritze (V3).
+  DateTime? emergencyShotAt;
+
+  /// Der von der Notfall-Spritze unterdrückte Status (V3).
+  String? suppressedStatus;
+
   /// Match-Historie (serialisiert als Liste von Maps).
   List<Map<String, dynamic>> matchHistory;
 
@@ -137,6 +153,10 @@ class StaffData {
     this.moneyValue = 100,
     this.xpValue = 25,
     this.status = 'ready',
+    this.injuryStartedAt,
+    this.injuryStartStatus,
+    this.emergencyShotAt,
+    this.suppressedStatus,
     List<Map<String, dynamic>>? matchHistory,
   }) : matchHistory = matchHistory ?? [];
 
@@ -155,6 +175,12 @@ class StaffData {
         'moneyValue': moneyValue,
         'xpValue': xpValue,
         'status': status,
+        if (injuryStartedAt != null)
+          'injuryStartedAt': injuryStartedAt!.toIso8601String(),
+        if (injuryStartStatus != null) 'injuryStartStatus': injuryStartStatus,
+        if (emergencyShotAt != null)
+          'emergencyShotAt': emergencyShotAt!.toIso8601String(),
+        if (suppressedStatus != null) 'suppressedStatus': suppressedStatus,
         'matchHistory': matchHistory,
       };
 
@@ -173,6 +199,14 @@ class StaffData {
         moneyValue: json['moneyValue'] as int? ?? 100,
         xpValue: json['xpValue'] as int? ?? 25,
         status: json['status'] as String? ?? 'ready',
+        injuryStartedAt: json['injuryStartedAt'] == null
+            ? null
+            : DateTime.parse(json['injuryStartedAt'] as String),
+        injuryStartStatus: json['injuryStartStatus'] as String?,
+        emergencyShotAt: json['emergencyShotAt'] == null
+            ? null
+            : DateTime.parse(json['emergencyShotAt'] as String),
+        suppressedStatus: json['suppressedStatus'] as String?,
         matchHistory: (json['matchHistory'] as List<dynamic>?)
             ?.map((e) => Map<String, dynamic>.from(e as Map))
             .toList(),

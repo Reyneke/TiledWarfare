@@ -57,6 +57,13 @@ void main() {
       expect(EconomyBalance.medicBaseCostPerWeek, greaterThan(0));
     });
 
+    test('Heilungs-Balance (V3) ist konsistent', () {
+      expect(EconomyBalance.maxWoundValue, greaterThan(0));
+      expect(EconomyBalance.healBasePerStage, greaterThan(Duration.zero));
+      expect(EconomyBalance.emergencyShotDuration, greaterThan(Duration.zero));
+      expect(EconomyBalance.emergencyShotCost, greaterThanOrEqualTo(0));
+    });
+
     test('jede Erweiterung hat eine positive Spec mit mindestens einer Stufe',
         () {
       for (final type in UpgradeType.values) {

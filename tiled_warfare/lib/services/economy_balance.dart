@@ -38,6 +38,24 @@ class EconomyBalance {
   /// Basisprämie bei Niederlage (reduziert).
   static const int battleRewardBaseLoss = 50;
 
+  // ── Heilung & Zeit (V3) ───────────────────────────────────────────────
+
+  /// Vollständige Trefferpunkte (Wundstufen) eines Charakters.
+  ///
+  /// `ready` startet das Gefecht wieder mit vollem Wert; der Startwert wird
+  /// über `GameClockService.woundValueFor(status)` aus dem Status abgeleitet
+  /// (eine Quelle der Wahrheit).
+  static const int maxWoundValue = 3;
+
+  /// Heilzeit pro Verletzungsstufe **ohne** Teamarzt (V3, § 4.3).
+  static const Duration healBasePerStage = Duration(hours: 24);
+
+  /// Einmalige Kosten einer (automatisch verabreichten) Notfall-Spritze (§ 4.5).
+  static const int emergencyShotCost = 0;
+
+  /// Wirkungsdauer der Notfall-Spritze bis zum Rückfall (§ 4.5).
+  static const Duration emergencyShotDuration = Duration(hours: 24);
+
   // ── Passives Einkommen / Fuzzy-Modell (§ 8) ───────────────────────────
 
   static const int passiveIncomePerCustomerPerWeek = 5;

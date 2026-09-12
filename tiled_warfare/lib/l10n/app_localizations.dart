@@ -1028,6 +1028,24 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Rebranding aktiv: Attraktivität −1 (noch {days} Tage)'**
   String rebrandingPenaltyActive(int days);
+
+  /// Countdown bis zur vollständigen Heilung (V3)
+  ///
+  /// In de, this message translates to:
+  /// **'Heilung fertig in ca. {hours} h {minutes} min'**
+  String healCountdown(int hours, int minutes);
+
+  /// Countdown bis zum Rückfall der Notfall-Spritze (V3)
+  ///
+  /// In de, this message translates to:
+  /// **'Rückfall in ca. {hours} h {minutes} min'**
+  String shotCountdown(int hours, int minutes);
+
+  /// Charakter ist vollständig geheilt (V3)
+  ///
+  /// In de, this message translates to:
+  /// **'Voll einsatzbereit'**
+  String get healingComplete;
 }
 
 class _AppLocalizationsDelegate

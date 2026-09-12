@@ -37,4 +37,35 @@ void main() {
     expect(legacy.upgrades, isEmpty);
     expect(legacy.lastMatchResult, isNull);
   });
+
+  test('StaffData serialisiert Heilungs-/Spritzenfelder (V3)', () {
+    final s = StaffData(
+      name: 'Koch',
+      imagePath: 'x.png',
+      type: 'apprentice',
+      status: 'dying',
+      injuryStartedAt: DateTime(2026, 1, 1, 12),
+      emergencyShotAt: DateTime(2026, 1, 1, 13),
+      suppressedStatus: 'dying',
+    );
+
+    final restored = StaffData.fromJson(s.toJson());
+
+    expect(restored.status, 'dying');
+    expect(restored.injuryStartedAt, DateTime(2026, 1, 1, 12));
+    expect(restored.emergencyShotAt, DateTime(2026, 1, 1, 13));
+    expect(restored.suppressedStatus, 'dying');
+  });
+
+  test('StaffData ohne V3-Felder bleibt abwärtskompatibel', () {
+    final restored = StaffData.fromJson({
+      'name': 'Alt',
+      'imagePath': 'x.png',
+      'type': 'apprentice',
+      'status': 'ready',
+    });
+    expect(restored.injuryStartedAt, isNull);
+    expect(restored.emergencyShotAt, isNull);
+    expect(restored.suppressedStatus, isNull);
+  });
 }

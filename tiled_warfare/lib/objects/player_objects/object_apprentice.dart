@@ -43,6 +43,21 @@ class ObjectApprentice extends ObjectToken {
   /// Aktueller Verletzungs-Status (ready = gesund).
   CharacterStatus status = CharacterStatus.ready;
 
+  /// Beginn der aktuellen Verletzung (V3) – Anker der Echtzeit-Heilung.
+  DateTime? injuryStartedAt;
+
+  /// Status zu Beginn der aktuellen Verletzung (V3) – Basis der idempotenten
+  /// Neuberechnung des Heilungsfortschritts.
+  CharacterStatus? injuryStartStatus;
+
+  /// Zeitpunkt der automatisch verabreichten Notfall-Spritze (V3).
+  /// Solange gesetzt und jünger als `EconomyBalance.emergencyShotDuration`,
+  /// ist [suppressedStatus] unterdrückt.
+  DateTime? emergencyShotAt;
+
+  /// Der von der Notfall-Spritze unterdrückte Status (V3).
+  CharacterStatus? suppressedStatus;
+
   /// Match-Historie dieses Charakters.
   List<MatchRecord> matchHistory = [];
 

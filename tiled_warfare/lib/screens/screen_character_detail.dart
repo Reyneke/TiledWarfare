@@ -3,6 +3,7 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 class ScreenCharacterDetail extends StatefulWidget {
   final ObjectApprentice character;
@@ -114,7 +115,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
               const SizedBox(height: 4),
               Text(l10n.level(character.levelValue),
                   style: theme.textTheme.bodyMedium),
-              Text(l10n.hitPoints(character.woundValue),
+              Text(l10n.hitPoints(GameClockService.woundValueFor(character.status)),
                   style: theme.textTheme.bodyMedium),
               const SizedBox(height: 4),
               Text(
@@ -161,8 +162,6 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
     if (!hasMedic) return const SizedBox.shrink();
 
     final needsTreat = character.status != CharacterStatus.ready;
-    final needsEmergency = character.woundValue <= 0 ||
-        character.status == CharacterStatus.dying;
 
     return Card(
       child: Padding(
@@ -175,6 +174,10 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
             Text(l10n.teamMedic,
                 style: theme.textTheme.labelLarge),
             const Spacer(),
+            if (needsTreat) ...[
+              Text(_healingInfoText(l10n), style: theme.textTheme.bodySmall),
+              const SizedBox(width: 8),
+            ],
             if (needsTreat)
               FilledButton.tonalIcon(
                 icon: const Icon(Icons.healing, size: 18),
@@ -198,36 +201,30 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
                   });
                 },
               ),
-            if (needsTreat && needsEmergency) const SizedBox(width: 8),
-            if (needsEmergency)
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.emergency, size: 18,
-                    color: Colors.red),
-                label: Text(l10n.emergencyShot,
-                    style: TextStyle(color: Colors.red[700])),
-                onPressed: () {
-                  setState(() {
-                    final medic = _profile.hiredMedics.first;
-                    if (medic.emergencyShot(character)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.emergencyShotSuccess(character.name)),
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.emergencyShotFailed),
-                        ),
-                      );
-                    }
-                  });
-                },
-              ),
           ],
         ),
       ),
     );
+  }
+
+  /// Countdown-Text für die laufende Heilung bzw. den Spritzen-Rückfall (V3).
+  String _healingInfoText(AppLocalizations l10n) {
+    final now = DateTime.now();
+    if (character.emergencyShotAt != null) {
+      final remaining =
+          GameClockService.remainingShotTime(character.emergencyShotAt, now);
+      return l10n.shotCountdown(remaining.inHours, remaining.inMinutes % 60);
+    }
+    final perStage = GameClockService.healTimePerStageFor(
+      quality: GameClockService.bestHiredQuality(_profile.hiredMedics),
+    );
+    final remaining = GameClockService.remainingHealingTime(
+      status: character.status,
+      injuryStartedAt: character.injuryStartedAt,
+      perStage: perStage,
+      now: now,
+    );
+    return l10n.healCountdown(remaining.inHours, remaining.inMinutes % 60);
   }
 
   Widget _buildXpBar(BuildContext context, ThemeData theme) {

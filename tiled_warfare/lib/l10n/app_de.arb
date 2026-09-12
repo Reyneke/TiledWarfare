@@ -669,5 +669,18 @@
   "@rebrandingPenaltyActive": {
     "description": "Anzeige des aktiven Rebranding-Malus",
     "placeholders": { "days": { "type": "int" } }
-  }
+  },
+
+  "healCountdown": "Heilung fertig in ca. {hours} h {minutes} min",
+  "@healCountdown": {
+    "description": "Countdown bis zur vollständigen Heilung (V3)",
+    "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
+  },
+  "shotCountdown": "Rückfall in ca. {hours} h {minutes} min",
+  "@shotCountdown": {
+    "description": "Countdown bis zum Rückfall der Notfall-Spritze (V3)",
+    "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
+  },
+  "healingComplete": "Voll einsatzbereit",
+  "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" }
 }

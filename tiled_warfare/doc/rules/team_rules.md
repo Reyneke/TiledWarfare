@@ -137,13 +137,13 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
 
 ### 4.3 Heilung
 
-- Die Verletzung heilt **um eine Stufe pro Echtzeit-Tag**
-- Gemessen wird ab dem **Startdatum der erlittenen Verletzung**
-- Heilungsreihenfolge: `dying → injured → hurt → reeling → ready`
-- Jede Stufe dauert **einen Echtzeit-Tag**
-- Ein Charakter im Status `dying` braucht also 4 Tage bis `ready`
+- Die Heilung läuft in **Echtzeit** und wird beim App-Start bzw. Restaurant-Wechsel nachgeholt (Catch-up, V8).
+- Gemessen wird ab dem **Beginn der aktuellen Verletzung** (`injuryStartedAt`; bei Alt-Spielständen ab `restaurant.lastSeenAt`).
+- Heilungsreihenfolge: `dying → injured → hurt → afraid → reeling → ready`
+- **Ohne Teamarzt** dauert jede Stufe **einen Echtzeit-Tag** (24 h). Ein `dying`-Charakter braucht also 5 Tage bis `ready`.
+- Die Zeit pro Stufe ist **deterministisch**: Sie hängt allein von der Qualität des angestellten Arztes ab (`MedicQuality.healTimePerStage`), nicht von Persönlichkeit/Fuzzy-Werten (`effectiveHealTime` entfällt).
 
-**Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter **eine Stufe pro Echtzeitstunde** statt pro Tag. Ein `dying`-Charakter ist so in 4 Stunden wieder voll einsatzbereit.
+**Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter je nach Qualität **eine Stufe pro 6 h / 3 h / 1 h** statt pro Tag (`MedicQuality.healTimePerStage`). Ein `dying`-Charakter ist so in 30 h / 15 h / 5 h wieder voll einsatzbereit.
 
 ### 4.4 Kampf mit Verletzungen
 
@@ -157,6 +157,8 @@ Sollte ein verletztes Teammitglied wieder ins Gefecht ziehen, bevor es den Statu
 | `injured` | −20 auf alle Werte, maximale Bewegung halbiert |
 | `dying` | Darf **nicht** am Gefecht teilnehmen |
 
+`afraid` ist ein regulärer Verletzungsstatus: Er entsteht im Gefecht und wird gemäß 4.3 in der Kette `hurt → afraid → reeling → ready` wieder **ausgeheilt**.
+
 ### 4.5 Teamarzt (Optionale Erweiterung)
 
 Der Spieler kann zwischen Gefechten einen Teamarzt anheuern, der die Überlebenschancen und Heilung des Teams verbessert (siehe Verweise in 4.2 und 4.3).
@@ -167,14 +169,15 @@ Der Spieler kann zwischen Gefechten einen Teamarzt anheuern, der die Überlebens
 - Die Bezahlung erfolgt **pro Echtzeitwoche** (`costPerWeek`) und wird im **Wochentick (V8)** abgebucht. Die erste Abbuchung erfolgt erst zum nächsten Wochentick (kein anteiliger Einzug).
 
 **Effekte:**
-- Heilung: 1 Verletzungsstufe pro **Echtzeitstunde** (statt 1 pro Tag); je höher die Qualität, desto schneller (`MedicQuality.healTimePerStage`).
+- Heilung: eine Verletzungsstufe pro `MedicQuality.healTimePerStage` – **6 h / 3 h / 1 h** je nach Qualität (statt 24 h pro Stufe ohne Arzt). Die Zeit ist deterministisch und unabhängig von Persönlichkeit/Fuzzy-Werten.
 - Rettungswurf: **+10 / +20 / +30** auf den Zielwert je nach Qualität (`MedicQuality.survivalBonus`), einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht.
 
 **Notfall-Spritze:**
-Der Teamarzt kann einem Verletzten eine Spritze verabreichen, die ihn **sofort** wieder voll einsatzfähig macht. Die Spritze ist jedoch teuer (einmalige Zusatzkosten) und schiebt den Schaden nur **temporär** auf:
+Ist ein Teamarzt angeheuert, verabreicht er einem Charakter, der das Gefecht als **`dying`** beendet, automatisch unmittelbar nach dem Rettungswurf eine Spritze – **keine manuelle Aktion** des Spielers. Sie macht ihn **sofort** wieder voll einsatzfähig, ist jedoch teuer (einmalige Zusatzkosten, `EconomyBalance.emergencyShotCost`) und schiebt den Schaden nur **temporär** auf:
 - Nach **einem Echtzeit-Tag** kehren die so unterdrückten Verletzungen zurück.
-- Hinzu kommen alle Verletzungen, die der Charakter in der Zwischenzeit erlitten hat.
-- Eine normale Genesung (4.3) läuft während der Wirkungsdauer zwar weiter, heilt aber maximal eine Stufe pro Tag – zu langsam, um den Rückfall abzufangen.
+- Hinzu kommen alle Verletzungen, die der Charakter in der Zwischenzeit erlitten hat (es gewinnt der schwerere Status gemäß der Heilungskette aus 4.3).
+- Eine normale Genesung (4.3) läuft während der Wirkungsdauer zwar weiter, heilt aber zu langsam, um den Rückfall abzufangen.
+- Der Rückfall zählt als **neuer Verletzungsbeginn** (`injuryStartedAt`) für die weitere Heilung.
 
 ---
 
