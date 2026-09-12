@@ -149,7 +149,8 @@ class ObjectProfile {
       return false; // Negativgrenze würde überschritten
     }
     budget -= cost;
-    final apprentice = ObjectApprentice(nameZone: activeCuisine.zone);
+    // Küche bestimmt Namensstamm und Token-Grafik (§ 9).
+    final apprentice = ObjectApprentice(cuisine: activeCuisine);
     _personal.add(apprentice);
     return true;
   }
@@ -184,7 +185,8 @@ class ObjectProfile {
 
     // Alten Lehrling entfernen und durch Line Cook ersetzen
     _personal.remove(apprentice);
-    final lineCook = ObjectLineCook(nameZone: activeCuisine.zone);
+    // Küche bestimmt Namensstamm und Token-Grafik (§ 9).
+    final lineCook = ObjectLineCook(cuisine: activeCuisine);
     lineCook.levelValue = currentLevel;
     lineCook.currentXPValue = currentXP;
     lineCook.woundValue = currentWound;

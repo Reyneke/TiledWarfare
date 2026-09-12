@@ -1,4 +1,5 @@
 import 'package:random_name_generator/random_name_generator.dart';
+import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 
@@ -45,10 +46,21 @@ class ObjectApprentice extends ObjectToken {
   /// Match-Historie dieses Charakters.
   List<MatchRecord> matchHistory = [];
 
+  /// Erzeugt einen Lehrling.
+  ///
+  /// [nameZone] wird für die Namenserzeugung genutzt; alternativ kann über
+  /// [cuisine] die Küche des Restaurants übergeben werden (§ 9). Ist [nameZone]
+  /// nicht gesetzt, wird die Zone der [cuisine] verwendet (Fallback:
+  /// [Zone.italy] für Alt-Spielstände).
+  ///
+  /// [imagePath] fällt auf die Küchen-Token-Grafik ([Cuisine.tokenImagePath])
+  /// bzw. auf die generische `token_cook_basic.png` zurück, wenn keine Küche
+  /// angegeben ist.
   ObjectApprentice({
     String? name,
     String? imagePath,
     Zone? nameZone,
+    Cuisine? cuisine,
     super.attackValue = 40,
     super.defenseValue = 20,
     super.movementValue = 6,
@@ -57,8 +69,11 @@ class ObjectApprentice extends ObjectToken {
     super.moneyValue = 100,
     super.xpValue = 25,
   }) : super(
-    name: name ?? "Apprentice: ${RandomNames(nameZone ?? Zone.italy).name()}",
-    imagePath: imagePath ?? "assets/images/token/token_cook_basic.png",
+    name: name ??
+        "Apprentice: ${RandomNames(nameZone ?? cuisine?.zone ?? Zone.italy).name()}",
+    imagePath: imagePath ??
+        cuisine?.tokenImagePath ??
+        "assets/images/token/token_cook_basic.png",
   );
 
   /// Fügt [xp] Erfahrungspunkte hinzu und führt ggf. Levelaufstiege durch.

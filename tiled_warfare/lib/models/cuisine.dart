@@ -31,6 +31,13 @@ enum Cuisine {
     }
   }
 
+  /// Token-/Personal-Grafik der Küche (§ 9, Küchen-Art-Assets).
+  ///
+  /// Die Dateien werden von `scripts/generate_cuisine_tokens.py` erzeugt und
+  /// liegen unter `assets/images/token/`. Der Name folgt dem Enum-Namen,
+  /// damit Asset und Küche stabil gekoppelt bleiben.
+  String get tokenImagePath => 'assets/images/token/token_cook_$name.png';
+
   /// Liest eine Küche aus ihrem Serialisierungs-Namen (Default: italienisch).
   static Cuisine fromName(String? name) => Cuisine.values.firstWhere(
         (c) => c.name == name,

@@ -31,7 +31,10 @@ class ScreenRestaurant extends StatefulWidget {
 class _ScreenRestaurantState extends State<ScreenRestaurant>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ObjectProfile _profile = ObjectProfile();
-  String _profileImagePath = 'assets/images/echo_standard.png';
+
+  /// Aktuell im Header gezeigtes Bild. Ohne eigenes Logo ist das die
+  /// Küchen-Grafik des Restaurants (§ 9, Küchen-Art-Assets).
+  String _profileImagePath = 'assets/images/token/token_cook_basic.png';
   bool _hasCustomImage = false;
   final Set<ObjectApprentice> _battleReadyCharacters = {};
   List<MapMeta> _mapEntries = [];
@@ -46,6 +49,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 4, vsync: this);
+    // Standard-Header-Bild = Küchen-Grafik (§ 9); ein eigenes Logo hat Vorrang.
+    _profileImagePath = _profile.activeCuisine.tokenImagePath;
     if (_profile.restaurantLogoPath != null &&
         _profile.restaurantLogoPath!.isNotEmpty) {
       _profileImagePath = _profile.restaurantLogoPath!;
@@ -81,7 +86,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (!mounted) return;
     setState(() {
       _battleReadyCharacters.clear();
-      _profileImagePath = 'assets/images/echo_standard.png';
+      _profileImagePath = _profile.activeCuisine.tokenImagePath;
       _hasCustomImage = false;
     });
   }
@@ -188,7 +193,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         _profileImagePath = logo;
         _hasCustomImage = true;
       } else {
-        _profileImagePath = 'assets/images/echo_standard.png';
+        // Standard-Bild = Küchen-Grafik des neu geladenen Spielstands (§ 9).
+        _profileImagePath = _profile.activeCuisine.tokenImagePath;
         _hasCustomImage = false;
       }
     });
@@ -507,13 +513,23 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
             },
             leading: CircleAvatar(
               backgroundColor: _statusAvatarColor(character.status),
-              child: Icon(
-                character is ObjectLineCook
-                    ? Icons.restaurant
-                    : Icons.school,
-                color: character.status == CharacterStatus.dying
-                    ? Colors.white
-                    : null,
+              // Küchen-Token als Personal-Grafik (§ 9); Icon als Fallback,
+              // falls ein Alt-Spielstand keinen gültigen Pfad hat.
+              child: ClipOval(
+                child: Image.asset(
+                  character.imagePath,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Icon(
+                    character is ObjectLineCook
+                        ? Icons.restaurant
+                        : Icons.school,
+                    color: character.status == CharacterStatus.dying
+                        ? Colors.white
+                        : null,
+                  ),
+                ),
               ),
             ),
             title: Text(

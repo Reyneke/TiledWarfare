@@ -97,7 +97,9 @@ class EconomyBalance {
   static const double attractivenessBase = 1.0;
   static const double satisfactionBase = 1.0;
   static const double staffAttractivityPerHead = 0.1;
-  static const double satisfactionHealthWeight = 4.0;
+  // Getunt (Balance-Tuning): 4.0 sättigte gesunde Teams am Domänen-Clamp (4.0)
+  // und machte Sieg-/Niederlage-Bonus, Upgrades und Rebranding-Malus wirkungslos.
+  static const double satisfactionHealthWeight = 1.5;
   static const double satisfactionWinBonus = 0.5;
   static const double satisfactionLossPenalty = 0.5;
   static const int capacityMoneyNorm = 100;
@@ -307,7 +309,7 @@ Bisher sind alle Charaktere italienisch geprägt (Name **und** Stil; `RandomName
 
 - **Daten:** neues Feld `RestaurantData.cuisine` (`enum Cuisine`, Default `italian`; Migration setzt Alt-Daten auf `italian`). Die Küche wird bei der Restaurant-Erstellung in `ScreenStart` gewählt und im `ScreenRestaurant`-Header angezeigt.
 - **Namenerzeugung:** `ObjectApprentice`/`ObjectTeamMedic` erhalten statt des hartkodierten `Zone.italy` einen `Zone`/`Cuisine`-Parameter (über `ObjectProfile` beim Anheuern übergeben).
-- **Stil:** Token-/Restaurant-Grafiken je Küche sind **Art-Assets** und bewusst nicht Teil dieses Code-Pakets – der Namensstamm ist der umsetzbare Kern.
+- **Stil (umgesetzt):** Token-/Restaurant-Grafiken je Küche liegen jetzt als **Küchen-Art-Assets** vor: `scripts/generate_cuisine_tokens.py` erzeugt aus `token_cook_basic.png` je Küche eine eigene Farbvariante (`assets/images/token/token_cook_<cuisine>.png`, **Platzhalter-Art** – durch echte Assets überschreibbar, Pfade bleiben stabil). `Cuisine.tokenImagePath` liefert den Pfad; Lehrling/Line Cook erhalten ihn über den `cuisine`-Parameter, Personal-Avatar und Header zeigen die Küchen-Grafik, und `ScreenCharacterDetail` nutzt sie automatisch. Alt-Spielstände behalten ihren gespeicherten (generischen) Bildpfad.
 - **Rebranding (Entscheidung):** Ein Küchenwechsel ist nachträglich möglich, aber **deutlich teuer** und mit **wirtschaftlichen Folgen** verbunden (z. B. einmalige Kosten + zeitlich begrenzter Attraktivitäts-Malus; Balance-Werte in `EconomyBalance`). UI in `ScreenRestaurant`; setzt `RestaurantData.cuisine` neu und erzeugt künftige Namen im neuen Namensstamm (bestehendes Personal behält seinen Namen).
 - `team_rules.md` § 2.4 (`RandomNames(Zone.italy)`) entsprechend aktualisieren.
 
@@ -435,4 +437,24 @@ Aktuell sind **keine offenen Fragen** mehr vorhanden.
 - **Rebranding-Balance (Vorschlag):** einmalige Kosten (z. B. 5.000 €) plus zeitlich begrenzter Attraktivitäts-Malus – in Phase 7/3 zu justieren.
 
 > **Hinweis:** Die frühere Roh-Notiz „Wirtschaftssystemupgrades → passives Einkommen“ ist vollständig in Abschnitt 8 übernommen und präzisiert (Eingangswerte, Fuzzy-Modell, Integration, Tests). Die weiteren Roh-Notizen (Küchen, Restauranterweiterungen, Screen-Redesign) sind in die Abschnitte 9–11 eingearbeitet.
+
+## Nachtrag: Erledigte Restpunkte
+
+Die nach dem Durchlauf offenen Punkte sind abgearbeitet:
+
+### Balance-Tuning (V7/§ 8)
+- **Fuzzy-Peaks/Sätze zentralisiert:** Alle Peaks des passiven Einkommens stehen jetzt in `EconomyBalance` (`fuzzyInputLowPeak/Mid/High`, `fuzzyCapacity*`, `fuzzyFewRepresentative`, `fuzzyCustomersMidPeak`, `customersDomainMax`). `PassiveIncomeService` enthält keine Literale mehr → Abnahmekriterium „über `EconomyBalance` justierbar" erfüllt.
+- **Zufriedenheit getunt:** `satisfactionHealthWeight` `4.0 → **1.5**`. Vorher sättigte jedes gesunde Team die Zufriedenheit sofort am Clamp (4.0); Sieg-/Niederlage-Bonus, Erweiterungen und Rebranding-Malus waren wirkungslos.
+- **„Wenig"-Repräsentant `0 → 20`:** Ein frisches Restaurant (nur Lehrlinge) erwirtschaftet jetzt ein kleines, aber spürbares passives Einkommen (statt 0 €). Max-Einkommen bleibt bei `100 Kunden × 5 € = 500 €/Woche` gedeckelt und damit unter üppigen Gefechtserlösen.
+- **Absicherung:** Neuer `test/balance_sanity_test.dart` erzwingt die Verträge (Peaks geordnet/innerhalb der Domäne, alle Erweiterungen spezifiziert, frisches Restaurant > 0 €, gesunde Teams sättigen nicht, Max-Einkommen gedeckelt).
+
+### Küchen-Art-Assets (§ 9)
+- Neues Skript `scripts/generate_cuisine_tokens.py` erzeugt sechs unterscheidbare Küchen-Token (`assets/images/token/token_cook_<cuisine>.png`) aus der Basistoken-Grafik (Platzhalter-Art).
+- `Cuisine.tokenImagePath` + `cuisine`-Parameter an `ObjectApprentice`/`ObjectLineCook`; `ObjectProfile.hireApprentice`/`upgradeToLineCook` geben die Restaurant-Küche durch.
+- `ScreenRestaurant` zeigt die Küchen-Grafik im Personal-Avatar und als Header-Standardbild (eigenes Logo hat Vorrang); `ScreenCharacterDetail` nutzt sie bereits. Tests in `test/cuisine_test.dart` erweitert.
+
+### Smoke-Test
+- Neuer `test/smoke_test.dart`: bootet die echte `MainApp` (Start-Screen) ohne Exception und fährt den Restaurant-Hauptfluss (alle vier Reiter, Arztverwaltung, `ScreenBattleResult` inkl. Wirtschaftsabrechnung) durch. Läuft damit in CI (`flutter test`).
+
+**Validierung:** `flutter analyze` ohne Fehler/Warnungen (nur die bereits vorher bestehenden 20 `info`-Lints); `flutter test` vollständig grün.
 

@@ -3,9 +3,24 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 
 /// Fuzzy-Variable für die Restaurant-Attraktivität (Domäne 0–4).
 class _Attractiveness extends FuzzyVariable<double> {
-  final niedrig = FuzzySet.LeftShoulder(0.0, 0.75, 2.0, 'Niedrig');
-  final mittel = FuzzySet.Triangle(0.75, 2.0, 3.25, 'Mittel');
-  final hoch = FuzzySet.RightShoulder(2.0, 3.25, 4.0, 'Hoch');
+  final niedrig = FuzzySet.LeftShoulder(
+    0.0,
+    EconomyBalance.fuzzyInputLowPeak,
+    EconomyBalance.fuzzyInputMidPeak,
+    'Niedrig',
+  );
+  final mittel = FuzzySet.Triangle(
+    EconomyBalance.fuzzyInputLowPeak,
+    EconomyBalance.fuzzyInputMidPeak,
+    EconomyBalance.fuzzyInputHighPeak,
+    'Mittel',
+  );
+  final hoch = FuzzySet.RightShoulder(
+    EconomyBalance.fuzzyInputMidPeak,
+    EconomyBalance.fuzzyInputHighPeak,
+    EconomyBalance.inputDomainMax,
+    'Hoch',
+  );
 
   _Attractiveness() {
     sets = [niedrig, mittel, hoch];
@@ -16,9 +31,24 @@ class _Attractiveness extends FuzzyVariable<double> {
 
 /// Fuzzy-Variable für die Kundenzufriedenheit (Domäne 0–4).
 class _Satisfaction extends FuzzyVariable<double> {
-  final niedrig = FuzzySet.LeftShoulder(0.0, 0.75, 2.0, 'Niedrig');
-  final mittel = FuzzySet.Triangle(0.75, 2.0, 3.25, 'Mittel');
-  final hoch = FuzzySet.RightShoulder(2.0, 3.25, 4.0, 'Hoch');
+  final niedrig = FuzzySet.LeftShoulder(
+    0.0,
+    EconomyBalance.fuzzyInputLowPeak,
+    EconomyBalance.fuzzyInputMidPeak,
+    'Niedrig',
+  );
+  final mittel = FuzzySet.Triangle(
+    EconomyBalance.fuzzyInputLowPeak,
+    EconomyBalance.fuzzyInputMidPeak,
+    EconomyBalance.fuzzyInputHighPeak,
+    'Mittel',
+  );
+  final hoch = FuzzySet.RightShoulder(
+    EconomyBalance.fuzzyInputMidPeak,
+    EconomyBalance.fuzzyInputHighPeak,
+    EconomyBalance.inputDomainMax,
+    'Hoch',
+  );
 
   _Satisfaction() {
     sets = [niedrig, mittel, hoch];
@@ -29,9 +59,24 @@ class _Satisfaction extends FuzzyVariable<double> {
 
 /// Fuzzy-Variable für die Kapazität (Domäne 0–20).
 class _Capacity extends FuzzyVariable<double> {
-  final niedrig = FuzzySet.LeftShoulder(0.0, 2.0, 8.0, 'Niedrig');
-  final mittel = FuzzySet.Triangle(2.0, 8.0, 14.0, 'Mittel');
-  final hoch = FuzzySet.RightShoulder(8.0, 14.0, 20.0, 'Hoch');
+  final niedrig = FuzzySet.LeftShoulder(
+    0.0,
+    EconomyBalance.fuzzyCapacityLowPeak,
+    EconomyBalance.fuzzyCapacityMidPeak,
+    'Niedrig',
+  );
+  final mittel = FuzzySet.Triangle(
+    EconomyBalance.fuzzyCapacityLowPeak,
+    EconomyBalance.fuzzyCapacityMidPeak,
+    EconomyBalance.fuzzyCapacityHighPeak,
+    'Mittel',
+  );
+  final hoch = FuzzySet.RightShoulder(
+    EconomyBalance.fuzzyCapacityMidPeak,
+    EconomyBalance.fuzzyCapacityHighPeak,
+    EconomyBalance.capacityMax,
+    'Hoch',
+  );
 
   _Capacity() {
     sets = [niedrig, mittel, hoch];
@@ -42,9 +87,26 @@ class _Capacity extends FuzzyVariable<double> {
 
 /// Ausgangs-Fuzzy-Variable „Kunden pro Woche" (0–100).
 class _CustomersPerWeek extends FuzzyVariable<int> {
-  final wenig = FuzzySet.LeftShoulder(0, 0, 50, 'Wenig');
-  final mittel = FuzzySet.Triangle(0, 50, 100, 'Mittel');
-  final viel = FuzzySet.RightShoulder(50, 100, 100, 'Viel');
+  /// „Wenig" hat einen Repräsentanten > 0, damit auch ein kleines Restaurant
+  /// passives Einkommen erwirtschaftet (V7-Balance, siehe `EconomyBalance`).
+  final wenig = FuzzySet.LeftShoulder(
+    EconomyBalance.fuzzyFewRepresentative,
+    0,
+    EconomyBalance.fuzzyCustomersMidPeak,
+    'Wenig',
+  );
+  final mittel = FuzzySet.Triangle(
+    0,
+    EconomyBalance.fuzzyCustomersMidPeak,
+    EconomyBalance.customersDomainMax,
+    'Mittel',
+  );
+  final viel = FuzzySet.RightShoulder(
+    EconomyBalance.fuzzyCustomersMidPeak,
+    EconomyBalance.customersDomainMax,
+    EconomyBalance.customersDomainMax,
+    'Viel',
+  );
 
   _CustomersPerWeek() {
     sets = [wenig, mittel, viel];

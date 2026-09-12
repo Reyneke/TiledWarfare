@@ -44,15 +44,48 @@ class EconomyBalance {
   static const double attractivenessBase = 1.0;
   static const double satisfactionBase = 1.0;
   static const double staffAttractivityPerHead = 0.1;
-  static const double satisfactionHealthWeight = 4.0;
+
+  /// Gewicht der Teamgesundheit in der Kundenzufriedenheit (§ 8).
+  ///
+  /// Bewusst moderat: Bei vollem Gewicht (z. B. 4.0) sättigt ein gesundes Team
+  /// die Zufriedenheit sofort am Domänen-Clamp, wodurch Sieg-/Niederlage-Bonus,
+  /// Erweiterungen und Rebranding-Malus wirkungslos würden.
+  static const double satisfactionHealthWeight = 1.5;
   static const double satisfactionWinBonus = 0.5;
   static const double satisfactionLossPenalty = 0.5;
   static const int capacityMoneyNorm = 100;
   static const double capacityMax = 20.0;
 
+  // ── Fuzzy-Modell „Kunden/Woche" (§ 8, V7) ─────────────────────────────
+  //
+  // Alle Peaks/Sätze des passiven Einkommens leben hier, damit Tuning ohne
+  // Eingriff in `passive_income_service.dart` möglich ist.
+
   /// Obere Grenze der Fuzzy-Eingänge Attraktivität/Kundenzufriedenheit
   /// (Domäne 0–4, siehe Balancing-Hinweis in § 8).
   static const double inputDomainMax = 4.0;
+
+  /// Obere Grenze der Ausgangsmenge „Kunden/Woche" (Domäne 0–100).
+  static const int customersDomainMax = 100;
+
+  /// Peaks der Eingangsmengen Attraktivität & Kundenzufriedenheit (0–4).
+  static const double fuzzyInputLowPeak = 0.75;
+  static const double fuzzyInputMidPeak = 2.0;
+  static const double fuzzyInputHighPeak = 3.25;
+
+  /// Peaks der Eingangsmenge Kapazität (0–`capacityMax`).
+  static const double fuzzyCapacityLowPeak = 2.0;
+  static const double fuzzyCapacityMidPeak = 8.0;
+  static const double fuzzyCapacityHighPeak = 14.0;
+
+  /// Repräsentant der Ausgangsmenge „Wenig" (Kunden/Woche).
+  ///
+  /// Bewusst > 0: Ein frisches Restaurant (nur Lehrlinge) erwirtschaftet so ein
+  /// kleines, aber spürbares passives Einkommen (§ 8).
+  static const int fuzzyFewRepresentative = 20;
+
+  /// Peak der Ausgangsmenge „Mittel" (Kunden/Woche).
+  static const int fuzzyCustomersMidPeak = 50;
 
   /// Stadtteil-Prestige (Default 1.0 für nicht gelistete Stadtteile).
   ///
