@@ -97,26 +97,6 @@ class ObjectPlayer {
   /// Gibt die Anzahl der aktuell kontrollierten Einheiten zurück.
   int get unitCount => unitList.length;
 
-  /// Verbessert die Eigenschaften einer [ObjectApprentice]-Einheit.
-  ///
-  /// Nur übergebene Werte werden aktualisiert; `null`-Werte bleiben unverändert.
-  void upgradeUnit(
-    ObjectApprentice unit, {
-    int? attackValue,
-    int? defenseValue,
-    int? movementValue,
-    int? damageValue,
-    int? rangeValue,
-    int? woundValue,
-  }) {
-    if (attackValue != null) unit.attackValue = attackValue;
-    if (defenseValue != null) unit.defenseValue = defenseValue;
-    if (movementValue != null) unit.movementValue = movementValue;
-    if (damageValue != null) unit.damageValue = damageValue;
-    if (rangeValue != null) unit.rangeValue = rangeValue;
-    if (woundValue != null) unit.woundValue = woundValue;
-  }
-
   /// Gibt die Liste der verfügbaren [CombatAction]s für eine Einheit zurück.
   ///
   /// Die Verfügbarkeit hängt von den Eigenschaften der Einheit ab:

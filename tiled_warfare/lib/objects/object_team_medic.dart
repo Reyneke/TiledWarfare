@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:tiled_warfare/services/economy_service.dart';
-import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
@@ -36,44 +35,17 @@ enum MedicQuality {
   );
 }
 
-/// Fuzzy-Variable für die Hilfsbereitschaft des Teamarztes (0–100).
-///
-/// Beeinflusst, wie wahrscheinlich der Arzt auf eine Bitte des Spielers
-/// reagiert und wie gut seine Behandlung tatsächlich wirkt.
-class MedicHelpfulness extends FuzzyVariable<int> {
-  var Unhelpful = FuzzySet.LeftShoulder(0, 20, 40);
-  var Neutral = FuzzySet.Triangle(20, 50, 80);
-  var Helpful = FuzzySet.RightShoulder(60, 80, 100);
-
-  MedicHelpfulness() {
-    sets = [Unhelpful, Neutral, Helpful];
-    init();
-  }
-}
-
-/// Fuzzy-Variable für die Erfolgsqualität einer Behandlung (0–100).
-class MedicTreatmentQuality extends FuzzyVariable<int> {
-  var Poor = FuzzySet.LeftShoulder(0, 20, 40);
-  var Average = FuzzySet.Triangle(20, 50, 80);
-  var Excellent = FuzzySet.RightShoulder(60, 80, 100);
-
-  MedicTreatmentQuality() {
-    sets = [Poor, Average, Excellent];
-    init();
-  }
-}
-
 /// Repräsentiert einen Teamarzt, der zwischen den Gefechten angeheuert werden kann.
 ///
 /// Der Teamarzt nimmt nicht aktiv am Gefecht teil, sondern verbessert die
 /// Überlebenschancen und Heilungsrate der Teammitglieder (siehe `team_rules.md`,
 /// Abschnitt 4.5).
 ///
-/// Analog zu [ObjectHost] besitzt der Teamarzt eine Persönlichkeit, die sich aus
-/// einem zufälligen [EnneagramProfile] und Fuzzy Logic zusammensetzt. Diese
-/// Persönlichkeit beeinflusst seine [MedicQuality], die wöchentlichen Kosten,
-/// seine tatsächliche Hilfsbereitschaft und die Erfolgswahrscheinlichkeit seiner
-/// Behandlungen.
+/// Der Teamarzt besitzt ein zufälliges [EnneagramProfile]. Es bestimmt – neben
+/// der [MedicQuality] – deterministisch seine Hilfsbereitschaft und die
+/// Erfolgswahrscheinlichkeit seiner Behandlungen. Eine frühere Fuzzy-Auswertung
+/// wurde entfernt (V5); die Persönlichkeits-Idee wird beim späteren Ausbau des
+/// Personalsektors in anderer Form wieder aufgegriffen.
 class ObjectTeamMedic {
   /// Eindeutige ID, bestehend aus einem CRC32-Hash des Namens und des
   /// Erstellungsdatums.
@@ -82,9 +54,7 @@ class ObjectTeamMedic {
   /// Zufällig generierter italienischer Name.
   String name;
 
-  /// Qualitätsstufe des Teamarztes.
-  ///
-  /// Wird durch die Persönlichkeit (Enneagramm + Fuzzy) beeinflusst.
+  /// Qualitätsstufe des Teamarztes (zufällig gewählt).
   MedicQuality quality;
 
   /// Die wöchentlichen Kosten des Teamarztes in Euro.
@@ -97,16 +67,7 @@ class ObjectTeamMedic {
   /// Das zufällig gewählte Enneagramm-Profil des Teamarztes.
   EnneagramProfile enneagramProfile;
 
-  /// Fuzzy-Variable für die Hilfsbereitschaft.
-  final MedicHelpfulness helpfulness = MedicHelpfulness();
-
-  /// Fuzzy-Variable für die Behandlungsqualität.
-  final MedicTreatmentQuality treatmentQuality = MedicTreatmentQuality();
-
-  /// Fuzzy-Regelbasis für die Persönlichkeit des Teamarztes.
-  final FuzzyRuleBase ruleBase = FuzzyRuleBase();
-
-  /// Zufallsgenerator für Persönlichkeitsentscheidungen.
+  /// Zufallsgenerator für die Erfolgswürfe der Behandlung.
   final Random _random = Random();
 
   /// Erzeugt einen neuen Teamarzt.
@@ -127,60 +88,6 @@ class ObjectTeamMedic {
     // Compute ID from the actual name and current timestamp (not a duplicate random name).
     id = CRC32.compute('$name${DateTime.now().toIso8601String()}');
     costPerWeek = EconomyService.weeklyMedicCost(quality, teamSize);
-    _initializeFuzzyRules();
-  }
-
-  /// Initialisiert die Fuzzy-Regeln basierend auf dem Enneagramm-Profil.
-  ///
-  /// Die Persönlichkeit beeinflusst die [helpfulness] und [treatmentQuality]
-  /// des Teamarztes. Ein hilfsbereiterer Arzt ist eher bereit, zu helfen,
-  /// aber möglicherweise weniger gründlich, während ein weniger hilfsbereiter
-  /// Arzt seltener hilft, dann aber mit höherer Qualität.
-  void _initializeFuzzyRules() {
-    switch (enneagramProfile.name) {
-      case 'Der Helfer':
-      case 'Der Friedfertige':
-        // Sehr hilfsbereit, durchschnittliche Behandlungsqualität
-        ruleBase.addRules([
-          (helpfulness.Unhelpful) >> (helpfulness.Helpful),
-          (treatmentQuality.Poor) >> (treatmentQuality.Average),
-        ]);
-        break;
-      case 'Der Denker':
-      case 'Der Stratege':
-        // Weniger hilfsbereit, aber hohe Behandlungsqualität, wenn sie helfen
-        ruleBase.addRules([
-          (helpfulness.Helpful) >> (helpfulness.Unhelpful),
-          (treatmentQuality.Poor) >> (treatmentQuality.Excellent),
-        ]);
-        break;
-      case 'Der Chaot':
-      case 'Der Enthusiast':
-        // Unberechenbar – hohe Streuung in beiden Variablen
-        ruleBase.addRules([
-          (helpfulness.Unhelpful) >> (helpfulness.Helpful),
-          (helpfulness.Helpful) >> (helpfulness.Neutral),
-          (treatmentQuality.Poor) >> (treatmentQuality.Excellent),
-          (treatmentQuality.Excellent) >> (treatmentQuality.Poor),
-        ]);
-        break;
-      case 'Der Reformierte':
-        // Zuverlässig, gute Qualität, aber nicht übermäßig hilfsbereit
-        ruleBase.addRules([
-          (helpfulness.Unhelpful) >> (helpfulness.Neutral),
-          (treatmentQuality.Poor) >> (treatmentQuality.Excellent),
-        ]);
-        break;
-      default:
-        // Ausgeglichenes Verhalten
-        ruleBase.addRules([
-          (helpfulness.Unhelpful) >> (helpfulness.Neutral),
-          (helpfulness.Helpful) >> (helpfulness.Neutral),
-          (treatmentQuality.Poor) >> (treatmentQuality.Average),
-          (treatmentQuality.Excellent) >> (treatmentQuality.Average),
-        ]);
-        break;
-    }
   }
 
   /// Gibt den Anzeigenamen des Teamarztes zurück.
@@ -197,9 +104,8 @@ class ObjectTeamMedic {
   /// startet lediglich die Verletzungsuhr (`injuryStartedAt`), falls sie noch
   /// nicht läuft.
   ///
-  /// Die Erfolgswahrscheinlichkeit hängt von der aktuellen [helpfulness] und
-  /// [treatmentQuality] ab, die wiederum durch das Enneagramm und die
-  /// Fuzzy-Regeln bestimmt werden.
+  /// Die Erfolgswahrscheinlichkeit hängt deterministisch von der
+  /// [MedicQuality] und dem Enneagramm-Profil ab (V5: keine Fuzzy-Auswertung).
   bool treatCharacter(ObjectApprentice character) {
     // Nur verletzte Charaktere behandeln
     if (character.status == CharacterStatus.ready ||
@@ -234,15 +140,15 @@ class ObjectTeamMedic {
   /// Teamarzt bietet.
   ///
   /// Gemäß team_rules.md Abschnitt 4.2:
-  /// - Basis-Bonus: +20 (in [MedicQuality] hinterlegt).
-  /// - Modifiziert durch die aktuelle [treatmentQuality].
+  /// - Basis-Bonus ist qualitätsabhängig (10/20/30, [MedicQuality.survivalBonus]).
+  /// - Modifiziert durch die Behandlungsqualität (deterministisch, V5).
   int get effectiveSurvivalBonus {
     final baseBonus = quality.survivalBonus;
     final qualityModifier = _evaluateTreatmentQuality() ~/ 10;
     return baseBonus + qualityModifier;
   }
 
-  /// Gibt einen deterministischen Score für das Enneagramm-Profil (0–100).
+  /// Gibt einen deterministischen Score für das Enneagramm-Profil (0–96).
   ///
   /// Verwendet den Index des Profils in der `all`-Liste, um einen
   /// reproduzierbaren und zwischen Runs/Plattformen konsistenten Wert
@@ -250,27 +156,36 @@ class ObjectTeamMedic {
   /// die nicht portabel war.
   static int _enneagramScore(EnneagramProfile profile) {
     final index = EnneagramProfile.all.indexOf(profile);
-    // Gleichmäßige Verteilung über 0–100 (91 = 12 Profile * 7.58)
     return ((index + 1) * 8) % 100;
   }
 
-  /// Bewertet die aktuelle Hilfsbereitschaft auf einer Skala von 0–100.
+  /// Hilfsbereitschaft (0–100) aus Enneagramm-Profil und Qualität.
   ///
-  /// Basis sind 50 Punkte, modifiziert durch das Enneagramm-Profil
-  /// (0–42 Punkte) und die Qualitätsstufe (0–10 Punkte).
-  /// Ergebnis ist deterministisch und reproduzierbar.
-  int _evaluateHelpfulness() {
-    return 50 + _enneagramScore(enneagramProfile) + quality.survivalBonus;
-  }
+  /// Basis 50 Punkte + Enneagramm-Anteil (0–96) + Qualitätsbonus (10–30),
+  /// begrenzt auf 0–100 (V5). Rein und deterministisch – ohne Fuzzy-Auswertung.
+  static int helpfulnessScoreFor(
+    EnneagramProfile profile,
+    MedicQuality quality,
+  ) =>
+      (50 + _enneagramScore(profile) + quality.survivalBonus).clamp(0, 100);
 
-  /// Bewertet die aktuelle Behandlungsqualität auf einer Skala von 0–100.
+  /// Behandlungsqualität (0–100) aus Enneagramm-Profil und Qualität.
   ///
-  /// Basis ist der [MedicQuality.survivalBonus] (10–30), modifiziert
-  /// durch das Enneagramm-Profil (0–42 Punkte).
-  /// Ergebnis ist deterministisch und reproduzierbar.
-  int _evaluateTreatmentQuality() {
-    return quality.survivalBonus + (_enneagramScore(enneagramProfile) ~/ 2);
-  }
+  /// Qualitätsbonus (10–30) + halber Enneagramm-Anteil (0–48),
+  /// begrenzt auf 0–100 (V5). Rein und deterministisch – ohne Fuzzy-Auswertung.
+  static int treatmentQualityScoreFor(
+    EnneagramProfile profile,
+    MedicQuality quality,
+  ) =>
+      (quality.survivalBonus + (_enneagramScore(profile) ~/ 2)).clamp(0, 100);
+
+  /// Bewertet die aktuelle Hilfsbereitschaft (0–100) dieses Arztes.
+  int _evaluateHelpfulness() =>
+      helpfulnessScoreFor(enneagramProfile, quality);
+
+  /// Bewertet die aktuelle Behandlungsqualität (0–100) dieses Arztes.
+  int _evaluateTreatmentQuality() =>
+      treatmentQualityScoreFor(enneagramProfile, quality);
 
   @override
   String toString() =>

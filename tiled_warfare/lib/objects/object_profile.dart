@@ -51,8 +51,16 @@ class ObjectProfile {
   /// Pfad zum Restaurant-Logo (optional). Wird separat gespeichert.
   String? restaurantLogoPath;
 
-  /// Ob ein benutzerdefiniertes Bild geladen wurde.
-  bool hasCustomImage = false;
+  /// Ob das aktive Restaurant ein eigenes Logo hat – abgeleitet aus
+  /// [restaurantLogoPath] statt aus dem Profilbild (V4/P2). Bewusst kein
+  /// mutablem Feld, damit der Zustand nicht vom Logo weglaufen kann.
+  bool get hasCustomImage =>
+      restaurantLogoPath != null && restaurantLogoPath!.isNotEmpty;
+
+  /// Kopf-Bild des aktiven Restaurants: eigenes Logo, sonst die Küchen-Grafik
+  /// des Restaurants (§ 9). Einzige Quelle der Wahrheit für die UI (V4).
+  String get headerImagePath =>
+      hasCustomImage ? restaurantLogoPath! : activeCuisine.tokenImagePath;
 
   /// Id of the currently active restaurant (savegame). `-1` = none loaded.
   int activeRestaurantId = -1;
@@ -96,14 +104,6 @@ class ObjectProfile {
 
   /// Referenz auf den [ObjectPlayer] für den Gefechts-Austausch.
   ObjectPlayer _player = ObjectPlayer();
-
-  /// Setzt die [ObjectPlayer]-Instanz, mit der dieses Profil arbeitet.
-  void setPlayer(ObjectPlayer player) {
-    _player = player;
-  }
-
-  /// Gibt die verknüpfte [ObjectPlayer]-Instanz zurück.
-  ObjectPlayer get player => _player;
 
   /// Liste aller angestellten Charaktere (Lehrlinge und höhere Klassen).
   final List<ObjectApprentice> _personal = [];
@@ -165,43 +165,66 @@ class ObjectProfile {
   /// Bildet einen Lehrling zu einem [ObjectLineCook] fort, sofern er
   /// Level 5 oder höher erreicht hat.
   ///
-  /// Die Fortbildung kostet Geld (deutlich teurer als Neuanheuerung).
-  /// Gibt `true` bei Erfolg zurück, `false` bei zu niedrigem Level oder
-  /// unzureichendem Budget.
-  bool upgradeToLineCook(ObjectApprentice apprentice,
+  /// Die Fortbildung kostet Geld (deutlich teurer als Neuanheuerung). Der
+  /// Charakter behält seine Identität: der Personenname (nur der Rang-Präfix
+  /// wechselt), das Bild und die Match-Historie werden auf den neuen
+  /// [ObjectLineCook] übertragen; Status und Verletzungszustand werden ebenfalls
+  /// übernommen. Die Statwerte wechseln auf das feste Line-Cook-Profil
+  /// (Beförderung, keine Neuwürfelung).
+  ///
+  /// Gibt den fortgebildeten [ObjectApprentice] (den neuen Line Cook) zurück –
+  /// oder `null`, wenn das Level zu niedrig, der Charakter bereits ein Line Cook
+  /// oder das Budget zu gering ist. Bei `null` bleibt der Zustand unverändert.
+  ObjectApprentice? upgradeToLineCook(ObjectApprentice apprentice,
       {int cost = EconomyBalance.upgradeToLineCookCost}) {
+    if (apprentice is ObjectLineCook) {
+      return null; // bereits fortgebildet
+    }
     if (apprentice.levelValue < 5) {
-      return false; // Fortbildung erst ab Level 5 möglich
+      return null; // Fortbildung erst ab Level 5 möglich
     }
     if (budget - cost < negativeLimit) {
-      return false; // Budget reicht nicht
+      return null; // Budget reicht nicht
     }
     budget -= cost;
 
-    // Bestehende Werte des Lehrlings merken
-    final int currentLevel = apprentice.levelValue;
-    final int currentXP = apprentice.currentXPValue;
-    final int currentWound = apprentice.woundValue;
-    final CharacterStatus currentStatus = apprentice.status;
-    final DateTime? currentInjury = apprentice.injuryStartedAt;
-    final CharacterStatus? currentInjuryStart = apprentice.injuryStartStatus;
-    final DateTime? currentShot = apprentice.emergencyShotAt;
-    final CharacterStatus? currentSuppressed = apprentice.suppressedStatus;
+    // Identität bewahren: Personenname (nur Rang-Präfix wechseln), Bild und
+    // Match-Historie werden auf den Line Cook übertragen (V5).
+    // Die Küche bestimmt Namensstamm und Token-Grafik (§ 9).
+    final lineCook = ObjectLineCook(
+      cuisine: activeCuisine,
+      name: _promotedName(apprentice.name),
+      imagePath: apprentice.imagePath,
+    );
 
-    // Alten Lehrling entfernen und durch Line Cook ersetzen
+    // Fortschritt und Verletzungszustand übernehmen.
+    lineCook.levelValue = apprentice.levelValue;
+    lineCook.currentXPValue = apprentice.currentXPValue;
+    lineCook.woundValue = apprentice.woundValue;
+    lineCook.status = apprentice.status;
+    lineCook.injuryStartedAt = apprentice.injuryStartedAt;
+    lineCook.injuryStartStatus = apprentice.injuryStartStatus;
+    lineCook.emergencyShotAt = apprentice.emergencyShotAt;
+    lineCook.suppressedStatus = apprentice.suppressedStatus;
+    lineCook.matchHistory = List.of(apprentice.matchHistory);
+
+    // Alten Lehrling entfernen und durch den Line Cook ersetzen
     _personal.remove(apprentice);
-    // Küche bestimmt Namensstamm und Token-Grafik (§ 9).
-    final lineCook = ObjectLineCook(cuisine: activeCuisine);
-    lineCook.levelValue = currentLevel;
-    lineCook.currentXPValue = currentXP;
-    lineCook.woundValue = currentWound;
-    lineCook.status = currentStatus;
-    lineCook.injuryStartedAt = currentInjury;
-    lineCook.injuryStartStatus = currentInjuryStart;
-    lineCook.emergencyShotAt = currentShot;
-    lineCook.suppressedStatus = currentSuppressed;
     _personal.add(lineCook);
-    return true;
+    return lineCook;
+  }
+
+  /// Ersetzt den Rang-Präfix eines Lehrlingsnamens durch „Line Cook: “.
+  ///
+  /// Alt-Daten oder abweichend benannte Charaktere werden defensiv behandelt:
+  /// Beginnt der Name nicht mit dem Lehrlings-Präfix, wird er unverändert
+  /// übernommen.
+  static String _promotedName(String name) {
+    const apprenticePrefix = 'Apprentice: ';
+    if (name.startsWith(apprenticePrefix)) {
+      return 'Line Cook: ${name.substring(apprenticePrefix.length)}';
+    }
+    return name;
   }
 
   /// Wählt die Charaktere aus, die ins Gefecht gehen sollen.
@@ -425,7 +448,6 @@ class ObjectProfile {
     restaurantName = 'Neues Restaurant';
     restaurantLogoPath = null;
     budget = startBudget;
-    hasCustomImage = false;
     lastMatchResult = null;
     lastSeenAt = DateTime.now();
     activeCuisine = Cuisine.italian;
@@ -449,7 +471,6 @@ class ObjectProfile {
     id = data.id;
     name = data.name;
     profileImagePath = data.profileImagePath;
-    hasCustomImage = data.profileImagePath != null;
 
     final restaurant = _resolveRestaurant(data, restaurantId);
     if (restaurant == null) {

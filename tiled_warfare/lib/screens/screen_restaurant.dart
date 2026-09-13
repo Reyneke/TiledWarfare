@@ -32,10 +32,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ObjectProfile _profile = ObjectProfile();
 
-  /// Aktuell im Header gezeigtes Bild. Ohne eigenes Logo ist das die
-  /// Küchen-Grafik des Restaurants (§ 9, Küchen-Art-Assets).
-  String _profileImagePath = 'assets/images/token/token_cook_basic.png';
-  bool _hasCustomImage = false;
   final Set<ObjectApprentice> _battleReadyCharacters = {};
   List<MapMeta> _mapEntries = [];
   bool _isLoadingMaps = true;
@@ -49,13 +45,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 4, vsync: this);
-    // Standard-Header-Bild = Küchen-Grafik (§ 9); ein eigenes Logo hat Vorrang.
-    _profileImagePath = _profile.activeCuisine.tokenImagePath;
-    if (_profile.restaurantLogoPath != null &&
-        _profile.restaurantLogoPath!.isNotEmpty) {
-      _profileImagePath = _profile.restaurantLogoPath!;
-      _hasCustomImage = true;
-    }
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
     _discoverMaps();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkBankruptcy());
@@ -86,8 +75,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (!mounted) return;
     setState(() {
       _battleReadyCharacters.clear();
-      _profileImagePath = _profile.activeCuisine.tokenImagePath;
-      _hasCustomImage = false;
     });
   }
 
@@ -189,15 +176,6 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     setState(() {
       _battleReadyCharacters.clear();
       _tabController.index = 0;
-      final logo = _profile.restaurantLogoPath;
-      if (logo != null && logo.isNotEmpty) {
-        _profileImagePath = logo;
-        _hasCustomImage = true;
-      } else {
-        // Standard-Bild = Küchen-Grafik des neu geladenen Spielstands (§ 9).
-        _profileImagePath = _profile.activeCuisine.tokenImagePath;
-        _hasCustomImage = false;
-      }
     });
   }
 
@@ -324,22 +302,22 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         final destPath = '${profileDir.path}/restaurant_$timestamp$imageExtension';
         final destFile = File(destPath);
 
-        if (await profileDir.exists()) {
-          final oldLogos = await profileDir
-              .list()
-              .where((entity) =>
-                  entity is File && entity.path.contains('restaurant_'))
-              .toList();
-          for (final old in oldLogos) {
-            await (old as File).delete();
-          }
-        }
+        // Alte Logos erst NACH erfolgreichem Schreiben entfernen (V4/P6): die
+        // Liste wird vor dem Schreiben erfasst und enthält die neue Datei
+        // daher noch nicht. Schlägt das Schreiben fehl, bleibt das alte Logo.
+        final oldLogos = await profileDir
+            .list()
+            .where((entity) =>
+                entity is File && entity.path.contains('restaurant_'))
+            .toList();
 
         await destFile.writeAsBytes(await image.readAsBytes());
 
+        for (final old in oldLogos) {
+          await (old as File).delete();
+        }
+
         setState(() {
-          _profileImagePath = destPath;
-          _hasCustomImage = true;
           _profile.restaurantLogoPath = destPath;
         });
         await _saveState();
@@ -583,6 +561,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                       }
                     },
                   ),
+                  if (character is! ObjectLineCook)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_upward,
+                          color: Colors.amber),
+                      tooltip: l10n.promoteToLineCook,
+                      onPressed: () => _promoteCharacter(character),
+                    ),
                   IconButton(
                     icon: const Icon(Icons.person_remove,
                         color: Colors.red),
@@ -639,6 +624,74 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         );
       },
     );
+  }
+
+  /// Führt die Fortbildung eines Lehrlings zum Line Cook durch (V5).
+  ///
+  /// Zeigt die Kosten, holt eine Bestätigung ein und überträgt anschließend
+  /// die Kader-Auswahl auf den neuen Line Cook, damit der Haken nicht am
+  /// alten Objekt hängen bleibt.
+  Future<void> _promoteCharacter(ObjectApprentice character) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (character is ObjectLineCook) return;
+    if (character.levelValue < 5) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.promoteLevelRequired)));
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.promoteToLineCook),
+        content: Text(
+          l10n.promoteConfirm(
+            character.name,
+            EconomyBalance.upgradeToLineCookCost,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.promoteToLineCook),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final wasInSquad = _battleReadyCharacters.contains(character);
+    final promoted = _profile.upgradeToLineCook(character);
+    if (promoted == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.promoteNotEnoughBudget)),
+        );
+      return;
+    }
+
+    setState(() {
+      if (wasInSquad) {
+        _battleReadyCharacters
+          ..remove(character)
+          ..add(promoted);
+      }
+    });
+    await _saveState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(l10n.promoteSuccess(promoted.name))),
+      );
   }
 
   /// Kompakter Heil-/Rückfall-Countdown für die Personal-Liste (V3).
@@ -1006,16 +1059,16 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: _hasCustomImage
+                    child: _profile.hasCustomImage
                         ? Image.file(
-                            File(_profileImagePath),
+                            File(_profile.headerImagePath),
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,
                             errorBuilder: _buildImageErrorWidget,
                           )
                         : Image.asset(
-                            _profileImagePath,
+                            _profile.headerImagePath,
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,

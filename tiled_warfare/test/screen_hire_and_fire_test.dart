@@ -65,8 +65,10 @@ void main() {
     // Gesamtwochenlast 1000 + 500 = 1500 €
     expect(find.textContaining('Gesamtwochenlast'), findsOneWidget);
     expect(find.textContaining('1500'), findsWidgets);
-    expect(find.textContaining('Rossi'), findsOneWidget);
-    expect(find.textContaining('Bianchi'), findsOneWidget);
+    // Exact matches: the randomly generated pool may contain surnames like
+    // "Rossi"/"Bianchi", so `textContaining` would be flaky.
+    expect(find.text('Rossi'), findsOneWidget);
+    expect(find.text('Bianchi'), findsOneWidget);
   });
 
   testWidgets('ohne Ärzte wird keine Wochenlast angezeigt', (tester) async {

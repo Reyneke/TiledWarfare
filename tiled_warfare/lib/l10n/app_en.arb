@@ -292,6 +292,28 @@
   "@notEnoughBudget": {
     "description": "Snackbar error message when budget is insufficient"
   },
+  "promoteToLineCook": "Promote to Line Cook",
+  "@promoteToLineCook": {
+    "description": "Action: promote an apprentice to line cook"
+  },
+  "promoteLevelRequired": "Promotion requires level 5!",
+  "@promoteLevelRequired": {
+    "description": "Message when the level is too low for promotion"
+  },
+  "promoteConfirm": "Promote {name} to Line Cook? Cost: {cost} €",
+  "@promoteConfirm": {
+    "description": "Promotion confirmation dialog",
+    "placeholders": { "name": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "promoteNotEnoughBudget": "Not enough budget for the promotion!",
+  "@promoteNotEnoughBudget": {
+    "description": "Error message when budget is insufficient for promotion"
+  },
+  "promoteSuccess": "{name} is now a Line Cook!",
+  "@promoteSuccess": {
+    "description": "Snackbar after successful promotion",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "availableMaps": "Available Maps",
   "@availableMaps": {
     "description": "Heading for the map list"

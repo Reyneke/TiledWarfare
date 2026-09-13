@@ -470,6 +470,36 @@ abstract class AppLocalizations {
   /// **'Budget reicht nicht zum Anheuern!'**
   String get notEnoughBudget;
 
+  /// Aktion: Lehrling zum Line Cook fortbilden
+  ///
+  /// In de, this message translates to:
+  /// **'Zum Line Cook fortbilden'**
+  String get promoteToLineCook;
+
+  /// Meldung, wenn das Level für die Fortbildung zu niedrig ist
+  ///
+  /// In de, this message translates to:
+  /// **'Fortbildung erst ab Level 5 möglich!'**
+  String get promoteLevelRequired;
+
+  /// Bestätigungsdialog der Fortbildung
+  ///
+  /// In de, this message translates to:
+  /// **'{name} zum Line Cook fortbilden? Kosten: {cost} €'**
+  String promoteConfirm(String name, int cost);
+
+  /// Fehlermeldung, wenn das Budget für die Fortbildung nicht reicht
+  ///
+  /// In de, this message translates to:
+  /// **'Budget reicht nicht für die Fortbildung!'**
+  String get promoteNotEnoughBudget;
+
+  /// Snackbar nach erfolgreicher Fortbildung
+  ///
+  /// In de, this message translates to:
+  /// **'{name} ist jetzt ein Line Cook!'**
+  String promoteSuccess(String name);
+
   /// Überschrift für die Karten-Liste
   ///
   /// In de, this message translates to:

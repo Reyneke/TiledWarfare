@@ -222,6 +222,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notEnoughBudget => 'Not enough budget to hire!';
 
   @override
+  String get promoteToLineCook => 'Promote to Line Cook';
+
+  @override
+  String get promoteLevelRequired => 'Promotion requires level 5!';
+
+  @override
+  String promoteConfirm(String name, int cost) {
+    return 'Promote $name to Line Cook? Cost: $cost €';
+  }
+
+  @override
+  String get promoteNotEnoughBudget => 'Not enough budget for the promotion!';
+
+  @override
+  String promoteSuccess(String name) {
+    return '$name is now a Line Cook!';
+  }
+
+  @override
   String get availableMaps => 'Available Maps';
 
   @override

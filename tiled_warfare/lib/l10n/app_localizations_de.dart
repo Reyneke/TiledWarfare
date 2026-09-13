@@ -224,6 +224,26 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notEnoughBudget => 'Budget reicht nicht zum Anheuern!';
 
   @override
+  String get promoteToLineCook => 'Zum Line Cook fortbilden';
+
+  @override
+  String get promoteLevelRequired => 'Fortbildung erst ab Level 5 möglich!';
+
+  @override
+  String promoteConfirm(String name, int cost) {
+    return '$name zum Line Cook fortbilden? Kosten: $cost €';
+  }
+
+  @override
+  String get promoteNotEnoughBudget =>
+      'Budget reicht nicht für die Fortbildung!';
+
+  @override
+  String promoteSuccess(String name) {
+    return '$name ist jetzt ein Line Cook!';
+  }
+
+  @override
   String get availableMaps => 'Verfügbare Karten';
 
   @override

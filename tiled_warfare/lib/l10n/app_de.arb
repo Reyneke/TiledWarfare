@@ -292,6 +292,28 @@
   "@notEnoughBudget": {
     "description": "Snackbar-Fehlermeldung, wenn das Budget nicht reicht"
   },
+  "promoteToLineCook": "Zum Line Cook fortbilden",
+  "@promoteToLineCook": {
+    "description": "Aktion: Lehrling zum Line Cook fortbilden"
+  },
+  "promoteLevelRequired": "Fortbildung erst ab Level 5 möglich!",
+  "@promoteLevelRequired": {
+    "description": "Meldung, wenn das Level für die Fortbildung zu niedrig ist"
+  },
+  "promoteConfirm": "{name} zum Line Cook fortbilden? Kosten: {cost} €",
+  "@promoteConfirm": {
+    "description": "Bestätigungsdialog der Fortbildung",
+    "placeholders": { "name": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "promoteNotEnoughBudget": "Budget reicht nicht für die Fortbildung!",
+  "@promoteNotEnoughBudget": {
+    "description": "Fehlermeldung, wenn das Budget für die Fortbildung nicht reicht"
+  },
+  "promoteSuccess": "{name} ist jetzt ein Line Cook!",
+  "@promoteSuccess": {
+    "description": "Snackbar nach erfolgreicher Fortbildung",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "availableMaps": "Verfügbare Karten",
   "@availableMaps": {
     "description": "Überschrift für die Karten-Liste"
