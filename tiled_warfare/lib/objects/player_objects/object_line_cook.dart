@@ -2,6 +2,7 @@
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 
 class ObjectLineCook extends ObjectApprentice {
   ObjectLineCook({
@@ -13,12 +14,12 @@ class ObjectLineCook extends ObjectApprentice {
     name: name ??
         "Line Cook: ${RandomNames(nameZone ?? cuisine?.zone ?? Zone.italy).fullName()}",
     imagePath: imagePath ?? cuisine?.tokenImagePath,
-    attackValue: 80,
-    defenseValue: 40,
-    movementValue: 3,
-    damageValue: 2,
-    rangeValue: 3,
-    moneyValue: 1000,
-    xpValue: 100,
+    attackValue: EconomyBalance.lineCookStats.attack,
+    defenseValue: EconomyBalance.lineCookStats.defense,
+    movementValue: EconomyBalance.lineCookStats.movement,
+    damageValue: EconomyBalance.lineCookStats.damage,
+    rangeValue: EconomyBalance.lineCookStats.range,
+    moneyValue: EconomyBalance.lineCookStats.money,
+    xpValue: EconomyBalance.lineCookStats.xp,
   );
 }

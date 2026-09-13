@@ -1,3 +1,4 @@
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 
 /// Zentrale Balance-Werte der Wirtschaft (V7).
@@ -13,8 +14,39 @@ class EconomyBalance {
   /// Startbudget eines neuen Restaurants in Euro.
   static const int startBudget = 10000;
 
-  /// Maximale Negativgrenze (doppelter Startwert).
-  static const int negativeLimit = -20000;
+  /// Maximale Negativgrenze (doppelter Startwert, § 2.2 des Regelwerks).
+  ///
+  /// Bewusst aus [startBudget] abgeleitet, damit ein Tuning des Startbudgets
+  /// die Regel „bis zum Doppelten ins Negative“ nicht still bricht (V7/P7).
+  static const int negativeLimit = -2 * startBudget;
+
+  // ── Erfahrung & Beförderung (V7/P1, P2) ───────────────────────────────
+
+  /// XP-Basisprämie bei Sieg (zusätzlich zu [xpPerLevelWin] je Level).
+  static const int xpBaseWin = 50;
+
+  /// Zusätzliche XP je Charakter-Level bei Sieg.
+  static const int xpPerLevelWin = 10;
+
+  /// XP-Basisprämie bei Niederlage.
+  static const int xpBaseLoss = 10;
+
+  /// XP-Schwelle pro Level: `levelValue × levelUpXpPerLevel`.
+  static const int levelUpXpPerLevel = 1000;
+
+  /// Ab diesem Level ist die Fortbildung „Lehrling → Line Cook“ möglich (§ 2.3).
+  static const int lineCookPromotionLevel = 5;
+
+  // ── W100-Domäne (§ 4.2) ───────────────────────────────────────────────
+
+  /// Untere/obere Grenze eines W100-Wurfs.
+  static const int d100Min = 1;
+  static const int d100Max = 100;
+
+  // ── Zeit (V8) ─────────────────────────────────────────────────────────
+
+  /// Länge eines Wochenticks (1 Echtzeitwoche).
+  static const Duration weeklyTick = Duration(days: 7);
 
   // ── Einmalige Kosten ──────────────────────────────────────────────────
 
@@ -29,6 +61,48 @@ class EconomyBalance {
 
   /// Zusätzlicher Kostenanteil pro Teammitglied (relativ, 0.05 = +5 %/Kopf).
   static const double medicTeamCostPerHead = 0.05;
+
+  /// Balance je [MedicQuality]: Kostenmultiplikator, Rettungswurf-Bonus (W100)
+  /// und Heilzeit pro Verletzungsstufe (§ 4.3/§ 4.5). Ersetzt die früheren
+  /// Tuning-Felder am Enum (V7/L2 – eine Quelle der Wahrheit).
+  static const Map<MedicQuality, MedicQualitySpec> medicQualitySpecs = {
+    MedicQuality.niedrig: MedicQualitySpec(
+      costMultiplier: 1.0,
+      survivalBonus: 10,
+      healTimePerStage: Duration(hours: 6),
+    ),
+    MedicQuality.mittel: MedicQualitySpec(
+      costMultiplier: 2.0,
+      survivalBonus: 20,
+      healTimePerStage: Duration(hours: 3),
+    ),
+    MedicQuality.hoch: MedicQualitySpec(
+      costMultiplier: 3.0,
+      survivalBonus: 30,
+      healTimePerStage: Duration(hours: 1),
+    ),
+  };
+
+  // ── Teamarzt-Bewertung (V5: deterministisch, 0–100) ────────────────────
+
+  /// Basis-Hilfsbereitschaft (vor Enneagramm- und Qualitätsanteil).
+  static const int medicHelpfulnessBase = 50;
+
+  /// Schrittweite des Enneagramm-Anteils in `_enneagramScore`.
+  static const int medicEnneagramStep = 8;
+
+  /// Modulo des Enneagramm-Anteils (`(index + 1) × step % modulo`).
+  static const int medicEnneagramModulo = 100;
+
+  /// Divisor des Enneagramm-Anteils in der Behandlungsqualität.
+  static const int medicTreatmentQualityDivisor = 2;
+
+  /// Divisor für den Qualitätsanteil am effektiven Rettungswurf-Bonus.
+  static const int medicQualityModifierDivisor = 10;
+
+  /// Untere/obere Grenze der Arzt-Scores.
+  static const int medicScoreMin = 0;
+  static const int medicScoreMax = 100;
 
   // ── Gefechtsbelohnung (§ 2.2) ─────────────────────────────────────────
 
@@ -165,6 +239,35 @@ class EconomyBalance {
   /// Dauer des Rebranding-Malus in Wochen.
   static const int rebrandingPenaltyWeeks = 2;
 
+  // ── Einheiten & Kampf (V7/L6, P8/P10) ─────────────────────────────────
+
+  /// Kampf-/Belohnungsprofil eines Spieler-Lehrlings (§ 2.3).
+  static const UnitStats apprenticeStats = UnitStats(
+    attack: 40, defense: 20, movement: 6, damage: 2, range: 3, money: 100, xp: 25,
+  );
+
+  /// Kampf-/Belohnungsprofil eines Line Cooks (§ 2.3).
+  static const UnitStats lineCookStats = UnitStats(
+    attack: 80, defense: 40, movement: 3, damage: 2, range: 3, money: 1000, xp: 100,
+  );
+
+  /// Kampf-/Belohnungsprofil eines Dough Zombie.
+  static const UnitStats doughZombieStats = UnitStats(
+    attack: 40, defense: 40, movement: 1, damage: 1, range: 0, money: 100, xp: 25,
+  );
+
+  /// Kampf-/Belohnungsprofil des Dough Dumpster (Boss).
+  static const UnitStats doughDumpsterStats = UnitStats(
+    attack: 0, defense: 0, movement: 0, damage: 0, range: 0,
+    money: 1000, xp: 1000, wound: 50,
+  );
+
+  /// Prozentualer Angriffs-/Verteidigungs-Modifikator je Treffer pro Runde (§ 7).
+  static const int combatModifierPercentPerHit = 5;
+
+  /// Münzwurf-Grenze bei Gleichstand im Kampf: Angreifer gewinnt bei Wurf > Wert.
+  static const int tieBreakWinAbove = 51;
+
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
   /// Anteil der investierten Anschaffungssumme, der beim Verkauf erstattet wird.
@@ -205,4 +308,55 @@ class EconomyBalance {
       attractivenessBonusPerLevel: 0.20,
     ),
   };
+}
+
+/// Balance-Definition einer Teamarzt-Qualität (V7/L2).
+///
+/// Bündelt die Werte, die zuvor als Tuning-Felder am [MedicQuality]-Enum
+/// hingen: Kostenmultiplikator (relativ zu `EconomyBalance.medicBaseCostPerWeek`),
+/// Bonus auf den Rettungswurf-Zielwert und Heilzeit pro Verletzungsstufe.
+class MedicQualitySpec {
+  /// Kostenmultiplikator relativ zum Basis-Wochenpreis.
+  final double costMultiplier;
+
+  /// Bonus auf den Rettungswurf-Zielwert (W100).
+  final int survivalBonus;
+
+  /// Dauer bis zur Heilung einer Verletzungsstufe.
+  final Duration healTimePerStage;
+
+  const MedicQualitySpec({
+    required this.costMultiplier,
+    required this.survivalBonus,
+    required this.healTimePerStage,
+  });
+}
+
+/// Kampf-/Belohnungsprofil einer Einheit (V7/L6).
+///
+/// Fasst die Werte zusammen, die zuvor als Konstruktor-Argumente über die
+/// Objektklassen verstreut waren (`moneyValue`/`xpValue` sind Belohnungswerte
+/// im Sinne von `team_rules.md` § 2.2, die übrigen sind Kampfbalance).
+class UnitStats {
+  final int attack;
+  final int defense;
+  final int movement;
+  final int damage;
+  final int range;
+  final int money;
+  final int xp;
+  final int wound;
+  final int fieldOfView;
+
+  const UnitStats({
+    required this.attack,
+    required this.defense,
+    required this.movement,
+    required this.damage,
+    required this.range,
+    required this.money,
+    required this.xp,
+    this.wound = 3,
+    this.fieldOfView = 3,
+  });
 }

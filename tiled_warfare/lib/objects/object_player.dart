@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 
 /// Repräsentiert das Ergebnis eines Kampfangriffs.
 class CombatResult {
@@ -123,10 +125,10 @@ class ObjectPlayer {
   ///
   /// Gemäß den Kampfregeln (Abschnitt 7) wird zu Beginn jeder Runde für jede
   /// Seite ein Initiative-Wurf mit einem W100 durchgeführt.
-  int rollInitiative() => _random.nextInt(100) + 1;
+  int rollInitiative() => EconomyService.rollD100(_random);
 
   /// Führt einen W100-Wurf durch und gibt das Ergebnis (1–100) zurück.
-  int _rollD100() => _random.nextInt(100) + 1;
+  int _rollD100() => EconomyService.rollD100(_random);
 
   /// Berechnet den effektiven Angriffswert unter Berücksichtigung von
   /// Entfernungsmalus und dem kumulativen Angriffs-Bonus gegen das Ziel.
@@ -399,7 +401,7 @@ class ObjectPlayer {
     if (attackerComparison == defenderComparison) {
       // Gleichstand → Münzwurf (W100 > 51 → Angreifer gewinnt)
       final coinToss = _rollD100();
-      if (coinToss > 51) {
+      if (coinToss > EconomyBalance.tieBreakWinAbove) {
         defender.woundValue -= attacker.damageValue;
         return CombatResult(
           hit: true,

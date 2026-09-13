@@ -8,6 +8,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
@@ -788,7 +789,7 @@ class ObjectHost {
   ///
   /// Gemäß den Kampfregeln (Abschnitt 7) wird zu Beginn jeder Runde für jede
   /// Seite ein Initiative-Wurf mit einem W100 durchgeführt.
-  int rollInitiative() => _random.nextInt(100) + 1;
+  int rollInitiative() => EconomyService.rollD100(_random);
 
   /// Gibt die Anzahl der noch einsatzfähigen Einheiten des Hosts zurück.
   ///

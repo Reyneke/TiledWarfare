@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';

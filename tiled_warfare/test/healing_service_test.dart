@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
-import 'package:tiled_warfare/objects/object_team_medic.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';

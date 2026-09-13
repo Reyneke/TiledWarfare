@@ -59,7 +59,10 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
     int totalXpGained = 0;
 
     for (final unit in allUnits) {
-      final xpGained = widget.playerWon ? _xpForWin(unit.levelValue) : _xpForLoss;
+      final xpGained = EconomyService.xpForBattle(
+        won: widget.playerWon,
+        level: unit.levelValue,
+      );
       final oldLevel = unit.levelValue;
 
       if (xpGained > 0) {
@@ -126,12 +129,6 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
     _fallen = fallenCount;
     _totalXpGained = totalXpGained;
   }
-
-  /// XP-Berechnung bei Sieg: Basis 50 + 10 pro Level + Bonus für Überlebende.
-  static int _xpForWin(int level) => 50 + (level * 10);
-
-  /// XP-Berechnung bei Niederlage: nur 10 XP.
-  static const int _xpForLoss = 10;
 
   /// Liefert einen lesbaren Anzeigenamen für den Charakter-Typ.
   static String _characterDisplayType(ObjectApprentice unit) {

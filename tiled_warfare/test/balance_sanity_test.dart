@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
@@ -162,6 +163,54 @@ void main() {
         enemyMoneyValues: const [1000, 1000, 1000],
       );
       expect(maxIncome, lessThan(richBattle));
+    });
+  });
+
+  group('V7-Zentralisierung: Invarianten & Profile', () {
+    test('negativeLimit ist der doppelte Startwert (§ 2.2)', () {
+      expect(EconomyBalance.negativeLimit, -2 * EconomyBalance.startBudget);
+    });
+
+    test('XP-Kurve: Sieg > Niederlage, monoton steigend', () {
+      expect(EconomyBalance.xpBaseWin, greaterThan(EconomyBalance.xpBaseLoss));
+      for (var level = 1; level < 10; level++) {
+        expect(
+          EconomyService.levelUpThreshold(level + 1),
+          greaterThan(EconomyService.levelUpThreshold(level)),
+        );
+      }
+    });
+
+    test('jede MedicQuality hat einen vollständigen Spec (V7/L2)', () {
+      for (final quality in MedicQuality.values) {
+        final spec = EconomyBalance.medicQualitySpecs[quality];
+        expect(spec, isNotNull, reason: 'Fehlender Spec für $quality');
+        expect(spec!.costMultiplier, greaterThan(0));
+        expect(spec.survivalBonus, greaterThan(0));
+        expect(spec.healTimePerStage, greaterThan(Duration.zero));
+      }
+      expect(
+        EconomyBalance.medicQualitySpecs.length,
+        MedicQuality.values.length,
+      );
+    });
+
+    test('W100-Domäne ist 1–100', () {
+      expect(EconomyBalance.d100Min, 1);
+      expect(EconomyBalance.d100Max, 100);
+    });
+
+    test('Einheiten-Profile existieren und Line Cook ist stärker (V7/L6)', () {
+      expect(
+        EconomyBalance.lineCookStats.money,
+        greaterThan(EconomyBalance.apprenticeStats.money),
+      );
+      expect(
+        EconomyBalance.lineCookStats.attack,
+        greaterThan(EconomyBalance.apprenticeStats.attack),
+      );
+      expect(EconomyBalance.doughZombieStats.money, greaterThan(0));
+      expect(EconomyBalance.doughDumpsterStats.wound, greaterThan(0));
     });
   });
 }

@@ -1,5 +1,7 @@
 import 'dart:ui' show Offset;
 
+import 'package:tiled_warfare/services/economy_balance.dart';
+
 /// Enum der verfügbaren Kampfaktionen für eine Einheit.
 ///
 /// Weitere Aktionen können in der Zukunft hinzugefügt werden.
@@ -122,13 +124,15 @@ class ObjectToken {
   /// der durch mehrfache Angriffe in dieser Runde entstanden ist.
   ///
   /// Jeder Angriff auf diesen Token verursacht −5 % auf alle Verteidigungswürfe.
-  int get defenseMalus => timesAttackedThisTurn * 5;
+  int get defenseMalus =>
+      timesAttackedThisTurn * EconomyBalance.combatModifierPercentPerHit;
 
   /// Gibt den kumulativen Angriffs-Bonus (in Prozent) zurück,
   /// den Angreifer gegen diesen Token erhalten.
   ///
   /// Jeder Angriff auf diesen Token gibt Angreifern +5 % auf ihren Angriffswert.
-  int get attackBonus => timesAttackedThisTurn * 5;
+  int get attackBonus =>
+      timesAttackedThisTurn * EconomyBalance.combatModifierPercentPerHit;
 
   ObjectToken({
     required this.name,

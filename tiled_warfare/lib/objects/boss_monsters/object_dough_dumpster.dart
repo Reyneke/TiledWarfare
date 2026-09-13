@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 
 /// Zählt, wie viele Dough Dumpster-Instanzen bereits erstellt wurden.
 /// Der erste heißt "Donald Trumpster", alle weiteren erhalten
@@ -42,14 +43,14 @@ class ObjectDoughDumpster extends ObjectToken {
   ObjectDoughDumpster() : super(
     name: _generateTrumpsterName(),
     imagePath: "assets/images/token/token_spawner.png",
-    woundValue: 50,
-    attackValue: 0,
-    defenseValue: 0,
-    movementValue: 0,
-    damageValue: 0,
-    rangeValue: 0,
-    moneyValue: 1000,
-    xpValue: 1000,
+    woundValue: EconomyBalance.doughDumpsterStats.wound,
+    attackValue: EconomyBalance.doughDumpsterStats.attack,
+    defenseValue: EconomyBalance.doughDumpsterStats.defense,
+    movementValue: EconomyBalance.doughDumpsterStats.movement,
+    damageValue: EconomyBalance.doughDumpsterStats.damage,
+    rangeValue: EconomyBalance.doughDumpsterStats.range,
+    moneyValue: EconomyBalance.doughDumpsterStats.money,
+    xpValue: EconomyBalance.doughDumpsterStats.xp,
   );
 
   List<ObjectDoughZombie> zombieList = [];

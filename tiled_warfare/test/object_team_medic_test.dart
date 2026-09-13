@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 
@@ -39,5 +42,15 @@ void main() {
 
     // Ohne Clamp hätte 50 + 96 + 30 = 176 entstehen können.
     expect(highest, 100);
+  });
+
+  test('injizierter Zufall/Zeit macht den Arzt deterministisch (V7/L7)', () {
+    final now = DateTime(2026, 1, 1);
+    final a = ObjectTeamMedic(random: Random(7), now: () => now);
+    final b = ObjectTeamMedic(random: Random(7), now: () => now);
+
+    expect(a.quality, b.quality);
+    expect(a.enneagramProfile, b.enneagramProfile);
+    expect(a.costPerWeek, b.costPerWeek);
   });
 }

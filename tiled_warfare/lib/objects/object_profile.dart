@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
@@ -145,7 +146,7 @@ class ObjectProfile {
   /// Gibt `true` zurück, wenn die Anheuerung erfolgreich war, andernfalls
   /// `false` (z. B. bei unzureichendem Budget trotz Negativgrenze).
   bool hireApprentice({int cost = EconomyBalance.hireApprenticeCost}) {
-    if (budget - cost < negativeLimit) {
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) {
       return false; // Negativgrenze würde überschritten
     }
     budget -= cost;
@@ -180,10 +181,10 @@ class ObjectProfile {
     if (apprentice is ObjectLineCook) {
       return null; // bereits fortgebildet
     }
-    if (apprentice.levelValue < 5) {
-      return null; // Fortbildung erst ab Level 5 möglich
+    if (apprentice.levelValue < EconomyBalance.lineCookPromotionLevel) {
+      return null; // Fortbildung erst ab dem konfigurierten Level möglich
     }
-    if (budget - cost < negativeLimit) {
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) {
       return null; // Budget reicht nicht
     }
     budget -= cost;
@@ -280,8 +281,9 @@ class ObjectProfile {
   ///
   /// Einmal gescheiterte Würfe können gegen Bezahlung wiederholt werden,
   /// wenn ein Teamarzt verfügbar ist.
-  void _performSurvivalRolls() {
-    final random = Random();
+  void _performSurvivalRolls({Random? random, DateTime? now}) {
+    final rng = random ?? Random();
+    final nowTime = now ?? DateTime.now();
     final hasMedic = _hiredMedics.isNotEmpty;
     final medicBonus = hasMedic
         ? _hiredMedics.map((m) => m.effectiveSurvivalBonus).reduce(
@@ -306,12 +308,12 @@ class ObjectProfile {
       targetValue += medicBonus; // Teamarzt-Bonus
 
       // Erster Rettungswurf
-      int roll = random.nextInt(100) + 1;
-      if (roll <= targetValue.clamp(1, 100)) {
+      int roll = EconomyService.rollD100(rng);
+      if (roll <= EconomyService.clampTargetToD100(targetValue)) {
         // Gerettet! Verletzungsstatus setzen (nicht tot).
         // V3: `injuryStartedAt` ist der Anker der Echtzeit-Heilung; alte
         // Spritzen-Marker werden verworfen (neue Verletzung).
-        unit.injuryStartedAt = DateTime.now();
+        unit.injuryStartedAt = nowTime;
         unit.injuryStartStatus = CharacterStatus.dying;
         unit.emergencyShotAt = null;
         unit.suppressedStatus = null;
@@ -319,12 +321,15 @@ class ObjectProfile {
         continue;
       }
 
-      // Bei Misserfolg und vorhandenem Teamarzt: Wiederholung gegen Bezahlung
-      if (hasMedic && budget >= EconomyBalance.revivalCost) {
+      // Bei Misserfolg und vorhandenem Teamarzt: Wiederholung gegen Bezahlung.
+      // Der Wächter folgt der einheitlichen Negativgrenzen-Regel (V7/L4).
+      if (hasMedic &&
+          EconomyService.canAfford(
+              budget: budget, cost: EconomyBalance.revivalCost)) {
         budget -= EconomyBalance.revivalCost; // Kosten für Wiederbelebung
-        roll = random.nextInt(100) + 1;
-        if (roll <= targetValue.clamp(1, 100)) {
-          unit.injuryStartedAt = DateTime.now();
+        roll = EconomyService.rollD100(rng);
+        if (roll <= EconomyService.clampTargetToD100(targetValue)) {
+          unit.injuryStartedAt = nowTime;
           unit.injuryStartStatus = CharacterStatus.dying;
           unit.emergencyShotAt = null;
           unit.suppressedStatus = null;
@@ -377,7 +382,8 @@ class ObjectProfile {
   /// [survivors] sind die Einheiten, die das Gefecht überlebt haben
   /// (woundValue > 0). Einheiten in [_personal], die nicht in [survivors]
   /// enthalten sind, gelten als gefallen und durchlaufen den Rettungswurf.
-  void syncUnitsAfterBattle(List<ObjectApprentice> survivors) {
+  void syncUnitsAfterBattle(List<ObjectApprentice> survivors,
+      {Random? random, DateTime? now}) {
     // Zuerst: existierende Einträge aus [_personal] mit den Überlebenden
     // aus dem Gefecht aktualisieren.
     // Vergleich über Identität statt name, da Namensgleichheit zu
@@ -390,7 +396,7 @@ class ObjectProfile {
     }
 
     // Rettungswürfe für alle Einheiten mit woundValue ≤ 0 durchführen
-    _performSurvivalRolls();
+    _performSurvivalRolls(random: random, now: now);
 
     // V3: Unmittelbar nach dem Rettungswurf erhält jeder `dying`-Charakter
     // automatisch die Notfall-Spritze – sofern ein Teamarzt angestellt ist und
@@ -409,8 +415,9 @@ class ObjectProfile {
     final shotAt = now ?? DateTime.now();
     for (final character in _personal) {
       if (character.status != CharacterStatus.dying) continue;
-      if (budget - EconomyBalance.emergencyShotCost < negativeLimit) continue;
-      budget -= EconomyBalance.emergencyShotCost;
+      final shotCost = EconomyBalance.emergencyShotCost;
+      if (!EconomyService.canAfford(budget: budget, cost: shotCost)) continue;
+      budget -= shotCost;
       character.suppressedStatus = character.status;
       character.injuryStartStatus ??= character.status;
       character.emergencyShotAt = shotAt;
@@ -628,7 +635,7 @@ class ObjectProfile {
     if (current >= spec.maxLevel) return false;
     final cost = EconomyService.upgradeCost(type, current + 1) -
         EconomyService.upgradeCost(type, current);
-    if (budget - cost < negativeLimit) return false;
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
     budget -= cost;
     activeUpgrades[type] = current + 1;
     return true;

@@ -3,6 +3,7 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 class ScreenCharacterDetail extends StatefulWidget {
@@ -230,7 +231,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
   Widget _buildXpBar(BuildContext context, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
     final currentXp = character.currentXPValue;
-    final threshold = character.levelValue * 1000;
+    final threshold = EconomyService.levelUpThreshold(character.levelValue);
     final progress = currentXp / threshold;
 
     return Column(

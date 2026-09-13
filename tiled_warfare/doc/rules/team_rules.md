@@ -23,9 +23,9 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
 
 | Regel | Beschreibung |
 |-------|-------------|
-| Startbudget | Wird zu Spielbeginn festgelegt (z. B. 10.000 €) |
-| Negativgrenze | Das Budget kann bis zum **doppelten Startwert ins Negative** gehen (z. B. −20.000 €) |
-| Negativzinsen | Solange das Budget negativ ist, fallen **pro Gefecht** und **bei jeder Wochenabrechnung** (V8) Negativzinsen an (10 % auf den negativen Bestand) |
+| Startbudget | `EconomyBalance.startBudget` (Default 10.000 €) |
+| Negativgrenze | Das Budget kann bis zum **doppelten Startwert ins Negative** gehen (`EconomyBalance.negativeLimit` = −2 × `startBudget`) |
+| Negativzinsen | Solange das Budget negativ ist, fallen **pro Gefecht** und **bei jeder Wochenabrechnung** (V8) Negativzinsen an (`EconomyBalance.negativeInterestRate`, 10 % auf den negativen Bestand) |
 | Permadeath | Wird der doppelte Startwert im Negativen überschritten, lösen die Investoren das Restaurant auf – das Spiel endet dauerhaft. Der Spieler muss ein neues Restaurant erstellen |
 
 **Einnahmequellen (implementiert, V2):**
@@ -133,7 +133,7 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
    - +5 pro `defenseValue` über 30
    - −10 bei `overkilled`-Schaden (doppelter Schaden)
 
-**Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert um seinen Qualitätsbonus (**+10 / +20 / +30**, `MedicQuality.survivalBonus`) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
+**Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert um seinen Qualitätsbonus (**+10 / +20 / +30**, `EconomyBalance.medicQualitySpecs`) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
 
 ### 4.3 Heilung
 
@@ -141,9 +141,9 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
 - Gemessen wird ab dem **Beginn der aktuellen Verletzung** (`injuryStartedAt`; bei Alt-Spielständen ab `restaurant.lastSeenAt`).
 - Heilungsreihenfolge: `dying → injured → hurt → afraid → reeling → ready`
 - **Ohne Teamarzt** dauert jede Stufe **einen Echtzeit-Tag** (24 h). Ein `dying`-Charakter braucht also 5 Tage bis `ready`.
-- Die Zeit pro Stufe ist **deterministisch**: Sie hängt allein von der Qualität des angestellten Arztes ab (`MedicQuality.healTimePerStage`), nicht von Persönlichkeit/Fuzzy-Werten (`effectiveHealTime` entfällt).
+- Die Zeit pro Stufe ist **deterministisch**: Sie hängt allein von der Qualität des angestellten Arztes ab (`EconomyBalance.medicQualitySpecs`), nicht von Persönlichkeit/Fuzzy-Werten (`effectiveHealTime` entfällt).
 
-**Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter je nach Qualität **eine Stufe pro 6 h / 3 h / 1 h** statt pro Tag (`MedicQuality.healTimePerStage`). Ein `dying`-Charakter ist so in 30 h / 15 h / 5 h wieder voll einsatzbereit.
+**Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter je nach Qualität **eine Stufe pro 6 h / 3 h / 1 h** statt pro Tag (`EconomyBalance.medicQualitySpecs`). Ein `dying`-Charakter ist so in 30 h / 15 h / 5 h wieder voll einsatzbereit.
 
 ### 4.4 Kampf mit Verletzungen
 
@@ -169,8 +169,8 @@ Der Spieler kann zwischen Gefechten einen Teamarzt anheuern, der die Überlebens
 - Die Bezahlung erfolgt **pro Echtzeitwoche** (`costPerWeek`) und wird im **Wochentick (V8)** abgebucht. Die erste Abbuchung erfolgt erst zum nächsten Wochentick (kein anteiliger Einzug).
 
 **Effekte:**
-- Heilung: eine Verletzungsstufe pro `MedicQuality.healTimePerStage` – **6 h / 3 h / 1 h** je nach Qualität (statt 24 h pro Stufe ohne Arzt). Die Zeit ist deterministisch und unabhängig von Persönlichkeit/Fuzzy-Werten.
-- Rettungswurf: **+10 / +20 / +30** auf den Zielwert je nach Qualität (`MedicQuality.survivalBonus`), einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht.
+- Heilung: eine Verletzungsstufe pro `EconomyBalance.medicQualitySpecs` – **6 h / 3 h / 1 h** je nach Qualität (statt 24 h pro Stufe ohne Arzt). Die Zeit ist deterministisch und unabhängig von Persönlichkeit/Fuzzy-Werten.
+- Rettungswurf: **+10 / +20 / +30** auf den Zielwert je nach Qualität (`EconomyBalance.medicQualitySpecs`), einmalige Wiederholung eines gescheiterten Wurfs pro Charakter und Gefecht.
 
 **Notfall-Spritze:**
 Ist ein Teamarzt angeheuert, verabreicht er einem Charakter, der das Gefecht als **`dying`** beendet, automatisch unmittelbar nach dem Rettungswurf eine Spritze – **keine manuelle Aktion** des Spielers. Sie macht ihn **sofort** wieder voll einsatzfähig, ist jedoch teuer (einmalige Zusatzkosten, `EconomyBalance.emergencyShotCost`) und schiebt den Schaden nur **temporär** auf:

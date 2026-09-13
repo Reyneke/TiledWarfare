@@ -1,39 +1,12 @@
 import 'dart:math';
 
+import 'package:tiled_warfare/models/medic_quality.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
 import 'package:random_name_generator/random_name_generator.dart';
-
-/// Qualitätsstufen des Teamarztes.
-///
-/// Bestimmt die Kosten und die Wirksamkeit des Arztes.
-enum MedicQuality {
-  /// Günstig, geringer Bonus auf Rettungswürfe und Heilung.
-  niedrig(1.0, 10, Duration(hours: 6)),
-
-  /// Mittelklasse, solider Bonus.
-  mittel(2.0, 20, Duration(hours: 3)),
-
-  /// Hochwertig, maximale Boni.
-  hoch(3.0, 30, Duration(hours: 1));
-
-  /// Kostenmultiplikator relativ zur Basis.
-  final double costMultiplier;
-
-  /// Bonus auf den Rettungswurf-Zielwert (W100).
-  final int survivalBonus;
-
-  /// Dauer bis zur Heilung einer Verletzungsstufe.
-  final Duration healTimePerStage;
-
-  const MedicQuality(
-    this.costMultiplier,
-    this.survivalBonus,
-    this.healTimePerStage,
-  );
-}
 
 /// Repräsentiert einen Teamarzt, der zwischen den Gefechten angeheuert werden kann.
 ///
@@ -68,7 +41,12 @@ class ObjectTeamMedic {
   EnneagramProfile enneagramProfile;
 
   /// Zufallsgenerator für die Erfolgswürfe der Behandlung.
-  final Random _random = Random();
+  ///
+  /// Injizierbar (V7/L7), damit Behandlungen deterministisch testbar sind.
+  late final Random _random;
+
+  /// Zeitquelle (injizierbar, V7/L7).
+  late final DateTime Function() _now;
 
   /// Erzeugt einen neuen Teamarzt.
   ///
@@ -79,14 +57,23 @@ class ObjectTeamMedic {
   /// berechnet (beide nutzen denselben Qualitätswert).
   /// [teamSize] ist die aktuelle Teamgröße des Restaurants; sie geht in die
   /// Wochenkosten ein (größeres Team = höhere Kosten, § 4.5).
-  ObjectTeamMedic({int teamSize = 0, Zone? nameZone})
-      : name = RandomNames(nameZone ?? Zone.italy).fullName(),
+  /// [random]/[now] sind optional injizierbar (Tests); Standard ist die
+  /// Systemzeit bzw. ein frischer [Random].
+  ObjectTeamMedic({
+    int teamSize = 0,
+    Zone? nameZone,
+    Random? random,
+    DateTime Function()? now,
+  })  : _random = random ?? Random(),
+        _now = now ?? DateTime.now,
+        name = RandomNames(nameZone ?? Zone.italy).fullName(),
         id = 0, // temporary; will be computed in constructor body
-        enneagramProfile =
-            EnneagramProfile.all[Random().nextInt(EnneagramProfile.all.length)],
-        quality = MedicQuality.values[Random().nextInt(MedicQuality.values.length)] {
+        enneagramProfile = EnneagramProfile.all[
+            (random ?? Random()).nextInt(EnneagramProfile.all.length)],
+        quality = MedicQuality.values[
+            (random ?? Random()).nextInt(MedicQuality.values.length)] {
     // Compute ID from the actual name and current timestamp (not a duplicate random name).
-    id = CRC32.compute('$name${DateTime.now().toIso8601String()}');
+    id = CRC32.compute('$name${_now().toIso8601String()}');
     costPerWeek = EconomyService.weeklyMedicCost(quality, teamSize);
   }
 
@@ -117,20 +104,20 @@ class ObjectTeamMedic {
     // Hilfsbereitschaft evaluieren: W100-Wurf gegen den aktuellen
     // helpfulness-Wert (Mittelwert der Fuzzy-Mengen).
     final helpfulnessScore = _evaluateHelpfulness();
-    if (_random.nextInt(100) + 1 > helpfulnessScore) {
+    if (EconomyService.rollD100(_random) > helpfulnessScore) {
       return false; // Arzt ist nicht hilfsbereit genug.
     }
 
     // Behandlungsqualität evaluieren.
     final qualityScore = _evaluateTreatmentQuality();
-    if (_random.nextInt(100) + 1 > qualityScore) {
+    if (EconomyService.rollD100(_random) > qualityScore) {
       return false; // Behandlung schlägt fehl.
     }
 
     // Behandlung angestoßen: Die Heilung läuft jetzt in Echtzeit (V3, § 4.3);
     // eine bereits laufende Verletzungsuhr bleibt unangetastet.
     if (character.injuryStartedAt == null) {
-      character.injuryStartedAt = DateTime.now();
+      character.injuryStartedAt = _now();
       character.injuryStartStatus = character.status;
     }
     return true;
@@ -140,11 +127,12 @@ class ObjectTeamMedic {
   /// Teamarzt bietet.
   ///
   /// Gemäß team_rules.md Abschnitt 4.2:
-  /// - Basis-Bonus ist qualitätsabhängig (10/20/30, [MedicQuality.survivalBonus]).
+  /// - Basis-Bonus ist qualitätsabhängig (10/20/30, [EconomyBalance.medicQualitySpecs]).
   /// - Modifiziert durch die Behandlungsqualität (deterministisch, V5).
   int get effectiveSurvivalBonus {
-    final baseBonus = quality.survivalBonus;
-    final qualityModifier = _evaluateTreatmentQuality() ~/ 10;
+    final baseBonus = EconomyBalance.medicQualitySpecs[quality]!.survivalBonus;
+    final qualityModifier = _evaluateTreatmentQuality() ~/
+        EconomyBalance.medicQualityModifierDivisor;
     return baseBonus + qualityModifier;
   }
 
@@ -156,7 +144,8 @@ class ObjectTeamMedic {
   /// die nicht portabel war.
   static int _enneagramScore(EnneagramProfile profile) {
     final index = EnneagramProfile.all.indexOf(profile);
-    return ((index + 1) * 8) % 100;
+    return ((index + 1) * EconomyBalance.medicEnneagramStep) %
+        EconomyBalance.medicEnneagramModulo;
   }
 
   /// Hilfsbereitschaft (0–100) aus Enneagramm-Profil und Qualität.
@@ -167,7 +156,10 @@ class ObjectTeamMedic {
     EnneagramProfile profile,
     MedicQuality quality,
   ) =>
-      (50 + _enneagramScore(profile) + quality.survivalBonus).clamp(0, 100);
+      (EconomyBalance.medicHelpfulnessBase +
+              _enneagramScore(profile) +
+              EconomyBalance.medicQualitySpecs[quality]!.survivalBonus)
+          .clamp(EconomyBalance.medicScoreMin, EconomyBalance.medicScoreMax);
 
   /// Behandlungsqualität (0–100) aus Enneagramm-Profil und Qualität.
   ///
@@ -177,7 +169,10 @@ class ObjectTeamMedic {
     EnneagramProfile profile,
     MedicQuality quality,
   ) =>
-      (quality.survivalBonus + (_enneagramScore(profile) ~/ 2)).clamp(0, 100);
+      (EconomyBalance.medicQualitySpecs[quality]!.survivalBonus +
+              (_enneagramScore(profile) ~/
+                  EconomyBalance.medicTreatmentQualityDivisor))
+          .clamp(EconomyBalance.medicScoreMin, EconomyBalance.medicScoreMax);
 
   /// Bewertet die aktuelle Hilfsbereitschaft (0–100) dieses Arztes.
   int _evaluateHelpfulness() =>

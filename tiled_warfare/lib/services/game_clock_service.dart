@@ -1,4 +1,5 @@
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
@@ -77,8 +78,8 @@ class HealingTickResult {
 class GameClockService {
   GameClockService._();
 
-  /// Länge eines Ticks: 1 Echtzeitwoche (Entscheidung, § 2/§ 8).
-  static const Duration week = Duration(days: 7);
+  /// Länge eines Ticks: 1 Echtzeitwoche (Entscheidung, § 2/§ 8; V7/P9).
+  static const Duration week = EconomyBalance.weeklyTick;
 
   /// Status→Schweregrad (0 = `ready` … 7 = `overkilled`).
   static const Map<String, int> _severityByStatus = {
@@ -131,8 +132,9 @@ class GameClockService {
       elapsed(from, now);
 
   /// Heilzeit pro Verletzungsstufe für [quality] (ohne Arzt: 24 h, § 4.3).
-  static Duration healTimePerStageFor({MedicQuality? quality}) =>
-      quality?.healTimePerStage ?? EconomyBalance.healBasePerStage;
+  static Duration healTimePerStageFor({MedicQuality? quality}) => quality == null
+      ? EconomyBalance.healBasePerStage
+      : EconomyBalance.medicQualitySpecs[quality]!.healTimePerStage;
 
   /// Kettenposition eines Status (höher = schwerer).
   static int chainPositionOf(CharacterStatus status) =>
@@ -440,7 +442,8 @@ class GameClockService {
         .map((s) => _severityByStatus[s.status] ?? 0)
         .fold<int>(0, (a, b) => a + b);
     final mean = sum / restaurant.staff.length;
-    return (1.0 - mean / 5.0).clamp(0.0, 1.0);
+    final maxSeverity = CharacterStatus.dying.severity;
+    return (1.0 - mean / maxSeverity).clamp(0.0, 1.0);
   }
 
   /// Kundenzufriedenheit: `1 + Teamgesundheit × Gewicht + Ergebnisbonus`,

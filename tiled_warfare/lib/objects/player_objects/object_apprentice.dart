@@ -2,6 +2,8 @@ import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 
 /// Status eines Charakters ausserhalb des Gefechts.
 ///
@@ -76,19 +78,26 @@ class ObjectApprentice extends ObjectToken {
     String? imagePath,
     Zone? nameZone,
     Cuisine? cuisine,
-    super.attackValue = 40,
-    super.defenseValue = 20,
-    super.movementValue = 6,
-    super.damageValue = 2,
-    super.rangeValue = 3,
-    super.moneyValue = 100,
-    super.xpValue = 25,
+    int? attackValue,
+    int? defenseValue,
+    int? movementValue,
+    int? damageValue,
+    int? rangeValue,
+    int? moneyValue,
+    int? xpValue,
   }) : super(
     name: name ??
         "Apprentice: ${RandomNames(nameZone ?? cuisine?.zone ?? Zone.italy).name()}",
     imagePath: imagePath ??
         cuisine?.tokenImagePath ??
         "assets/images/token/token_cook_basic.png",
+    attackValue: attackValue ?? EconomyBalance.apprenticeStats.attack,
+    defenseValue: defenseValue ?? EconomyBalance.apprenticeStats.defense,
+    movementValue: movementValue ?? EconomyBalance.apprenticeStats.movement,
+    damageValue: damageValue ?? EconomyBalance.apprenticeStats.damage,
+    rangeValue: rangeValue ?? EconomyBalance.apprenticeStats.range,
+    moneyValue: moneyValue ?? EconomyBalance.apprenticeStats.money,
+    xpValue: xpValue ?? EconomyBalance.apprenticeStats.xp,
   );
 
   /// Fügt [xp] Erfahrungspunkte hinzu und führt ggf. Levelaufstiege durch.
@@ -104,8 +113,8 @@ class ObjectApprentice extends ObjectToken {
     bool leveledUp = false;
     // Nach jedem Levelaufstieg wird die neue Schwelle berechnet, damit
     // überschüssige XP korrekt auf die Folgelevel angerechnet werden.
-    while (currentXPValue >= levelValue * 1000) {
-      currentXPValue -= levelValue * 1000;
+    while (currentXPValue >= EconomyService.levelUpThreshold(levelValue)) {
+      currentXPValue -= EconomyService.levelUpThreshold(levelValue);
       levelValue++;
       leveledUp = true;
     }

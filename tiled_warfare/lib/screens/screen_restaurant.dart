@@ -663,7 +663,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     final l10n = AppLocalizations.of(context)!;
 
     if (character is ObjectLineCook) return;
-    if (character.levelValue < 5) {
+    if (character.levelValue < EconomyBalance.lineCookPromotionLevel) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(l10n.promoteLevelRequired)));

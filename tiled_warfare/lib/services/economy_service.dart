@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
-import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 
 /// Reine, zustandslose Wirtschaftsfunktionen (V2).
@@ -51,16 +51,46 @@ class EconomyService {
   /// Ersetzt die frühere `_computeWeeklyCost`-Formel und macht Qualität **und**
   /// Teamgröße wirksam.
   static int weeklyMedicCost(MedicQuality quality, int teamSize) {
+    final spec = EconomyBalance.medicQualitySpecs[quality]!;
     final heads = math.max(0, teamSize);
     final teamMultiplier = 1.0 + heads * EconomyBalance.medicTeamCostPerHead;
     return (EconomyBalance.medicBaseCostPerWeek *
-            quality.costMultiplier *
+            spec.costMultiplier *
             teamMultiplier)
         .round();
   }
 
   /// `true`, wenn [budget] die Negativgrenze unterschreitet.
   static bool isBankrupt(int budget) => budget < EconomyBalance.negativeLimit;
+
+  // ── Budget-Wächter (V7/L4) ─────────────────────────────────────────────
+
+  /// `true`, wenn [cost] vom [budget] abgebucht werden darf, ohne die
+  /// Negativgrenze zu unterschreiten.
+  ///
+  /// Einzige Quelle für die Budgetregel – alle Ausgaben (Anheuern, Fortbildung,
+  /// Wiederbelebung, Notfall-Spritze) laufen hierüber.
+  static bool canAfford({required int budget, required int cost}) =>
+      budget - cost >= EconomyBalance.negativeLimit;
+
+  // ── W100 & Erfahrung (V7/L1, L3) ───────────────────────────────────────
+
+  /// Ein W100-Wurf (Domäne [EconomyBalance.d100Min]–[EconomyBalance.d100Max]).
+  static int rollD100(math.Random random) =>
+      random.nextInt(EconomyBalance.d100Max) + EconomyBalance.d100Min;
+
+  /// Begrenzt einen W100-Zielwert auf die gültige Domäne.
+  static int clampTargetToD100(int target) =>
+      target.clamp(EconomyBalance.d100Min, EconomyBalance.d100Max);
+
+  /// XP-Belohnung eines Charakters nach einem Gefecht (§ 3.1).
+  static int xpForBattle({required bool won, required int level}) => won
+      ? EconomyBalance.xpBaseWin + level * EconomyBalance.xpPerLevelWin
+      : EconomyBalance.xpBaseLoss;
+
+  /// XP-Schwelle für den Aufstieg von [level] auf `level + 1` (§ 3.1).
+  static int levelUpThreshold(int level) =>
+      level * EconomyBalance.levelUpXpPerLevel;
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
