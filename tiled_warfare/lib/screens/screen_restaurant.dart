@@ -38,6 +38,9 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
   String? _mapLoadingError;
   int? _selectedMapIndex;
   bool _bankruptcyHandled = false;
+
+  /// Reentranz-Schutz für das Best-effort-Speichern beim Hintergrundwechsel.
+  bool _isSaving = false;
   late final TabController _tabController;
 
   @override
@@ -91,6 +94,23 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _runResumeCatchUp();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _saveOnBackground();
+    }
+  }
+
+  /// Best-effort-Speichern beim Wechsel in den Hintergrund (V6/L7).
+  ///
+  /// Ohne Reentranz-Schutz würde ein weiterer Lifecycle-Übergang parallel
+  /// schreiben; Fehler werden im Storage geloggt.
+  Future<void> _saveOnBackground() async {
+    if (_isSaving) return;
+    _isSaving = true;
+    try {
+      await _profile.saveToStorage();
+    } finally {
+      _isSaving = false;
     }
   }
 
@@ -143,8 +163,16 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     AppTheme.themeModeNotifier.value = next;
   }
 
-  Future<void> _saveState() async {
-    await _profile.saveToStorage();
+  /// Speichert den aktiven Spielstand und meldet Fehlschläge sichtbar (V6/L4).
+  Future<bool> _saveState() async {
+    final ok = await _profile.saveToStorage();
+    if (!ok && mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.saveFailed)),
+      );
+    }
+    return ok;
   }
 
   /// Switches to another savegame of the profile.
@@ -155,8 +183,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (restaurantId == _profile.activeRestaurantId) return;
     await _saveState();
 
-    final profiles = await ProfileStorage.loadAllProfiles();
-    final data = profiles.cast<ProfileData?>().firstWhere(
+    final loadResult = await ProfileStorage.loadAllProfiles();
+    final data = loadResult.profiles.cast<ProfileData?>().firstWhere(
           (p) => p!.id == _profile.id,
           orElse: () => null,
         );

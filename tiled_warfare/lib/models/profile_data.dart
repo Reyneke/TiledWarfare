@@ -2,12 +2,44 @@ import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/utils/json_utils.dart';
 
 /// Default starting budget of a restaurant (EUR).
 ///
 /// Used when creating new restaurants and as the fallback value in the
 /// JSON deserializers. Referenced as `ObjectProfile.startBudget`.
 const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
+
+/// Aktuelle Schema-Version der gespeicherten Spielstände (V6).
+///
+/// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = aktuelle
+/// Struktur. Die Deserialisierung ist bewusst toleranter als die Version:
+/// fehlende oder unbekannte Felder führen zu Defaults statt zu Fehlern.
+const int kProfileSchemaVersion = 2;
+
+/// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
+///
+/// Nicht-Objekte und fehlerhafte Einträge werden übersprungen statt eine
+/// Exception zu werfen.
+List<T> _mapList<T>(dynamic value, T Function(Map<String, dynamic>) fromJson) {
+  if (value is! List) return const [];
+  final result = <T>[];
+  for (final entry in value) {
+    if (entry is Map) {
+      result.add(fromJson(Map<String, dynamic>.from(entry)));
+    }
+  }
+  return result;
+}
+
+/// Bildet einen optionalen [MatchResult]-Namen ab (unbekannt → `null`).
+MatchResult? _matchResultFromName(String? name) {
+  if (name == null) return null;
+  for (final value in MatchResult.values) {
+    if (value.name == name) return value;
+  }
+  return null;
+}
 
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
@@ -58,6 +90,7 @@ class ProfileData {
 
   /// Erzeugt einen JSON-kompatiblen Map-Repräsentation.
   Map<String, dynamic> toJson() => {
+        'version': kProfileSchemaVersion,
         'id': id,
         'name': name,
         'creationDate': creationDate.toIso8601String(),
@@ -69,24 +102,19 @@ class ProfileData {
       };
 
   /// Erzeugt ein [ProfileData] aus einer JSON-Map.
+  ///
+  /// Bewusst tolerant (V6): fehlende oder falsch typisierte Felder führen zu
+  /// Defaults, nicht zu einer Exception. Ein einzelner defekter Wert kann so
+  /// nicht mehr das Laden des gesamten Bestands verhindern.
   factory ProfileData.fromJson(Map<String, dynamic> json) => ProfileData(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        creationDate: DateTime.parse(json['creationDate'] as String),
-        budget: json['budget'] as int? ?? kDefaultRestaurantBudget,
-        profileImagePath: json['profileImagePath'] as String?,
-        staff: (json['staff'] as List<dynamic>?)
-                ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-        medics: (json['medics'] as List<dynamic>?)
-                ?.map((e) => MedicData.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-        restaurants: (json['restaurants'] as List<dynamic>?)
-                ?.map((e) => RestaurantData.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
+        id: readInt(json['id']) ?? -1,
+        name: readString(json['name']) ?? '',
+        creationDate: readDateTime(json['creationDate']) ?? DateTime.now(),
+        budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
+        profileImagePath: readString(json['profileImagePath']),
+        staff: _mapList(json['staff'], StaffData.fromJson),
+        medics: _mapList(json['medics'], MedicData.fromJson),
+        restaurants: _mapList(json['restaurants'], RestaurantData.fromJson),
       );
 
   @override
@@ -184,32 +212,27 @@ class StaffData {
         'matchHistory': matchHistory,
       };
 
+  /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory StaffData.fromJson(Map<String, dynamic> json) => StaffData(
-        name: json['name'] as String,
-        imagePath: json['imagePath'] as String,
-        type: json['type'] as String,
-        levelValue: json['levelValue'] as int? ?? 1,
-        currentXPValue: json['currentXPValue'] as int? ?? 0,
-        woundValue: json['woundValue'] as int? ?? 3,
-        attackValue: json['attackValue'] as int? ?? 40,
-        defenseValue: json['defenseValue'] as int? ?? 20,
-        movementValue: json['movementValue'] as int? ?? 6,
-        damageValue: json['damageValue'] as int? ?? 2,
-        rangeValue: json['rangeValue'] as int? ?? 3,
-        moneyValue: json['moneyValue'] as int? ?? 100,
-        xpValue: json['xpValue'] as int? ?? 25,
-        status: json['status'] as String? ?? 'ready',
-        injuryStartedAt: json['injuryStartedAt'] == null
-            ? null
-            : DateTime.parse(json['injuryStartedAt'] as String),
-        injuryStartStatus: json['injuryStartStatus'] as String?,
-        emergencyShotAt: json['emergencyShotAt'] == null
-            ? null
-            : DateTime.parse(json['emergencyShotAt'] as String),
-        suppressedStatus: json['suppressedStatus'] as String?,
-        matchHistory: (json['matchHistory'] as List<dynamic>?)
-            ?.map((e) => Map<String, dynamic>.from(e as Map))
-            .toList(),
+        name: readString(json['name']) ?? '',
+        imagePath: readString(json['imagePath']) ?? '',
+        type: readString(json['type']) ?? 'apprentice',
+        levelValue: readInt(json['levelValue']) ?? 1,
+        currentXPValue: readInt(json['currentXPValue']) ?? 0,
+        woundValue: readInt(json['woundValue']) ?? 3,
+        attackValue: readInt(json['attackValue']) ?? 40,
+        defenseValue: readInt(json['defenseValue']) ?? 20,
+        movementValue: readInt(json['movementValue']) ?? 6,
+        damageValue: readInt(json['damageValue']) ?? 2,
+        rangeValue: readInt(json['rangeValue']) ?? 3,
+        moneyValue: readInt(json['moneyValue']) ?? 100,
+        xpValue: readInt(json['xpValue']) ?? 25,
+        status: readString(json['status']) ?? 'ready',
+        injuryStartedAt: readDateTime(json['injuryStartedAt']),
+        injuryStartStatus: readString(json['injuryStartStatus']),
+        emergencyShotAt: readDateTime(json['emergencyShotAt']),
+        suppressedStatus: readString(json['suppressedStatus']),
+        matchHistory: readMapList(json['matchHistory']),
       );
 }
 
@@ -246,12 +269,13 @@ class MedicData {
         'enneagramProfileName': enneagramProfileName,
       };
 
+  /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory MedicData.fromJson(Map<String, dynamic> json) => MedicData(
-        id: json['id'] as int,
-        name: json['name'] as String,
-        quality: json['quality'] as String,
-        costPerWeek: json['costPerWeek'] as int,
-        enneagramProfileName: json['enneagramProfileName'] as String,
+        id: readInt(json['id']) ?? -1,
+        name: readString(json['name']) ?? '',
+        quality: readString(json['quality']) ?? 'niedrig',
+        costPerWeek: readInt(json['costPerWeek']) ?? 0,
+        enneagramProfileName: readString(json['enneagramProfileName']) ?? '',
       );
 }
 
@@ -343,37 +367,23 @@ class RestaurantData {
         },
       };
 
+  /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory RestaurantData.fromJson(Map<String, dynamic> json) => RestaurantData(
-        id: json['id'] as int? ?? -1,
-        name: json['name'] as String,
-        logoPath: json['logoPath'] as String?,
-        district: json['district'] as String?,
-        cuisine: Cuisine.fromName(json['cuisine'] as String?),
-        rebrandingPenaltyUntil: json['rebrandingPenaltyUntil'] == null
-            ? null
-            : DateTime.parse(json['rebrandingPenaltyUntil'] as String),
-        budget: json['budget'] as int? ?? kDefaultRestaurantBudget,
-        staff: (json['staff'] as List<dynamic>?)
-                ?.map((e) => StaffData.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-        medics: (json['medics'] as List<dynamic>?)
-                ?.map((e) => MedicData.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-        lastSeenAt: json['lastSeenAt'] == null
-            ? null
-            : DateTime.parse(json['lastSeenAt'] as String),
-        isDissolved: json['isDissolved'] as bool? ?? false,
-        dissolvedAt: json['dissolvedAt'] == null
-            ? null
-            : DateTime.parse(json['dissolvedAt'] as String),
-        lastMatchResult: json['lastMatchResult'] == null
-            ? null
-            : MatchResult.values.firstWhere(
-                (e) => e.name == json['lastMatchResult'],
-                orElse: () => MatchResult.draw,
-              ),
+        id: readInt(json['id']) ?? -1,
+        name: readString(json['name']) ?? '',
+        logoPath: readString(json['logoPath']),
+        district: readString(json['district']),
+        cuisine: Cuisine.fromName(readString(json['cuisine'])),
+        rebrandingPenaltyUntil:
+            readDateTime(json['rebrandingPenaltyUntil']),
+        budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
+        staff: _mapList(json['staff'], StaffData.fromJson),
+        medics: _mapList(json['medics'], MedicData.fromJson),
+        lastSeenAt: readDateTime(json['lastSeenAt']),
+        isDissolved: readBool(json['isDissolved']) ?? false,
+        dissolvedAt: readDateTime(json['dissolvedAt']),
+        lastMatchResult:
+            _matchResultFromName(readString(json['lastMatchResult'])),
         upgrades: _upgradesFromJson(json['upgrades']),
       );
 

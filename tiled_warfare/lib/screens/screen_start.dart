@@ -85,17 +85,50 @@ class _ScreenStartState extends State<ScreenStart> {
   }
 
   Future<void> _loadProfiles() async {
-
-    final profiles = await ProfileStorage.loadAllProfiles();
+    final result = await ProfileStorage.loadAllProfiles();
+    if (!mounted) return;
     setState(() {
-      _profiles = profiles;
+      _profiles = result.profiles;
       if (_selectedProfile != null &&
-          !profiles.any((p) => p.id == _selectedProfile!.id)) {
+          !result.profiles.any((p) => p.id == _selectedProfile!.id)) {
         _selectedProfile = null;
         _selectedRestaurantId = null;
       }
       _isLoading = false;
     });
+    if (result.hasErrors) {
+      _showStorageLoadError(result.errors);
+    }
+  }
+
+  /// Meldet beschädigte Spielstand-Dateien sichtbar (V6/L1).
+  void _showStorageLoadError(List<ProfileLoadError> errors) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      final files = errors.map((e) => e.path).toSet().join('\n');
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.storageLoadErrorTitle),
+          content: Text(l10n.storageLoadErrorMessage(files)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.close),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// Meldet einen fehlgeschlagenen Speichervorgang sichtbar (V6/L4).
+  void _reportSaveResult(bool ok) {
+    if (ok || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context)!.saveFailed)),
+    );
   }
 
   ProfileData? _findProfileById(int id) {
@@ -171,7 +204,7 @@ class _ScreenStartState extends State<ScreenStart> {
 
     if (result != null && result.isNotEmpty) {
       final newProfile = ProfileStorage.createProfile(result);
-      await ProfileStorage.saveProfile(newProfile);
+      _reportSaveResult(await ProfileStorage.saveProfile(newProfile));
       await _loadProfiles();
     }
   }
@@ -188,7 +221,7 @@ class _ScreenStartState extends State<ScreenStart> {
 
     if (result != null && result.isNotEmpty && result != profile.name) {
       profile.name = result;
-      await ProfileStorage.saveProfile(profile);
+      _reportSaveResult(await ProfileStorage.saveProfile(profile));
       await _loadProfiles();
     }
   }
@@ -204,7 +237,7 @@ class _ScreenStartState extends State<ScreenStart> {
 
       if (pickedFile == null) return;
 
-      final profileDir = Directory('profiles/${profile.id}');
+      final profileDir = Directory('${ProfileStorage.baseDirName}/${profile.id}');
       if (!await profileDir.exists()) {
         await profileDir.create(recursive: true);
       }
@@ -231,7 +264,7 @@ class _ScreenStartState extends State<ScreenStart> {
       await destFile.writeAsBytes(await pickedFile.readAsBytes());
 
       profile.profileImagePath = destPath;
-      await ProfileStorage.saveProfile(profile);
+      _reportSaveResult(await ProfileStorage.saveProfile(profile));
       await _loadProfiles();
     } on FileSystemException catch (e) {
       if (!mounted) return;
@@ -364,7 +397,7 @@ class _ScreenStartState extends State<ScreenStart> {
         ));
         _selectedRestaurantId = id;
       });
-      await ProfileStorage.saveProfile(_selectedProfile!);
+      _reportSaveResult(await ProfileStorage.saveProfile(_selectedProfile!));
       await _loadProfiles();
       _updateSelectedProfile();
     }
@@ -420,7 +453,7 @@ class _ScreenStartState extends State<ScreenStart> {
           _selectedRestaurantId = null;
         }
       });
-      await ProfileStorage.saveProfile(_selectedProfile!);
+      _reportSaveResult(await ProfileStorage.saveProfile(_selectedProfile!));
       await _loadProfiles();
       _updateSelectedProfile();
     }
@@ -473,7 +506,7 @@ class _ScreenStartState extends State<ScreenStart> {
     GameClockService.catchUp(selected, DateTime.now());
 
     ObjectProfile().loadFromData(freshProfile, restaurantId: selected.id);
-    await ObjectProfile().saveToStorage();
+    _reportSaveResult(await ObjectProfile().saveToStorage());
 
     if (!mounted) return;
     await Navigator.push(

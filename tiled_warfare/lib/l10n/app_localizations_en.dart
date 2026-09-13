@@ -126,6 +126,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileImageError => 'Error loading profile image.';
 
   @override
+  String get saveFailed => 'Saving failed – changes may be lost.';
+
+  @override
+  String get storageLoadErrorTitle => 'Savegame not loadable';
+
+  @override
+  String storageLoadErrorMessage(String files) {
+    return 'Corrupted savegame files:\n$files';
+  }
+
+  @override
   String get restaurantSection => 'Restaurants';
 
   @override

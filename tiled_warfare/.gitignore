@@ -33,6 +33,10 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local runtime data (savegames / logs) – never commit
+/profiles/
+/logs/
+
 # Symbolication related
 app.*.symbols
 

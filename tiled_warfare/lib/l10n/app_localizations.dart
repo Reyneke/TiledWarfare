@@ -308,6 +308,24 @@ abstract class AppLocalizations {
   /// **'Fehler beim Laden des Profilbildes.'**
   String get profileImageError;
 
+  /// Snackbar-Fehlermeldung, wenn ein Spielstand nicht gespeichert werden konnte (V6)
+  ///
+  /// In de, this message translates to:
+  /// **'Speichern fehlgeschlagen – Änderungen sind eventuell verloren.'**
+  String get saveFailed;
+
+  /// Titel des Dialogs, wenn Spielstand-Dateien nicht geladen werden konnten (V6)
+  ///
+  /// In de, this message translates to:
+  /// **'Spielstand nicht ladbar'**
+  String get storageLoadErrorTitle;
+
+  /// Meldung mit den nicht ladbaren Spielstand-Dateien (V6)
+  ///
+  /// In de, this message translates to:
+  /// **'Beschädigte Spielstand-Dateien:\n{files}'**
+  String storageLoadErrorMessage(String files);
+
   /// Überschrift für den Restaurantbereich
   ///
   /// In de, this message translates to:

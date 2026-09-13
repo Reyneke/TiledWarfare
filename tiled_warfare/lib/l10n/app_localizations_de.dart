@@ -127,6 +127,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileImageError => 'Fehler beim Laden des Profilbildes.';
 
   @override
+  String get saveFailed =>
+      'Speichern fehlgeschlagen – Änderungen sind eventuell verloren.';
+
+  @override
+  String get storageLoadErrorTitle => 'Spielstand nicht ladbar';
+
+  @override
+  String storageLoadErrorMessage(String files) {
+    return 'Beschädigte Spielstand-Dateien:\n$files';
+  }
+
+  @override
   String get restaurantSection => 'Restaurants';
 
   @override

@@ -724,19 +724,6 @@ class ObjectProfile {
     return ProfileStorage.saveProfile(data);
   }
 
-  /// Lädt asynchron ein Profil aus dem ProfileStorage und initialisiert
-  /// dieses Singleton damit.
-  Future<bool> loadFromStorage(int profileId, {int? restaurantId}) async {
-    final profiles = await ProfileStorage.loadAllProfiles();
-    final data = profiles.cast<ProfileData?>().firstWhere(
-          (p) => p!.id == profileId,
-          orElse: () => null,
-        );
-    if (data == null) return false;
-    loadFromData(data, restaurantId: restaurantId);
-    return true;
-  }
-
   // ── Konvertierungshilfen ───────────────────────────────────────────────
 
   static StaffData _apprenticeToStaffData(ObjectApprentice a) => StaffData(

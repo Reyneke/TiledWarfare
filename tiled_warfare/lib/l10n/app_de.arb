@@ -160,6 +160,19 @@
   "@profileImageError": {
     "description": "Snackbar-Fehlermeldung beim Profilbild-Laden"
   },
+  "saveFailed": "Speichern fehlgeschlagen – Änderungen sind eventuell verloren.",
+  "@saveFailed": {
+    "description": "Snackbar-Fehlermeldung, wenn ein Spielstand nicht gespeichert werden konnte (V6)"
+  },
+  "storageLoadErrorTitle": "Spielstand nicht ladbar",
+  "@storageLoadErrorTitle": {
+    "description": "Titel des Dialogs, wenn Spielstand-Dateien nicht geladen werden konnten (V6)"
+  },
+  "storageLoadErrorMessage": "Beschädigte Spielstand-Dateien:\n{files}",
+  "@storageLoadErrorMessage": {
+    "description": "Meldung mit den nicht ladbaren Spielstand-Dateien (V6)",
+    "placeholders": { "files": { "type": "String" } }
+  },
 
   "restaurantSection": "Restaurants",
   "@restaurantSection": {

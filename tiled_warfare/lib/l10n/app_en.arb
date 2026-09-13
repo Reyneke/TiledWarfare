@@ -160,6 +160,19 @@
   "@profileImageError": {
     "description": "Snackbar error message when loading profile image"
   },
+  "saveFailed": "Saving failed – changes may be lost.",
+  "@saveFailed": {
+    "description": "Snackbar error message when a savegame could not be saved (V6)"
+  },
+  "storageLoadErrorTitle": "Savegame not loadable",
+  "@storageLoadErrorTitle": {
+    "description": "Dialog title when savegame files could not be loaded (V6)"
+  },
+  "storageLoadErrorMessage": "Corrupted savegame files:\n{files}",
+  "@storageLoadErrorMessage": {
+    "description": "Message listing the savegame files that could not be loaded (V6)",
+    "placeholders": { "files": { "type": "String" } }
+  },
 
   "restaurantSection": "Restaurants",
   "@restaurantSection": {

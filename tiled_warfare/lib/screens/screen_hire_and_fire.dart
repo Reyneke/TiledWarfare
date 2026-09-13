@@ -31,19 +31,29 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     }
   }
 
-  void _hireMedic(ObjectTeamMedic medic) {
+  Future<void> _hireMedic(ObjectTeamMedic medic) async {
     setState(() {
       _availablePersonnel.remove(medic);
       _profile.hireMedic(medic);
     });
-    _profile.saveToStorage();
+    await _saveWithFeedback();
   }
 
-  void _fireMedic(ObjectTeamMedic medic) {
+  Future<void> _fireMedic(ObjectTeamMedic medic) async {
     setState(() {
       _profile.fireMedic(medic);
     });
-    _profile.saveToStorage();
+    await _saveWithFeedback();
+  }
+
+  /// Speichert den Spielstand und meldet einen Fehlschlag sichtbar (V6/L4).
+  Future<void> _saveWithFeedback() async {
+    final ok = await _profile.saveToStorage();
+    if (ok || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.saveFailed)),
+    );
   }
 
   void _regeneratePool() {

@@ -5,6 +5,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/l10n/app_localizations.dart';
 
 /// Ergebnis-Bildschirm nach einem Kampf.
 ///
@@ -104,16 +105,20 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
         widget.playerWon ? MatchResult.win : MatchResult.loss;
     _profile.applyNegativeInterest();
 
-    // Sync units + save (fire-and-forget with error handling)
-    // Nur die Überlebenden (unitList) an syncUnitsAfterBattle übergeben,
-    // da ObjectProfile._performSurvivalRolls() die Gefallenen aus _personal
-    // selbst ermittelt und Rettungswürfe durchführt.
+    // Sync units + save. Nur die Überlebenden (unitList) an
+    // syncUnitsAfterBattle übergeben, da ObjectProfile._performSurvivalRolls()
+    // die Gefallenen aus _personal selbst ermittelt und Rettungswürfe
+    // durchführt. Der Save wird ausgewertet und ein Fehlschlag sichtbar
+    // gemeldet (V6/L4); initState kann nicht `await`en, daher `.then`.
     _profile.syncUnitsAfterBattle(survivors);
     _bankrupt = _profile.isBankrupt;
     _reward = reward;
-    _profile.saveToStorage().catchError((Object error) {
-      debugPrint('Failed to save profile after battle: $error');
-      return false;
+    _profile.saveToStorage().then((ok) {
+      if (ok || !mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.saveFailed)),
+      );
     });
 
     _characterResults = results;
