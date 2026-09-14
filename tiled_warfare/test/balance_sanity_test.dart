@@ -65,6 +65,17 @@ void main() {
       expect(EconomyBalance.emergencyShotCost, greaterThanOrEqualTo(0));
     });
 
+    test('Tagesschritt passt exakt in den Wochentick (§ 6)', () {
+      expect(EconomyBalance.dailyTick, const Duration(days: 1));
+      expect(
+        EconomyBalance.dailyTick * 7,
+        EconomyBalance.weeklyTick,
+        reason: '7 Tagesschritte müssen eine Woche ergeben',
+      );
+      expect(GameClockService.day, EconomyBalance.dailyTick);
+      expect(GameClockService.week, EconomyBalance.weeklyTick);
+    });
+
     test('jede Erweiterung hat eine positive Spec mit mindestens einer Stufe',
         () {
       for (final type in UpgradeType.values) {

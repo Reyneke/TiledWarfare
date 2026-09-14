@@ -312,8 +312,18 @@ class RestaurantData {
   /// Hired team medics of this savegame (serialized).
   List<MedicData> medics;
 
-  /// Last played timestamp (reserved for the realtime system, V8).
+  /// Zeitanker des Echtzeit-Systems (V8/§ 6): bis hierhin sind alle **vollen
+  /// Echtzeittage** abgerechnet (Tages-Schritt). Wird nur um abgerechnete Tage
+  /// fortgeschrieben (der Sub-Tag-Rest bleibt erhalten), damit der Tagestakt
+  /// auch bei häufigem Nachrechnen nicht verloren geht.
   DateTime? lastSeenAt;
+
+  /// Beginn des laufenden 7-Tage-Blocks (Wochenanker, § 6).
+  ///
+  /// Wird nur um **volle Wochen** fortgeschrieben, damit das Wochenraster nicht
+  /// mit jedem Catch-up verschoben wird. Alt-Stände ohne Feld: Fallback auf
+  /// [lastSeenAt].
+  DateTime? weekAnchorAt;
 
   /// `true` once the savegame has been dissolved after permadeath.
   bool isDissolved;
@@ -339,6 +349,7 @@ class RestaurantData {
     List<StaffData>? staff,
     List<MedicData>? medics,
     this.lastSeenAt,
+    this.weekAnchorAt,
     this.isDissolved = false,
     this.dissolvedAt,
     this.lastMatchResult,
@@ -359,6 +370,8 @@ class RestaurantData {
         'staff': staff.map((s) => s.toJson()).toList(),
         'medics': medics.map((m) => m.toJson()).toList(),
         if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+        if (weekAnchorAt != null)
+          'weekAnchorAt': weekAnchorAt!.toIso8601String(),
         'isDissolved': isDissolved,
         if (dissolvedAt != null) 'dissolvedAt': dissolvedAt!.toIso8601String(),
         if (lastMatchResult != null) 'lastMatchResult': lastMatchResult!.name,
@@ -380,6 +393,7 @@ class RestaurantData {
         staff: _mapList(json['staff'], StaffData.fromJson),
         medics: _mapList(json['medics'], MedicData.fromJson),
         lastSeenAt: readDateTime(json['lastSeenAt']),
+        weekAnchorAt: readDateTime(json['weekAnchorAt']),
         isDissolved: readBool(json['isDissolved']) ?? false,
         dissolvedAt: readDateTime(json['dissolvedAt']),
         lastMatchResult:

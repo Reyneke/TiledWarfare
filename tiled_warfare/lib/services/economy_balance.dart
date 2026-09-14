@@ -48,6 +48,13 @@ class EconomyBalance {
   /// Länge eines Wochenticks (1 Echtzeitwoche).
   static const Duration weeklyTick = Duration(days: 7);
 
+  /// Länge eines Tagesschritts (1 Echtzeittag, § 6).
+  ///
+  /// Der Tag ist die Abgrenzungsebene des passiven Einkommens im
+  /// Wochen-Catch-up; `weeklyTick` ist ein ganzzahliges Vielfaches davon
+  /// (`dailyTick * 7 == weeklyTick`).
+  static const Duration dailyTick = Duration(days: 1);
+
   // ── Einmalige Kosten ──────────────────────────────────────────────────
 
   static const int hireApprenticeCost = 100;

@@ -1089,6 +1089,24 @@ abstract class AppLocalizations {
   /// **'Rückfall in ca. {hours} h {minutes} min'**
   String shotCountdown(int hours, int minutes);
 
+  /// Zusammenfassung des Echtzeit-Catch-up (V8/§ 6)
+  ///
+  /// In de, this message translates to:
+  /// **'{weeks, plural, =1{1 Woche abgerechnet} other{{weeks} Wochen abgerechnet}}: Einkommen +{income} €, Arzt −{medicCosts} €, Unterhalt −{upkeep} €, Zinsen −{interest} €'**
+  String catchUpSummary(
+    int weeks,
+    int income,
+    int medicCosts,
+    int upkeep,
+    int interest,
+  );
+
+  /// Anteilige Resttage der Tagesabgrenzung (V8/§ 6)
+  ///
+  /// In de, this message translates to:
+  /// **'{days, plural, =1{1 Resttag} other{{days} Resttage}} Einkommen: +{income} €'**
+  String catchUpLeftover(int days, int income);
+
   /// Charakter ist vollständig geheilt (V3)
   ///
   /// In de, this message translates to:

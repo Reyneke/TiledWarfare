@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,12 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
   bool _isSaving = false;
   late final TabController _tabController;
 
+  /// Takt des periodischen Nachrechnens bei offenem Screen (L1/§ 6).
+  static const Duration _tickInterval = Duration(seconds: 60);
+
+  /// Periodischer Tick für fällige Tage/Wochen bei offenem Screen (L1/§ 6).
+  Timer? _tickTimer;
+
   @override
   void initState() {
     super.initState();
@@ -50,7 +57,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     _tabController = TabController(length: 4, vsync: this);
     AppTheme.themeModeNotifier.addListener(_onThemeChanged);
     _discoverMaps();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkBankruptcy());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkBankruptcy();
+      _showPendingCatchUp();
+    });
+    // L1/§ 6: Auch bei sichtbar laufender App fällige Tage/Wochen nachrechnen
+    // und die Countdowns aktualisieren.
+    _tickTimer = Timer.periodic(_tickInterval, (_) => _runTick());
   }
 
   /// Zeigt bei Bankrott den Permadeath-Dialog und startet danach einen neuen
@@ -83,6 +96,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
 
   @override
   void dispose() {
+    _tickTimer?.cancel();
     AppTheme.themeModeNotifier.removeListener(_onThemeChanged);
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
@@ -116,15 +130,68 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
 
   /// Holt beim Wiederaufnehmen der App fällige Wochen nach (V8) **und** die
   /// Echtzeit-Heilung/den Spritzen-Rückfall (V3); aktualisiert die Ansicht
-  /// (inkl. Bankrott-Prüfung).
+  /// (inkl. Bankrott-Prüfung) und zeigt die Buchungen an (L2/§ 6).
   Future<void> _runResumeCatchUp() async {
     if (!mounted) return;
     // V3: Heilung läuft auch ohne fällige Woche weiter, daher immer speichern.
-    _profile.runCatchUp(DateTime.now());
+    final result = _profile.runCatchUp(DateTime.now());
     await _saveState();
     if (!mounted) return;
     setState(() {});
+    _showCatchUpResult(result);
     _checkBankruptcy();
+  }
+
+  /// Periodischer Tick (L1/§ 6): rechnet fällige Tage/Wochen nach, während die
+  /// App sichtbar offen ist, und aktualisiert die Countdowns.
+  ///
+  /// Gespeichert wird nur, wenn tatsächlich ein Tag/Block abgerechnet wurde
+  /// (Reentranz-Schutz über [_isSaving], vgl. [_saveOnBackground]).
+  Future<void> _runTick() async {
+    if (!mounted || _isSaving) return;
+    final result = _profile.runCatchUp(DateTime.now());
+    final changed = result.weeks > 0 || result.leftoverDays > 0;
+    if (changed) {
+      await _saveState();
+      if (!mounted) return;
+      _showCatchUpResult(result);
+    }
+    if (!mounted) return;
+    setState(() {});
+    if (result.bankrupt) _checkBankruptcy();
+  }
+
+  /// Zeigt ein beim Login vorbereitetes Catch-up-Ergebnis einmalig an (L2).
+  void _showPendingCatchUp() {
+    final pending = _profile.pendingCatchUpResult;
+    if (pending == null) return;
+    _profile.pendingCatchUpResult = null;
+    if (!mounted) return;
+    _showCatchUpResult(pending);
+  }
+
+  /// Zeigt die fälligen Buchungen eines Catch-up als SnackBar (L2/§ 6).
+  void _showCatchUpResult(WeeklyTickResult result) {
+    if (result.weeks <= 0 && result.leftoverDays <= 0) return;
+    final l10n = AppLocalizations.of(context)!;
+    final parts = <String>[];
+    if (result.weeks > 0) {
+      parts.add(l10n.catchUpSummary(
+        result.weeks,
+        result.passiveIncome - result.leftoverIncome,
+        result.medicCosts,
+        result.upgradeUpkeep,
+        result.negativeInterest,
+      ));
+    }
+    if (result.leftoverDays > 0 && result.leftoverIncome > 0) {
+      parts.add(
+          l10n.catchUpLeftover(result.leftoverDays, result.leftoverIncome));
+    }
+    if (parts.isEmpty) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(parts.join('\n'))));
   }
 
   void _onThemeChanged() {
@@ -195,8 +262,9 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
           (r) => r!.id == restaurantId,
           orElse: () => null,
         );
+    WeeklyTickResult? catchUp;
     if (target != null) {
-      GameClockService.catchUp(target, DateTime.now());
+      catchUp = GameClockService.catchUp(target, DateTime.now());
       await ProfileStorage.saveProfile(data);
     }
 
@@ -205,6 +273,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       _battleReadyCharacters.clear();
       _tabController.index = 0;
     });
+    if (catchUp != null) _showCatchUpResult(catchUp);
   }
 
   /// Shows a dialog to switch to another (non-dissolved) savegame.
@@ -990,7 +1059,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final snapshot = _profile.activeRestaurantSnapshot();
-    final anchor = snapshot.lastSeenAt ?? now;
+    final anchor =
+        snapshot.weekAnchorAt ?? snapshot.lastSeenAt ?? now;
     final nextTick = GameClockService.nextWeeklyTick(anchor, now);
     final days = nextTick.difference(now).inDays;
     final attractiveness = GameClockService.attractivenessOf(snapshot, now: now);

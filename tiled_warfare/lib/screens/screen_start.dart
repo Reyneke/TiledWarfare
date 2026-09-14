@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tiled_warfare/l10n/locale_provider.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
-import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/district.dart';
@@ -502,10 +501,11 @@ class _ScreenStartState extends State<ScreenStart> {
         );
     if (selected == null || selected.isDissolved) return;
 
-    // Echtzeit-Catch-up (V8): verpasste Wochen vor dem ersten Frame abrechnen.
-    GameClockService.catchUp(selected, DateTime.now());
-
+    // Echtzeit-Catch-up (V8): verpasste Tage/Wochen vor dem ersten Frame
+    // abrechnen; das Ergebnis zeigt der Restaurant-Screen beim Aufbau an (L2).
     ObjectProfile().loadFromData(freshProfile, restaurantId: selected.id);
+    ObjectProfile().pendingCatchUpResult =
+        ObjectProfile().runCatchUp(DateTime.now());
     _reportSaveResult(await ObjectProfile().saveToStorage());
 
     if (!mounted) return;

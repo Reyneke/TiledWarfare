@@ -594,5 +594,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String catchUpSummary(
+    int weeks,
+    int income,
+    int medicCosts,
+    int upkeep,
+    int interest,
+  ) {
+    String _temp0 = intl.Intl.pluralLogic(
+      weeks,
+      locale: localeName,
+      other: '$weeks weeks settled',
+      one: '1 week settled',
+    );
+    return '$_temp0: income +$income €, medic −$medicCosts €, upkeep −$upkeep €, interest −$interest €';
+  }
+
+  @override
+  String catchUpLeftover(int days, int income) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days leftover days',
+      one: '1 leftover day',
+    );
+    return '$_temp0 income: +$income €';
+  }
+
+  @override
   String get healingComplete => 'Fully fit for duty';
 }

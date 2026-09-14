@@ -716,6 +716,22 @@
     "description": "Countdown until the emergency shot wears off (V3)",
     "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
   },
+  "catchUpSummary": "{weeks, plural, =1{1 week settled} other{{weeks} weeks settled}}: income +{income} €, medic −{medicCosts} €, upkeep −{upkeep} €, interest −{interest} €",
+  "@catchUpSummary": {
+    "description": "Summary of the realtime catch-up (V8/§ 6)",
+    "placeholders": {
+      "weeks": { "type": "int" },
+      "income": { "type": "int" },
+      "medicCosts": { "type": "int" },
+      "upkeep": { "type": "int" },
+      "interest": { "type": "int" }
+    }
+  },
+  "catchUpLeftover": "{days, plural, =1{1 leftover day} other{{days} leftover days}} income: +{income} €",
+  "@catchUpLeftover": {
+    "description": "Pro-rated leftover days of the daily step (V8/§ 6)",
+    "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
+  },
   "healingComplete": "Fully fit for duty",
   "@healingComplete": { "description": "Character is fully healed (V3)" }
 }

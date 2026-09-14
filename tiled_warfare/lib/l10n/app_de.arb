@@ -716,6 +716,22 @@
     "description": "Countdown bis zum Rückfall der Notfall-Spritze (V3)",
     "placeholders": { "hours": { "type": "int" }, "minutes": { "type": "int" } }
   },
+  "catchUpSummary": "{weeks, plural, =1{1 Woche abgerechnet} other{{weeks} Wochen abgerechnet}}: Einkommen +{income} €, Arzt −{medicCosts} €, Unterhalt −{upkeep} €, Zinsen −{interest} €",
+  "@catchUpSummary": {
+    "description": "Zusammenfassung des Echtzeit-Catch-up (V8/§ 6)",
+    "placeholders": {
+      "weeks": { "type": "int" },
+      "income": { "type": "int" },
+      "medicCosts": { "type": "int" },
+      "upkeep": { "type": "int" },
+      "interest": { "type": "int" }
+    }
+  },
+  "catchUpLeftover": "{days, plural, =1{1 Resttag} other{{days} Resttage}} Einkommen: +{income} €",
+  "@catchUpLeftover": {
+    "description": "Anteilige Resttage der Tagesabgrenzung (V8/§ 6)",
+    "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
+  },
   "healingComplete": "Voll einsatzbereit",
   "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" }
 }

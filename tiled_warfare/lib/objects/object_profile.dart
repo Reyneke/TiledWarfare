@@ -73,9 +73,19 @@ class ObjectProfile {
   /// passiven Einkommens, § 8).
   MatchResult? lastMatchResult;
 
-  /// Anker des Echtzeit-Zeitsystems (V8) für den aktiven Spielstand – Basis
-  /// für den Countdown bis zur nächsten Wochenabbuchung.
+  /// Einmalig anzuzeigendes Catch-up-Ergebnis (L2/§ 6).
+  ///
+  /// Wird beim Login gesetzt, wenn der Catch-up vor dem Aufbau des
+  /// Restaurant-Screens läuft; die UI konsumiert und leert es.
+  WeeklyTickResult? pendingCatchUpResult;
+
+  /// Anker des Echtzeit-Zeitsystems (V8) für den aktiven Spielstand – bis
+  /// hierhin sind alle **vollen Echtzeittage** abgerechnet (Tages-Schritt, § 6).
   DateTime? lastSeenAt;
+
+  /// Beginn des laufenden 7-Tage-Blocks (Wochenanker, § 6) – stabil über
+  /// mehrere Catch-ups hinweg; Alt-Stände: Fallback auf [lastSeenAt].
+  DateTime? weekAnchorAt;
 
   /// Küche (Konzept) des aktiven Restaurants (§ 9).
   Cuisine activeCuisine = Cuisine.italian;
@@ -457,6 +467,7 @@ class ObjectProfile {
     budget = startBudget;
     lastMatchResult = null;
     lastSeenAt = DateTime.now();
+    weekAnchorAt = DateTime.now();
     activeCuisine = Cuisine.italian;
     rebrandingPenaltyUntil = null;
     activeUpgrades = {};
@@ -488,6 +499,7 @@ class ObjectProfile {
       budget = startBudget;
       lastMatchResult = null;
       lastSeenAt = null;
+      weekAnchorAt = null;
       activeCuisine = Cuisine.italian;
       rebrandingPenaltyUntil = null;
       activeUpgrades = {};
@@ -503,6 +515,7 @@ class ObjectProfile {
     budget = restaurant.budget;
     lastMatchResult = restaurant.lastMatchResult;
     lastSeenAt = restaurant.lastSeenAt;
+    weekAnchorAt = restaurant.weekAnchorAt;
     activeCuisine = restaurant.cuisine;
     rebrandingPenaltyUntil = restaurant.rebrandingPenaltyUntil;
     activeUpgrades = Map.of(restaurant.upgrades);
@@ -577,6 +590,8 @@ class ObjectProfile {
       lastSeenAt: lastSeenAt ??
           (existingIndex >= 0 ? restaurants[existingIndex].lastSeenAt : null) ??
           DateTime.now(),
+      weekAnchorAt: weekAnchorAt ??
+          (existingIndex >= 0 ? restaurants[existingIndex].weekAnchorAt : null),
       lastMatchResult: lastMatchResult,
       isDissolved: existingIndex >= 0
           ? restaurants[existingIndex].isDissolved
@@ -616,6 +631,7 @@ class ObjectProfile {
         medics: _hiredMedics.map(_medicToMedicData).toList(),
         upgrades: Map.of(activeUpgrades),
         lastSeenAt: lastSeenAt,
+        weekAnchorAt: weekAnchorAt,
         lastMatchResult: lastMatchResult,
       );
 
@@ -676,6 +692,7 @@ class ObjectProfile {
     final result = GameClockService.catchUp(snapshot, now);
     budget = snapshot.budget;
     lastSeenAt = snapshot.lastSeenAt;
+    weekAnchorAt = snapshot.weekAnchorAt;
     // V3: geheilten Status/Spritzen-Zustand in die In-Memory-Charaktere
     // zurückschreiben (beide Listen sind 1:1 über die Konvertierung geordnet).
     _syncStaffFromSnapshot(snapshot);

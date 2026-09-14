@@ -599,5 +599,33 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String catchUpSummary(
+    int weeks,
+    int income,
+    int medicCosts,
+    int upkeep,
+    int interest,
+  ) {
+    String _temp0 = intl.Intl.pluralLogic(
+      weeks,
+      locale: localeName,
+      other: '$weeks Wochen abgerechnet',
+      one: '1 Woche abgerechnet',
+    );
+    return '$_temp0: Einkommen +$income €, Arzt −$medicCosts €, Unterhalt −$upkeep €, Zinsen −$interest €';
+  }
+
+  @override
+  String catchUpLeftover(int days, int income) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days Resttage',
+      one: '1 Resttag',
+    );
+    return '$_temp0 Einkommen: +$income €';
+  }
+
+  @override
   String get healingComplete => 'Voll einsatzbereit';
 }

@@ -7,12 +7,50 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 
-/// Ergebnis eines (nachgeholten) Wochenticks (V8).
+/// Abrechnung eines vollendeten 7-Tage-Blocks (Wochen-Zusammenfassung, § 6).
+class WeekSettlement {
+  /// Laufender Index des Blocks innerhalb dieses Catch-up (0-basiert).
+  final int weekIndex;
+
+  /// Beginn des Blocks (Wochenanker zum Zeitpunkt der Abrechnung).
+  final DateTime periodStart;
+
+  /// Ende des Blocks (`periodStart + 1 Woche`).
+  final DateTime periodEnd;
+
+  /// Gutgeschriebenes passives Einkommen des Blocks (`= incomePerWeek`).
+  final int income;
+
+  /// Abgebuchte Teamarzt-Kosten des Blocks.
+  final int medicCosts;
+
+  /// Abgebuchter Erweiterungs-Unterhalt des Blocks.
+  final int upgradeUpkeep;
+
+  /// Abgebuchte Negativzinsen des Blocks.
+  final int negativeInterest;
+
+  /// Budget nach der Abrechnung des Blocks.
+  final int budgetAfter;
+
+  const WeekSettlement({
+    required this.weekIndex,
+    required this.periodStart,
+    required this.periodEnd,
+    required this.income,
+    required this.medicCosts,
+    required this.upgradeUpkeep,
+    required this.negativeInterest,
+    required this.budgetAfter,
+  });
+}
+
+/// Ergebnis eines (nachgeholten) Tages-/Wochenticks (V8/§ 6).
 class WeeklyTickResult {
-  /// Anzahl der abgerechneten Wochen.
+  /// Anzahl der abgerechneten vollen Wochen (Blöcke).
   final int weeks;
 
-  /// Gutgeschriebenes passives Einkommen insgesamt.
+  /// Gutgeschriebenes passives Einkommen insgesamt (inkl. Resttage).
   final int passiveIncome;
 
   /// Abgebuchte Teamarzt-Kosten insgesamt.
@@ -30,6 +68,15 @@ class WeeklyTickResult {
   /// `true`, wenn das Budget die Negativgrenze unterschreitet.
   final bool bankrupt;
 
+  /// Abrechnungen je vollendetem 7-Tage-Block (§ 6, Wochen-Zusammenfassung).
+  final List<WeekSettlement> settlements;
+
+  /// Anzahl voller Echtzeittage **außerhalb** des letzten Blocks (§ 6).
+  final int leftoverDays;
+
+  /// Summe der Tageserträge dieser Resttage (§ 6).
+  final int leftoverIncome;
+
   const WeeklyTickResult({
     required this.weeks,
     required this.passiveIncome,
@@ -38,9 +85,12 @@ class WeeklyTickResult {
     required this.negativeInterest,
     required this.budgetAfter,
     required this.bankrupt,
+    this.settlements = const [],
+    this.leftoverDays = 0,
+    this.leftoverIncome = 0,
   });
 
-  /// Ergebnis ohne fällige Wochen (No-op).
+  /// Ergebnis ohne fällige Tage/Wochen (No-op).
   factory WeeklyTickResult.none(int budget) => WeeklyTickResult(
         weeks: 0,
         passiveIncome: 0,
@@ -80,6 +130,9 @@ class GameClockService {
 
   /// Länge eines Ticks: 1 Echtzeitwoche (Entscheidung, § 2/§ 8; V7/P9).
   static const Duration week = EconomyBalance.weeklyTick;
+
+  /// Länge eines Tagesschritts: 1 Echtzeittag (§ 6).
+  static const Duration day = EconomyBalance.dailyTick;
 
   /// Status→Schweregrad (0 = `ready` … 7 = `overkilled`).
   static const Map<String, int> _severityByStatus = {
@@ -337,42 +390,78 @@ class GameClockService {
   static int weeksElapsed(DateTime lastSeenAt, DateTime now) =>
       elapsed(lastSeenAt, now).inDays ~/ 7;
 
+  /// Anzahl vollständiger Echtzeittage seit [from] (§ 6).
+  ///
+  /// Feste 24-h-Einheit über `elapsed.inDays` (floor); ein angebrochener Tag
+  /// zählt nicht.
+  static int daysElapsed(DateTime from, DateTime now) =>
+      elapsed(from, now).inDays;
+
   /// Zeitpunkt des nächsten Wochenticks (für den Countdown in der UI).
+  ///
+  /// Erwartet den **Wochenanker** (`RestaurantData.weekAnchorAt`), damit der
+  /// Countdown über mehrere Catch-ups stabil bleibt (§ 6).
   static DateTime nextWeeklyTick(DateTime lastSeenAt, DateTime now) {
     final weeks = weeksElapsed(lastSeenAt, now);
     return lastSeenAt.add(week * (weeks + 1));
   }
 
-  /// Holt fällige Wochen für [restaurant] nach und schreibt `lastSeenAt` fort.
+  /// Zeitpunkt der nächsten Tagesbuchung (für einen optionalen UI-Countdown).
+  static DateTime nextDailyTick(DateTime from, DateTime now) {
+    final days = daysElapsed(from, now);
+    return from.add(day * (days + 1));
+  }
+
+  /// Holt fällige Tage/Wochen für [restaurant] nach und schreibt die Anker fort.
   ///
-  /// Reihenfolge **pro Woche**: **passives Einkommen → Teamarzt-Kosten →
-  /// Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check** (§ 8/§ 10).
-  /// Wiederholtes Anwenden ist idempotent: Da `lastSeenAt` auf [now] gesetzt
-  /// wird, liefert ein zweiter Aufruf mit demselben [now] keine Fälligkeit.
+  /// Reihenfolge: **Heilung → Spritzen-Rückfall → Tagesschleife** (§ 6). Das
+  /// passive Einkommen entsteht **anteilig pro vollem Echtzeittag**; an jeder
+  /// Grenze eines vollen 7-Tage-Blocks (`weekAnchorAt`) werden Teamarzt-Kosten,
+  /// Erweiterungs-Unterhalt und Negativzinsen abgebucht und eine
+  /// [WeekSettlement] erzeugt. Tage nach dem letzten vollen Block (Resttage)
+  /// buchen nur Tagesertrag.
+  ///
+  /// Die Eingangswerte stammen aus dem **Endzustand** (L5-Entscheidung) und
+  /// sind über die Lücke konstant; der 7. Tag eines Blocks trägt den
+  /// Rundungsrest, damit `Σ Blocktag = incomePerWeek` exakt bleibt.
+  ///
+  /// Idempotent: `lastSeenAt` (Tagescursor) wird nur um die abgerechneten Tage
+  /// fortgeschrieben; ein zweiter Aufruf mit demselben [now] liefert keine
+  /// Fälligkeit. Der Sub-Tag-Rest bleibt erhalten, damit häufige Aufrufe (z. B.
+  /// ein periodischer UI-Tick) keinen Tag verlieren.
   static WeeklyTickResult catchUp(RestaurantData restaurant, DateTime now) {
     // V3: Echtzeit-Heilung und Spritzen-Rückfall werden **immer** nachgeholt –
-    // auch wenn seit dem letzten Anker noch keine volle Woche vergangen ist.
+    // auch wenn seit dem letzten Anker noch kein voller Tag vergangen ist.
     advanceHealing(restaurant, now);
     rollBackEmergencyShots(restaurant, now);
 
     final lastSeen = restaurant.lastSeenAt;
     if (lastSeen == null) {
       restaurant.lastSeenAt = now;
+      restaurant.weekAnchorAt = now;
       return WeeklyTickResult.none(restaurant.budget);
     }
 
-    final weeks = weeksElapsed(lastSeen, now);
-    if (weeks <= 0) {
-      restaurant.lastSeenAt = now;
+    final days = daysElapsed(lastSeen, now);
+    if (days <= 0) {
+      // Kein voller Tag fällig: Anker unangetastet lassen (der Sub-Tag-Rest
+      // bleibt erhalten), damit wiederholte Aufrufe nichts verschieben.
       return WeeklyTickResult.none(restaurant.budget);
     }
 
-    // Eingangswerte des passiven Einkommens (§ 8).
+    // Wochenanker: Fortschreibung nur um volle Wochen (§ 6); Alt-Stände ohne
+    // Feld fallen auf den Tagescursor zurück.
+    var weekAnchor = restaurant.weekAnchorAt ?? lastSeen;
+
+    // Eingangswerte des passiven Einkommens (§ 8) aus dem Endzustand (L5).
     final incomePerWeek = PassiveIncomeService.passiveIncomePerWeek(
       attractiveness: attractivenessOf(restaurant, now: now),
       satisfaction: satisfactionOf(restaurant),
       capacity: capacityOf(restaurant),
     );
+    // Tagesertrag; der 7. Tag eines Blocks trägt den Rundungsrest.
+    final incomePerDay = incomePerWeek ~/ 7;
+    final incomeLastDayOfBlock = incomePerWeek - incomePerDay * 6;
     final medicPerWeek = EconomyService.billWeeklyMedicCosts(
       restaurant.medics.map((m) => m.costPerWeek),
       1,
@@ -380,38 +469,67 @@ class GameClockService {
     final upkeepPerWeek =
         EconomyService.totalUpgradeUpkeepPerWeek(restaurant.upgrades);
 
-    // Wochenweise abrechnen (Reihenfolge je Woche, § 8/§ 10): passives
-    // Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen.
-    // Die Zinsen werden **pro fälliger Woche** auf den jeweiligen Saldo
-    // angewandt (und damit ggf. über mehrere Wochen „verzinst").
     var budget = restaurant.budget;
     var totalIncome = 0;
     var totalMedic = 0;
     var totalUpkeep = 0;
     var totalInterest = 0;
-    for (var week = 0; week < weeks; week++) {
-      budget += incomePerWeek;
-      totalIncome += incomePerWeek;
+    final settlements = <WeekSettlement>[];
+    var cursor = lastSeen;
+
+    for (var i = 0; i < days; i++) {
+      final dayInBlock = daysElapsed(weekAnchor, cursor) + 1; // 1 … 7
+      final isBlockEnd = dayInBlock >= 7;
+      final dailyIncome = isBlockEnd ? incomeLastDayOfBlock : incomePerDay;
+      budget += dailyIncome;
+      totalIncome += dailyIncome;
+      cursor = cursor.add(day);
+
+      if (!isBlockEnd) continue;
+
+      // Blockende: wöchentliche Kosten und Zinsen (§ 8/§ 10) – die Zinsen
+      // werden auf den jeweiligen Saldo am Blockende angewandt.
       budget -= medicPerWeek;
       totalMedic += medicPerWeek;
       budget -= upkeepPerWeek;
       totalUpkeep += upkeepPerWeek;
       final beforeInterest = budget;
       budget = EconomyService.applyNegativeInterest(budget);
-      totalInterest += beforeInterest - budget;
+      final interest = beforeInterest - budget;
+      totalInterest += interest;
+
+      settlements.add(WeekSettlement(
+        weekIndex: settlements.length,
+        periodStart: weekAnchor,
+        periodEnd: weekAnchor.add(week),
+        income: incomePerDay * 6 + incomeLastDayOfBlock,
+        medicCosts: medicPerWeek,
+        upgradeUpkeep: upkeepPerWeek,
+        negativeInterest: interest,
+        budgetAfter: budget,
+      ));
+      // Wochenraster exakt eine Woche weiterziehen (kein Drift).
+      weekAnchor = weekAnchor.add(week);
     }
 
     restaurant.budget = budget;
-    restaurant.lastSeenAt = now;
+    restaurant.lastSeenAt = cursor;
+    restaurant.weekAnchorAt = weekAnchor;
+
+    // Resttage = volle Tage im noch unfertigen Block nach dem letzten Abschluss.
+    final leftoverDays = daysElapsed(weekAnchor, cursor);
 
     return WeeklyTickResult(
-      weeks: weeks,
+      weeks: settlements.length,
       passiveIncome: totalIncome,
       medicCosts: totalMedic,
       upgradeUpkeep: totalUpkeep,
       negativeInterest: totalInterest,
       budgetAfter: budget,
       bankrupt: EconomyService.isBankrupt(budget),
+      settlements: settlements,
+      leftoverDays: leftoverDays,
+      leftoverIncome: incomePerDay * leftoverDays,
     );
   }
 
