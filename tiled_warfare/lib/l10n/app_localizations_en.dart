@@ -623,4 +623,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get healingComplete => 'Fully fit for duty';
+
+  @override
+  String personalityLabel(String name) {
+    return 'Personality: $name';
+  }
+
+  @override
+  String resourcesLine(int vitality, int morale) {
+    return 'Vitality $vitality/100 · Morale $morale/100';
+  }
+
+  @override
+  String stressCountdown(String time) {
+    return 'Stressed – switching until $time';
+  }
+
+  @override
+  String ruheCountdown(String time) {
+    return 'At ease – switching until $time';
+  }
+
+  @override
+  String resourceZeroMalus(int malus) {
+    return 'Exhausted: −$malus % on all rolls';
+  }
+
+  @override
+  String medicScores(int helpfulness, int treatment) {
+    return 'Helpfulness $helpfulness · Treatment quality $treatment';
+  }
 }

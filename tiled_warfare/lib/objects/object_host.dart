@@ -2,44 +2,20 @@ import 'dart:math';
 import 'dart:ui' show Offset;
 
 import 'package:tiled_warfare/fuzzy_logic/lib/fuzzylogic.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/objects/boss_monsters/object_dough_dumpster.dart';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:random_name_generator/random_name_generator.dart';
 
-/// Repräsentiert ein Enneagramm-Persönlichkeitsprofil.
-///
-/// Die zwölf Enneagramme basieren auf der Enneagramm-Persönlichkeitstheorie
-/// (siehe https://en.wikipedia.org/wiki/Enneagram_of_Personality).
-/// Jedes Profil beeinflusst das Verhalten des Hosts im Spiel.
-class EnneagramProfile {
-  final String name;
-  final String description;
-
-  const EnneagramProfile(this.name, this.description);
-
-  static const List<EnneagramProfile> all = [
-    EnneagramProfile('Der Reformierte', 'Prinzipientreu, zielstrebig, perfektionistisch'),
-    EnneagramProfile('Der Helfer', 'Fürsorglich, großzügig, besitzergreifend'),
-    EnneagramProfile('Der Erfolgsorientierte', 'Ehrgeizig, anpassungsfähig, imagebewusst'),
-    EnneagramProfile('Der Individualist', 'Kreativ, sensibel, selbstbezogen'),
-    EnneagramProfile('Der Denker', 'Analytisch, zurückhaltend, geizig'),
-    EnneagramProfile('Der Loyalist', 'Verantwortungsbewusst, misstrauisch, ängstlich'),
-    EnneagramProfile('Der Enthusiast', 'Lebhaft, impulsiv, zerstreut'),
-    EnneagramProfile('Der Herausforderer', 'Durchsetzungsfähig, beschützend, konfrontativ'),
-    EnneagramProfile('Der Friedfertige', 'Ausgeglichen, bestätigend, träge'),
-    EnneagramProfile('Der Stratege', 'Vorausschauend, berechnend, unnahbar'),
-    EnneagramProfile('Der Beschützer', 'Mutig, territorial, stur'),
-    EnneagramProfile('Der Chaot', 'Unberechenbar, kreativ, destruktiv'),
-  ];
-}
 
 /// Fuzzy-Logik-basierte Persönlichkeitsbewertung für den Host.
 ///
@@ -59,7 +35,59 @@ class HostPersonality {
   /// Fuzzy-Variable für die Taktik (0 = direkt, 100 = komplex).
   final TacticalComplexity tacticalComplexity = TacticalComplexity();
 
-  HostPersonality(this.profile);
+  /// Regelbasis der Persönlichkeit; wird seit V9 tatsächlich ausgewertet
+  /// (vorher wurde sie erzeugt und sofort verworfen).
+  late final FuzzyRuleBase ruleBase;
+
+  FuzzyValue<int>? _aggressivenessOutput;
+  FuzzyValue<int>? _riskToleranceOutput;
+  FuzzyValue<int>? _tacticalComplexityOutput;
+
+  HostPersonality(this.profile) {
+    ruleBase = FuzzyRuleBase();
+    initializeRules(ruleBase);
+  }
+
+  /// Bewertet die Persönlichkeit gegen den Gefechtszustand (V9 § 5, Phase 6).
+  ///
+  /// Eingänge sind Crisp-Werte 0–100; die Ergebnisse werden über
+  /// [aggressionBias], [riskToleranceBias] und [tacticalBias] gelesen.
+  void evaluate({
+    required int threatLevel,
+    required int ownStrength,
+    required int tacticalSprawl,
+  }) {
+    _aggressivenessOutput = aggressiveness.createOutputPlaceholder();
+    _riskToleranceOutput = riskTolerance.createOutputPlaceholder();
+    _tacticalComplexityOutput = tacticalComplexity.createOutputPlaceholder();
+    ruleBase.resolve(
+      inputs: [
+        aggressiveness.assign(threatLevel.clamp(0, 100)),
+        riskTolerance.assign(ownStrength.clamp(0, 100)),
+        tacticalComplexity.assign(tacticalSprawl.clamp(0, 100)),
+      ],
+      outputs: [
+        _aggressivenessOutput!,
+        _riskToleranceOutput!,
+        _tacticalComplexityOutput!,
+      ],
+    );
+  }
+
+  /// Ausgangs-Bias der Aggressivität (0–100; 50 = neutral).
+  int get aggressionBias => _biasOf(_aggressivenessOutput);
+
+  /// Ausgangs-Bias der Risikobereitschaft (0–100).
+  int get riskToleranceBias => _biasOf(_riskToleranceOutput);
+
+  /// Ausgangs-Bias der taktischen Komplexität (0–100).
+  int get tacticalBias => _biasOf(_tacticalComplexityOutput);
+
+  static int _biasOf(FuzzyValue<int>? output) {
+    final crisp = output?.crispValue;
+    if (crisp == null) return 50;
+    return crisp.clamp(0, 100);
+  }
 
   /// Initialisiert die Fuzzy-Regeln basierend auf dem Enneagramm-Profil.
   void initializeRules(FuzzyRuleBase ruleBase) {
@@ -217,11 +245,33 @@ class ObjectHost {
     // Zufälliges Enneagramm auswählen
     enneagramProfile =
         EnneagramProfile.all[_random.nextInt(EnneagramProfile.all.length)];
+    // V9 (Phase 6): Die Regelbasis lebt im Personality-Objekt und wird
+    // tatsächlich ausgewertet (vorher wurde sie verworfen).
     personality = HostPersonality(enneagramProfile);
+  }
 
-    // Fuzzy-Regeln initialisieren
-    final ruleBase = FuzzyRuleBase();
-    personality.initializeRules(ruleBase);
+  /// Aggressivitäts-Bias der Fuzzy-Auswertung (0–100, V9 § 5).
+  int get aggressionBias => personality.aggressionBias;
+
+  /// Risiko-Bias der Fuzzy-Auswertung (0–100).
+  int get riskToleranceBias => personality.riskToleranceBias;
+
+  /// Taktik-Bias der Fuzzy-Auswertung (0–100).
+  int get tacticalBias => personality.tacticalBias;
+
+  /// Bewertet die Persönlichkeit gegen den aktuellen Gefechtszustand (V9).
+  void refreshPersonality({
+    required int ownUnits,
+    required int enemyUnits,
+    required int visibleTargets,
+  }) {
+    final total = ownUnits + enemyUnits;
+    final ownStrength = total == 0 ? 50 : ownUnits * 100 ~/ total;
+    personality.evaluate(
+      threatLevel: 100 - ownStrength,
+      ownStrength: ownStrength,
+      tacticalSprawl: (visibleTargets * 20).clamp(0, 100),
+    );
   }
 
   /// Gibt den Host-Namen mit Enneagramm-Titel zurück (für GUI-Anzeige).
@@ -282,6 +332,13 @@ class ObjectHost {
   void moveAllZombiesTowardsTargets(List<ObjectApprentice> targets) {
     // Fog-of-War: Nur sichtbare/aufgedeckte Ziele berücksichtigen
     final visibleTargets = _filterVisibleTargets(targets);
+
+    // V9 (Phase 6): Persönlichkeit gegen den Gefechtszustand bewerten.
+    refreshPersonality(
+      ownUnits: activeUnitCount,
+      enemyUnits: targets.length,
+      visibleTargets: visibleTargets.length,
+    );
 
     for (final dumpster in doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
@@ -429,7 +486,9 @@ class ObjectHost {
     
     // Der Zombie bewegt sich um min(movementValue, 1) Schritte entlang des Pfads
     // Zombies haben movementValue = 1, also genau 1 Schritt
-    final steps = zombie.movementValue.clamp(1, 100);
+    // V9 (Phase 6): Aggressive Persönlichkeiten drängen einen Schritt weiter.
+    final aggressionBonus = aggressionBias >= 60 ? 1 : 0;
+    final steps = (zombie.movementValue + aggressionBonus).clamp(1, 100);
     final stepsToTake = min(steps, path.length - 1);
     
     // Nächstes Hex auf dem Pfad bestimmen
@@ -789,7 +848,11 @@ class ObjectHost {
   ///
   /// Gemäß den Kampfregeln (Abschnitt 7) wird zu Beginn jeder Runde für jede
   /// Seite ein Initiative-Wurf mit einem W100 durchgeführt.
-  int rollInitiative() => EconomyService.rollD100(_random);
+  /// Initiative inkl. Persönlichkeits-Bias (V9 § 5): aggressive Hosts handeln
+  /// tendenziell früher (Bias 50 = neutral).
+  int rollInitiative() =>
+      (EconomyService.rollD100(_random) + (aggressionBias - 50) ~/ 5)
+          .clamp(EconomyBalance.d100Min, EconomyBalance.d100Max);
 
   /// Gibt die Anzahl der noch einsatzfähigen Einheiten des Hosts zurück.
   ///

@@ -15,7 +15,7 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = aktuelle
 /// Struktur. Die Deserialisierung ist bewusst toleranter als die Version:
 /// fehlende oder unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 2;
+const int kProfileSchemaVersion = 3;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -135,6 +135,16 @@ class StaffData {
   /// Typ: 'apprentice' oder 'line_cook'.
   String type;
 
+  /// Stabile Charakter-ID (CRC32 aus Name + Erzeugungszeitpunkt).
+  ///
+  /// `-1` markiert eine noch nicht zugewiesene ID (V9).
+  int id;
+
+  /// Index des Enneagramm-Profils in `EnneagramProfile.all` (V9).
+  ///
+  /// `-1` markiert ein noch nicht zugewiesenes Profil (Alt-Daten).
+  int personalityId;
+
   int levelValue;
   int currentXPValue;
   int woundValue;
@@ -163,6 +173,31 @@ class StaffData {
   /// Der von der Notfall-Spritze unterdrückte Status (V3).
   String? suppressedStatus;
 
+  /// Aktueller Vitalitätsstand (V9) – `null` bei Alt-Daten (wird beim Laden
+  /// aus den Persönlichkeits-Traits abgeleitet).
+  int? vitalityCurrent;
+
+  /// Aktueller Moralstand (V9) – `null` bei Alt-Daten.
+  int? moraleCurrent;
+
+  /// Anker für idempotentes Sinken/Auffüllen der Ressourcen (V9).
+  DateTime? lastResourceRefillAt;
+
+  /// Temporär wirksames Enneagramm-Profil (Stress/Ruhe, V9 § 6); `-1` = keins.
+  int personalityOverrideId;
+
+  /// Ablaufzeitpunkt des Overrides (V9 § 6).
+  DateTime? personalityOverrideUntil;
+
+  /// Auslöser des Overrides: `stress` oder `ruhe` (V9 § 6).
+  String? personalityOverrideCause;
+
+  /// Seit wann `vitalityCurrent` auf 0 steht (Erschöpfungs-Malus, V9 § 6).
+  DateTime? vitalityZeroSinceAt;
+
+  /// Seit wann `moraleCurrent` auf 0 steht (Erschöpfungs-Malus, V9 § 6).
+  DateTime? moraleZeroSinceAt;
+
   /// Match-Historie (serialisiert als Liste von Maps).
   List<Map<String, dynamic>> matchHistory;
 
@@ -170,6 +205,8 @@ class StaffData {
     required this.name,
     required this.imagePath,
     required this.type,
+    this.id = -1,
+    this.personalityId = -1,
     this.levelValue = 1,
     this.currentXPValue = 0,
     this.woundValue = 3,
@@ -185,6 +222,14 @@ class StaffData {
     this.injuryStartStatus,
     this.emergencyShotAt,
     this.suppressedStatus,
+    this.vitalityCurrent,
+    this.moraleCurrent,
+    this.lastResourceRefillAt,
+    this.personalityOverrideId = -1,
+    this.personalityOverrideUntil,
+    this.personalityOverrideCause,
+    this.vitalityZeroSinceAt,
+    this.moraleZeroSinceAt,
     List<Map<String, dynamic>>? matchHistory,
   }) : matchHistory = matchHistory ?? [];
 
@@ -192,6 +237,8 @@ class StaffData {
         'name': name,
         'imagePath': imagePath,
         'type': type,
+        'id': id,
+        'personalityId': personalityId,
         'levelValue': levelValue,
         'currentXPValue': currentXPValue,
         'woundValue': woundValue,
@@ -209,6 +256,20 @@ class StaffData {
         if (emergencyShotAt != null)
           'emergencyShotAt': emergencyShotAt!.toIso8601String(),
         if (suppressedStatus != null) 'suppressedStatus': suppressedStatus,
+        if (vitalityCurrent != null) 'vitalityCurrent': vitalityCurrent,
+        if (moraleCurrent != null) 'moraleCurrent': moraleCurrent,
+        if (lastResourceRefillAt != null)
+          'lastResourceRefillAt': lastResourceRefillAt!.toIso8601String(),
+        'personalityOverrideId': personalityOverrideId,
+        if (personalityOverrideUntil != null)
+          'personalityOverrideUntil':
+              personalityOverrideUntil!.toIso8601String(),
+        if (personalityOverrideCause != null)
+          'personalityOverrideCause': personalityOverrideCause,
+        if (vitalityZeroSinceAt != null)
+          'vitalityZeroSinceAt': vitalityZeroSinceAt!.toIso8601String(),
+        if (moraleZeroSinceAt != null)
+          'moraleZeroSinceAt': moraleZeroSinceAt!.toIso8601String(),
         'matchHistory': matchHistory,
       };
 
@@ -217,6 +278,8 @@ class StaffData {
         name: readString(json['name']) ?? '',
         imagePath: readString(json['imagePath']) ?? '',
         type: readString(json['type']) ?? 'apprentice',
+        id: readInt(json['id']) ?? -1,
+        personalityId: readInt(json['personalityId']) ?? -1,
         levelValue: readInt(json['levelValue']) ?? 1,
         currentXPValue: readInt(json['currentXPValue']) ?? 0,
         woundValue: readInt(json['woundValue']) ?? 3,
@@ -232,6 +295,14 @@ class StaffData {
         injuryStartStatus: readString(json['injuryStartStatus']),
         emergencyShotAt: readDateTime(json['emergencyShotAt']),
         suppressedStatus: readString(json['suppressedStatus']),
+        vitalityCurrent: readInt(json['vitalityCurrent']),
+        moraleCurrent: readInt(json['moraleCurrent']),
+        lastResourceRefillAt: readDateTime(json['lastResourceRefillAt']),
+        personalityOverrideId: readInt(json['personalityOverrideId']) ?? -1,
+        personalityOverrideUntil: readDateTime(json['personalityOverrideUntil']),
+        personalityOverrideCause: readString(json['personalityOverrideCause']),
+        vitalityZeroSinceAt: readDateTime(json['vitalityZeroSinceAt']),
+        moraleZeroSinceAt: readDateTime(json['moraleZeroSinceAt']),
         matchHistory: readMapList(json['matchHistory']),
       );
 }
@@ -253,12 +324,16 @@ class MedicData {
   /// Name des Enneagramm-Profils.
   final String enneagramProfileName;
 
+  /// Stabiler Profil-Index (V9) – bevorzugt beim Laden; `null` = Alt-Daten.
+  final int? personalityId;
+
   MedicData({
     required this.id,
     required this.name,
     required this.quality,
     required this.costPerWeek,
     required this.enneagramProfileName,
+    this.personalityId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -267,6 +342,7 @@ class MedicData {
         'quality': quality,
         'costPerWeek': costPerWeek,
         'enneagramProfileName': enneagramProfileName,
+        if (personalityId != null) 'personalityId': personalityId,
       };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -276,6 +352,7 @@ class MedicData {
         quality: readString(json['quality']) ?? 'niedrig',
         costPerWeek: readInt(json['costPerWeek']) ?? 0,
         enneagramProfileName: readString(json['enneagramProfileName']) ?? '',
+        personalityId: readInt(json['personalityId']),
       );
 }
 

@@ -3,7 +3,8 @@ import 'dart:math';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
-import 'package:tiled_warfare/objects/object_host.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/utils/crc32.dart' show CRC32;
 import 'package:random_name_generator/random_name_generator.dart';
@@ -74,7 +75,11 @@ class ObjectTeamMedic {
             (random ?? Random()).nextInt(MedicQuality.values.length)] {
     // Compute ID from the actual name and current timestamp (not a duplicate random name).
     id = CRC32.compute('$name${_now().toIso8601String()}');
-    costPerWeek = EconomyService.weeklyMedicCost(quality, teamSize);
+    costPerWeek = EconomyService.weeklyMedicCost(
+      quality,
+      teamSize,
+      PersonalityTraits.forProfile(enneagramProfile.id, id).thriftiness,
+    );
   }
 
   /// Gibt den Anzeigenamen des Teamarztes zurück.
@@ -101,16 +106,22 @@ class ObjectTeamMedic {
       return false;
     }
 
+    // V9 § 6: Der Erschöpfungs-Malus des Charakters mindert die Arzt-Proben.
+    final exhaustion =
+        StressService.malusPercentForCharacter(character, _now());
+
     // Hilfsbereitschaft evaluieren: W100-Wurf gegen den aktuellen
     // helpfulness-Wert (Mittelwert der Fuzzy-Mengen).
     final helpfulnessScore = _evaluateHelpfulness();
-    if (EconomyService.rollD100(_random) > helpfulnessScore) {
+    if (EconomyService.rollD100(_random) >
+        StressService.targetAfterMalus(helpfulnessScore, exhaustion)) {
       return false; // Arzt ist nicht hilfsbereit genug.
     }
 
     // Behandlungsqualität evaluieren.
     final qualityScore = _evaluateTreatmentQuality();
-    if (EconomyService.rollD100(_random) > qualityScore) {
+    if (EconomyService.rollD100(_random) >
+        StressService.targetAfterMalus(qualityScore, exhaustion)) {
       return false; // Behandlung schlägt fehl.
     }
 

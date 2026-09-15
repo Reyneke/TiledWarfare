@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
@@ -6,6 +9,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
 
 /// Abrechnung eines vollendeten 7-Tage-Blocks (Wochen-Zusammenfassung, § 6).
 class WeekSettlement {
@@ -429,11 +433,14 @@ class GameClockService {
   /// fortgeschrieben; ein zweiter Aufruf mit demselben [now] liefert keine
   /// Fälligkeit. Der Sub-Tag-Rest bleibt erhalten, damit häufige Aufrufe (z. B.
   /// ein periodischer UI-Tick) keinen Tag verlieren.
-  static WeeklyTickResult catchUp(RestaurantData restaurant, DateTime now) {
+  static WeeklyTickResult catchUp(RestaurantData restaurant, DateTime now,
+      {Random? random}) {
     // V3: Echtzeit-Heilung und Spritzen-Rückfall werden **immer** nachgeholt –
     // auch wenn seit dem letzten Anker noch kein voller Tag vergangen ist.
     advanceHealing(restaurant, now);
     rollBackEmergencyShots(restaurant, now);
+    // V9 § 6 (Phase 4): Abgelaufene Stress-/Ruhe-Overrides werden entfernt.
+    _expireOverrides(restaurant, now);
 
     final lastSeen = restaurant.lastSeenAt;
     if (lastSeen == null) {
@@ -484,6 +491,8 @@ class GameClockService {
       budget += dailyIncome;
       totalIncome += dailyIncome;
       cursor = cursor.add(day);
+      // V9 (Phase 3): Je Echtzeit-Tag sinken Vitalität/Moral des Personals.
+      _applyDailyResourceSink(restaurant, cursor);
 
       if (!isBlockEnd) continue;
 
@@ -510,7 +519,13 @@ class GameClockService {
       ));
       // Wochenraster exakt eine Woche weiterziehen (kein Drift).
       weekAnchor = weekAnchor.add(week);
+      // V9 (Phase 3): Am Block-Ende werden Vitalität/Moral auf den Basiswert
+      // aufgefüllt (deterministisch aus Persönlichkeit + Charakter-ID).
+      _refillStaffResources(restaurant);
     }
+
+    // V9 § 6 (Phase 4): ein Proben-Paar je Staffel und Charakter.
+    _probeResources(restaurant, now, random ?? Random());
 
     restaurant.budget = budget;
     restaurant.lastSeenAt = cursor;
@@ -535,6 +550,88 @@ class GameClockService {
 
   // ── Eingangswerte aus dem Restaurant-Zustand (§ 8) ────────────────────
 
+  /// Senkt Vitalität/Moral um den Tages-Sink und pflegt die Null-Anker
+  /// (V9 § 6; die Anker sind die Basis des Erschöpfungs-Malus).
+  static void _applyDailyResourceSink(RestaurantData restaurant, DateTime now) {
+    for (final s in restaurant.staff) {
+      if (s.vitalityCurrent != null) {
+        final sink = StressService.sink(
+            s.vitalityCurrent!, EconomyBalance.resourceSinkPerDay);
+        s.vitalityCurrent = sink.value;
+        s.vitalityZeroSinceAt = StressService.updateZeroAnchor(
+            s.vitalityZeroSinceAt, atZero: sink.atZero, now: now);
+      }
+      if (s.moraleCurrent != null) {
+        final sink = StressService.sink(
+            s.moraleCurrent!, EconomyBalance.resourceSinkPerDay);
+        s.moraleCurrent = sink.value;
+        s.moraleZeroSinceAt = StressService.updateZeroAnchor(
+            s.moraleZeroSinceAt, atZero: sink.atZero, now: now);
+      }
+    }
+  }
+
+  /// Setzt Vitalität/Moral am Wochenblock-Ende auf den Trait-Basiswert zurück
+  /// (V9, Phase 3; deterministisch über Persönlichkeit + Charakter-ID).
+  static void _refillStaffResources(RestaurantData restaurant) {
+    for (final s in restaurant.staff) {
+      if (s.personalityId < 0) continue;
+      final base = PersonalityTraits.forProfile(s.personalityId, s.id);
+      s.vitalityCurrent = base.vitality;
+      s.moraleCurrent = base.morale;
+      // Der Refill löscht die Null-Anker – der Malus fällt auf 0 zurück (§ 6).
+      s.vitalityZeroSinceAt = null;
+      s.moraleZeroSinceAt = null;
+    }
+  }
+
+  /// Führt je Charakter ein Proben-Paar für die abgerechnete Staffel aus
+  /// (V9 § 6; der Zufall ist injizierbar, V7/L7).
+  static void _probeResources(
+      RestaurantData restaurant, DateTime now, Random rng) {
+    for (final s in restaurant.staff) {
+      final vitality = s.vitalityCurrent;
+      final morale = s.moraleCurrent;
+      if (vitality == null || morale == null) continue;
+      final override = StressService.probe(
+        vitalityCurrent: vitality,
+        moraleCurrent: morale,
+        currentProfileId: s.personalityId < 0 ? 0 : s.personalityId,
+        random: rng,
+        malusPercent: StressService.malusPercentForStaffData(s, now),
+      );
+      if (override == null) continue;
+      s.personalityOverrideId = override.profileId;
+      s.personalityOverrideUntil = now.add(override.duration);
+      s.personalityOverrideCause = override.cause;
+    }
+  }
+
+  /// Entfernt abgelaufene Stress-/Ruhe-Overrides (V9 § 6).
+  static void _expireOverrides(RestaurantData restaurant, DateTime now) {
+    for (final s in restaurant.staff) {
+      final until = s.personalityOverrideUntil;
+      if (until != null && !now.isBefore(until)) {
+        s.personalityOverrideId = -1;
+        s.personalityOverrideUntil = null;
+        s.personalityOverrideCause = null;
+      }
+    }
+  }
+
+  /// Ø Hilfsbereitschaft des Personals (nur Charaktere mit zugewiesenem Profil).
+  static double _staffHelpfulnessAverage(RestaurantData restaurant) {
+    if (restaurant.staff.isEmpty) return 0.0;
+    var sum = 0.0;
+    var n = 0;
+    for (final s in restaurant.staff) {
+      if (s.personalityId < 0) continue;
+      sum += PersonalityTraits.forProfile(s.personalityId, s.id).helpfulness;
+      n++;
+    }
+    return n == 0 ? 0.0 : sum / n;
+  }
+
   /// Attraktivität: `1 + (Prestige − 1) + Personalanzahl × Kopf-Bonus`,
   /// geclamped auf die Domäne `0–inputDomainMax`. Ein aktiver Rebranding-Malus
   /// (§ 9) wird abgezogen, sofern [now] übergeben wird und noch innerhalb des
@@ -544,6 +641,9 @@ class GameClockService {
     var value = EconomyBalance.attractivenessBase +
         (prestige - 1.0) +
         restaurant.staff.length * EconomyBalance.staffAttractivityPerHead;
+    // V9 (Phase 3): Die Hilfsbereitschaft des Personals trägt zur Attraktivität bei.
+    value += EconomyBalance.personalityAttractivenessWeight *
+        _staffHelpfulnessAverage(restaurant);
     // Erweiterungen wirken multiplikativ vor dem Clamp (§ 10).
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).attractiveness;
     final penaltyUntil = restaurant.rebrandingPenaltyUntil;

@@ -403,7 +403,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Nutzt [ObjectToken.baseMovementValue] (final), um den ursprünglichen
   /// Konstruktor-Wert zu erhalten – unabhängig von früheren Spielrunden.
   void _resetTokenRoundState(ObjectToken token) {
-    token.movementValue = token.baseMovementValue;
+    // V9 (Phase 5): Spieler-Charaktere erhalten ihren Persönlichkeits-Modifikator
+    // (TacticalComplexity) auf die Bewegungsreichweite.
+    token.movementValue = token is ObjectApprentice
+        ? token.personalityMovementValue
+        : token.baseMovementValue;
     token.hasActed = false;
   }
 

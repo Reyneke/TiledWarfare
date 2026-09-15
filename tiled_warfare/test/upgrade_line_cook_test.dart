@@ -31,6 +31,8 @@ void main() {
     int woundValue = 3,
     String status = 'ready',
     List<Map<String, dynamic>>? matchHistory,
+    int id = -1,
+    int personalityId = -1,
   }) =>
       StaffData(
         name: name,
@@ -40,6 +42,8 @@ void main() {
         woundValue: woundValue,
         status: status,
         matchHistory: matchHistory,
+        id: id,
+        personalityId: personalityId,
       );
 
   test('unter Level 5: kein Upgrade, Budget unverändert', () {
@@ -62,6 +66,8 @@ void main() {
     profile.loadFromData(
       profileWith(
         staff: apprentice(
+          id: 424242,
+          personalityId: 3,
           levelValue: 5,
           woundValue: 2,
           status: 'hurt',
@@ -101,6 +107,12 @@ void main() {
     expect(promoted.levelValue, 5);
     expect(promoted.status, CharacterStatus.hurt);
     expect(promoted.woundValue, 2);
+
+    // Identität & Persönlichkeit (V9) wandern mit – inkl. Ressourcen.
+    expect(promoted.id, 424242);
+    expect(promoted.personalityId, 3);
+    expect(promoted.vitalityCurrent, old.vitalityCurrent);
+    expect(promoted.moraleCurrent, old.moraleCurrent);
 
     // Statprofil des Line Cooks (Beförderung, keine Neuwürfelung).
     expect(promoted.attackValue, 80);

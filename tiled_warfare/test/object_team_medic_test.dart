@@ -2,8 +2,9 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
-import 'package:tiled_warfare/objects/object_host.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 
 /// Tests der Teamarzt-Bewertung nach dem Entfernen der Fuzzy-Engine (V5,
 /// `doc/todo/feat_better_restaurant_management/5_Halbfertige_Features.md`).
@@ -51,6 +52,15 @@ void main() {
 
     expect(a.quality, b.quality);
     expect(a.enneagramProfile, b.enneagramProfile);
-    expect(a.costPerWeek, b.costPerWeek);
+    // V9: Der Lohn hängt zusätzlich an der Thriftiness des Individuums
+    // (Charakter-ID aus Name + Zeit) – gleiche Basis, eigene Ausprägung.
+    expect(
+      a.costPerWeek,
+      EconomyService.weeklyMedicCost(
+        a.quality,
+        0,
+        PersonalityTraits.forProfile(a.enneagramProfile.id, a.id).thriftiness,
+      ),
+    );
   });
 }

@@ -5,6 +5,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 class ScreenCharacterDetail extends StatefulWidget {
   final ObjectApprentice character;
@@ -129,6 +130,30 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
                 ),
                 style: theme.textTheme.bodySmall,
               ),
+              const SizedBox(height: 4),
+              // Persönlichkeit & Ressourcen (V9 § 2/§ 6).
+              Text(
+                l10n.personalityLabel(character.effectivePersonality.name),
+                style: theme.textTheme.bodySmall,
+              ),
+              Text(
+                l10n.resourcesLine(
+                  character.vitalityCurrent,
+                  character.moraleCurrent,
+                ),
+                style: theme.textTheme.bodySmall,
+              ),
+              if (_overrideInfoText(l10n) != null)
+                Text(
+                  _overrideInfoText(l10n)!,
+                  style: theme.textTheme.bodySmall,
+                ),
+              if (_exhaustionMalus() > 0)
+                Text(
+                  l10n.resourceZeroMalus(_exhaustionMalus()),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.error),
+                ),
               const SizedBox(height: 8),
               if (character.matchHistory.isNotEmpty) ...[
                 Text(
@@ -227,6 +252,21 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
     );
     return l10n.healCountdown(remaining.inHours, remaining.inMinutes % 60);
   }
+
+  /// Text des laufenden Stress-/Ruhe-Overrides (V9 § 6) oder `null`.
+  String? _overrideInfoText(AppLocalizations l10n) {
+    final until = character.personalityOverrideUntil;
+    if (until == null || !until.isAfter(DateTime.now())) return null;
+    final time = '${until.day}.${until.month}. ${until.hour}:'
+        '${until.minute.toString().padLeft(2, '0')}';
+    return character.personalityOverrideCause == 'ruhe'
+        ? l10n.ruheCountdown(time)
+        : l10n.stressCountdown(time);
+  }
+
+  /// Aktueller Erschöpfungs-Malus in Prozentpunkten (V9 § 6).
+  int _exhaustionMalus() =>
+      StressService.malusPercentForCharacter(character, DateTime.now());
 
   Widget _buildXpBar(BuildContext context, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;

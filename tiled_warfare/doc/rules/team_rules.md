@@ -54,6 +54,8 @@ Der Spieler kann Charaktere verschiedener Klassen anheuern und weiterentwickeln.
 
 **Wichtig:** Der Spieler kann **nur** Lehrlinge direkt anheuern. Höhere Klassen werden durch Fortbildung freigeschaltet.
 
+**Vererbung (verbindlich):** Alle Klassen, die ins Gefecht ziehen, leiten von der **Grundklasse Lehrling (Apprentice)** ab (`ObjectLineCook extends ObjectApprentice`). Neue Klassen (Sous Chef, Chef de Partie, Patissier) erben dieselbe Attribut- und Persönlichkeitsstruktur – kein Parallelmodell (Details: `9_Personal.md`).
+
 ### 2.4 Anheuerung (Rekrutierung)
 
 - Der Spieler kann jederzeit zwischen Gefechten neue Lehrlinge anheuern
@@ -68,6 +70,36 @@ Der Spieler kann Charaktere verschiedener Klassen anheuern und weiterentwickeln.
 - Es gibt keine Rückerstattung des Anheuerungspreises bei Entlassung
 
 ---
+
+### 2.6 Attribute & Persönlichkeit (V9)
+
+**Attribute (kanonisch, für alle Charaktere – auch außerhalb des Gefechts):**
+
+| Gruppe | Attribute (Auszug) | Herkunft |
+|---|---|---|
+| Basis (Gefecht) | `attackValue`, `defenseValue`, `damageValue`, `movementValue`, `rangeValue`, `fieldOfView`, `woundValue` | Klassen-Profil (`EconomyBalance.<class>Stats`) |
+| Zustand | `status`, `injuryStartedAt`, `injuryStartStatus`, `emergencyShotAt`, `suppressedStatus` | Gefecht/Heilung (V3) |
+| Fortschritt | `levelValue`, `currentXPValue`, `xpValue`, `moneyValue`, `matchHistory` | Gefecht |
+| Persönlichkeit | `aggressiveness`, `riskTolerance`, `tacticalComplexity`, `helpfulness`, `thriftiness`, `vitality`, `morale`, `shadiness` | Enneagramm-Profil (`personalityId`) |
+
+Zusätzlich trägt jeder Charakter eine stabile `id` (CRC32) als Referenz für Attribute, Persönlichkeit und Match-Historie.
+
+**Persönlichkeit:** Zwölf Enneagramm-Profile; die Traits werden **deterministisch** aus dem Profil abgeleitet und weichen je Charakter um **±1W20** ab (Varianz aus der Charakter-`id`, keine zusätzlichen Speicherfelder). Gespeichert wird ausschließlich `personalityId` – Anzeige und Wirkung werden daraus abgeleitet (eine Quelle der Wahrheit).
+
+**Ressourcen (Echtzeit):**
+
+| Ressource | Sinkt | Wird aufgefüllt | Bei 0 |
+|---|---|---|---|
+| `vitalityCurrent` | −5 je Tag, −10 je Einsatz | wöchentlich auf den Trait-Basiswert | kumulativer Erschöpfungs-Malus |
+| `moraleCurrent` | −5 je Tag, −10 je Einsatz | wöchentlich auf den Trait-Basiswert | kumulativer Erschöpfungs-Malus |
+
+**Erschöpfungs-Malus:** −5 Prozentpunkte auf **alle W100-Zielwerte** je Nulltag (−10 pp, wenn beide Ressourcen auf 0 stehen); **kein Cap** – der Wochen-Refill setzt zurück (Stützwerte in `EconomyBalance`).
+
+**Stress & Ruhe:** Jeder Ressourcenverlust löst eine **W100-Probe je Ressource** aus (Ziel = aktueller Wert nach dem Sinken). Überwurf ⇒ **Stress**, kritische Unterschreitung ⇒ **Ruhe** – beides ein **vollständiger, temporärer Persönlichkeitswechsel** (Override mit Ablaufzeitpunkt); die Dauer staffelt sich nach der Über-/Unterschreitung (1W6 Einzelticke à 3 h bis 1W4 Monate).
+
+**Grenze:** Heilzeit und Heilungsqualität bleiben **persönlichkeitsunabhängig** und deterministisch (§ 4.3/§ 4.5); `vitality`/`morale` berühren die Wundkette (`status`/`woundValue`) nicht.
+
+> Formeln, Konstanten und Umsetzung: `doc/todo/feat_better_restaurant_management/9_Personal.md`.
 
 ## 3. Charakter-Progression
 
@@ -135,6 +167,8 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
 
 **Optionale Verbesserung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, erhöht sich der Rettungswurf-Zielwert um seinen Qualitätsbonus (**+10 / +20 / +30**, `EconomyBalance.medicQualitySpecs`) zusätzlich zu den obigen Boni. Ein einmalig gescheiterter Rettungswurf pro Charakter und Gefecht kann gegen Bezahlung wiederholt werden.
 
+**Abzug durch Erschöpfung (V9):** Steht `vitalityCurrent` bzw. `moraleCurrent` auf 0, mindert der **kumulative Erschöpfungs-Malus** alle W100-Zielwerte – also auch diesen Rettungswurf (§ 2.6; Details in `9_Personal.md`, § 6).
+
 ### 4.3 Heilung
 
 - Die Heilung läuft in **Echtzeit** und wird beim App-Start bzw. Restaurant-Wechsel nachgeholt (Catch-up, V8).
@@ -142,6 +176,7 @@ Wenn ein Charakter auf der Map stirbt (`woundValue ≤ 0`):
 - Heilungsreihenfolge: `dying → injured → hurt → afraid → reeling → ready`
 - **Ohne Teamarzt** dauert jede Stufe **einen Echtzeit-Tag** (24 h). Ein `dying`-Charakter braucht also 5 Tage bis `ready`.
 - Die Zeit pro Stufe ist **deterministisch**: Sie hängt allein von der Qualität des angestellten Arztes ab (`EconomyBalance.medicQualitySpecs`), nicht von Persönlichkeit/Fuzzy-Werten (`effectiveHealTime` entfällt).
+- **Unverändert (V9):** Auch die Ressourcen (`vitalityCurrent`/`moraleCurrent`) und der Erschöpfungs-Malus ändern die Heilzeit nicht (§ 2.6).
 
 **Optionale Beschleunigung durch Teamarzt (siehe 4.5):** Ist ein Teamarzt angeheuert, heilt der Charakter je nach Qualität **eine Stufe pro 6 h / 3 h / 1 h** statt pro Tag (`EconomyBalance.medicQualitySpecs`). Ein `dying`-Charakter ist so in 30 h / 15 h / 5 h wieder voll einsatzbereit.
 
@@ -225,4 +260,5 @@ Bei einem Neustart:
 ## 7. Zusätzliche Hinweise
 
 - Dieses Regelwerk sollte mit den tatsächlichen Implementierungen in `object_apprentice.dart`, `object_line_cook.dart`, `object_token.dart` und `object_player.dart` abgeglichen werden
+- **Attribute & Persönlichkeit (V9):** kanonische Attributliste, Enneagramm-Traits, ±1W20-Varianz, Ressourcen, Stress/Ruhe und Erschöpfungs-Malus siehe `doc/todo/feat_better_restaurant_management/9_Personal.md`
 - **Aktuelles Implementierungs-Detail:** `ObjectPlayer` verwaltet derzeit nur `lineCookList`. Die Anheuerung von Lehrlingen und deren Verwaltung muss noch in den Code integriert werden

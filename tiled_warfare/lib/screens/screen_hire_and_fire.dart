@@ -299,7 +299,12 @@ class _PersonnelCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      medic.enneagramProfile.name,
+                      '${medic.enneagramProfile.name} · ${l10n.medicScores(
+                        ObjectTeamMedic.helpfulnessScoreFor(
+                            medic.enneagramProfile, medic.quality),
+                        ObjectTeamMedic.treatmentQualityScoreFor(
+                            medic.enneagramProfile, medic.quality),
+                      )}',
                       style: theme.textTheme.bodySmall,
                       overflow: TextOverflow.ellipsis,
                     ),

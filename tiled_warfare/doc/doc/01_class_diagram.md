@@ -164,7 +164,8 @@
 |--------|-------|
 | `CombatAction` | Enum: `melee`, `ranged`, `focusFire` |
 | `CombatResult` | Datenklasse für Kampfergebnisse |
-| `EnneagramProfile` | 12 Enneagramm-Persönlichkeitsprofile |
+| `EnneagramProfile` | 12 Enneagramm-Persönlichkeitsprofile (`lib/models/personality.dart`, V9) |
+| `PersonalityTraits` | Deterministische Trait-Ableitung je Charakter aus dem Profil (V9) |
 | `HostPersonality` | Fuzzy-Logik-basierte Persönlichkeitsbewertung |
 | `Aggressiveness` | Fuzzy-Variable (0–100) |
 | `RiskTolerance` | Fuzzy-Variable (0–100) |

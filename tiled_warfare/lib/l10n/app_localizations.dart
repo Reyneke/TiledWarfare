@@ -1112,6 +1112,42 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Voll einsatzbereit'**
   String get healingComplete;
+
+  /// Enneagramm-Profil des Charakters (V9)
+  ///
+  /// In de, this message translates to:
+  /// **'Persönlichkeit: {name}'**
+  String personalityLabel(String name);
+
+  /// Ressourcenstände des Charakters (V9 § 2)
+  ///
+  /// In de, this message translates to:
+  /// **'Vitalität {vitality}/100 · Moral {morale}/100'**
+  String resourcesLine(int vitality, int morale);
+
+  /// Laufender Stress-Override (V9 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Unter Stress – Wechsel bis {time}'**
+  String stressCountdown(String time);
+
+  /// Laufender Ruhe-Override (V9 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'In Ruhe – Wechsel bis {time}'**
+  String ruheCountdown(String time);
+
+  /// Kumulativer Erschöpfungs-Malus (V9 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Erschöpft: −{malus} % auf alle Würfe'**
+  String resourceZeroMalus(int malus);
+
+  /// Persönlichkeits-Scores des Teamarztes (V9 § 4)
+  ///
+  /// In de, this message translates to:
+  /// **'Hilfsbereitschaft {helpfulness} · Behandlungsqualität {treatment}'**
+  String medicScores(int helpfulness, int treatment);
 }
 
 class _AppLocalizationsDelegate

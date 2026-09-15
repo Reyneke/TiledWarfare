@@ -4,6 +4,7 @@ import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
 
 /// Repräsentiert das Ergebnis eines Kampfangriffs.
 class CombatResult {
@@ -140,22 +141,25 @@ class ObjectPlayer {
     required ObjectToken attacker,
     required ObjectToken defender,
     required int distance,
+    required DateTime now,
   }) {
+    // V9 (Phase 5): Basis inkl. Persönlichkeits-Modifikator + Erschöpfungs-Malus.
+    final int attackBase = _attackTargetBase(attacker, now);
     int effectiveAttackValue;
 
     // Angriffswert basierend auf der Aktion und Entfernung bestimmen
     if (action == CombatAction.ranged) {
       // Fernkampf: Entfernungsmalus gemäß combat_rules.md
       if (distance <= attacker.rangeValue * 0.5) {
-        effectiveAttackValue = attacker.attackValue; // kein Malus
+        effectiveAttackValue = attackBase; // kein Malus
       } else if (distance <= attacker.rangeValue * 0.75) {
-        effectiveAttackValue = attacker.attackValue - 10; // −10 Malus
+        effectiveAttackValue = attackBase - 10; // −10 Malus
       } else {
-        effectiveAttackValue = attacker.attackValue - 20; // −20 Malus
+        effectiveAttackValue = attackBase - 20; // −20 Malus
       }
     } else {
       // Nahkampf: nur auf benachbarte Felder möglich
-      effectiveAttackValue = attacker.attackValue;
+      effectiveAttackValue = attackBase;
     }
 
     // Kumulativen Angriffs-Bonus durch mehrfache Angriffe auf das Ziel anwenden
@@ -169,12 +173,34 @@ class ObjectPlayer {
   /// kumulativen Verteidigungs-Malus durch mehrfache Angriffe.
   ///
   /// Der Malus beträgt −5 % pro Angriff auf diesen Token in dieser Runde.
-  int _calculateEffectiveDefenseValue(ObjectToken defender) {
+  int _calculateEffectiveDefenseValue(ObjectToken defender,
+      {required DateTime now}) {
+    // V9 (Phase 5): Basis inkl. Persönlichkeits-Modifikator + Erschöpfungs-Malus.
+    final int defenseBase = _defenseTargetBase(defender, now);
     // Kumulativen Verteidigungs-Malus durch mehrfache Angriffe anwenden
     // Jeder Angriff auf den Verteidiger gibt −5 % auf den Verteidigungswert
-    final effectiveDefenseValue = defender.defenseValue - defender.defenseMalus;
+    final effectiveDefenseValue = defenseBase - defender.defenseMalus;
     return effectiveDefenseValue.clamp(0, 100);
   }
+
+  /// Angriffs-Basiswert inkl. Persönlichkeit und Erschöpfungs-Malus (V9 § 5).
+  int _attackTargetBase(ObjectToken attacker, DateTime now) {
+    if (attacker is! ObjectApprentice) return attacker.attackValue;
+    return attacker.personalityAttackValue -
+        StressService.malusPercentForCharacter(attacker, now);
+  }
+
+  /// Verteidigungs-Basiswert inkl. Persönlichkeit und Erschöpfungs-Malus.
+  int _defenseTargetBase(ObjectToken defender, DateTime now) {
+    if (defender is! ObjectApprentice) return defender.defenseValue;
+    return defender.personalityDefenseValue -
+        StressService.malusPercentForCharacter(defender, now);
+  }
+
+  /// Schadenswert inkl. Persönlichkeits-Modifikator (V9 § 5).
+  int _damageBase(ObjectToken token) => token is ObjectApprentice
+      ? token.personalityDamageValue
+      : token.damageValue;
 
   /// Führt einen Angriff mit der angegebenen [action] vom [attacker] auf den
   /// [defender] aus.
@@ -201,15 +227,19 @@ class ObjectPlayer {
     required ObjectToken attacker,
     required ObjectToken defender,
     int distance = 1,
+    DateTime? now,
   }) {
+    final nowTime = now ?? DateTime.now();
     // Effektive Werte unter Berücksichtigung des Malus-Systems berechnen
     final int effectiveAttackValue = _calculateEffectiveAttackValue(
       action: action,
       attacker: attacker,
       defender: defender,
       distance: distance,
+      now: nowTime,
     );
-    final int effectiveDefenseValue = _calculateEffectiveDefenseValue(defender);
+    final int effectiveDefenseValue =
+        _calculateEffectiveDefenseValue(defender, now: nowTime);
 
     // Angreifer würfelt
     final attackRoll = _rollD100();
@@ -305,7 +335,7 @@ class ObjectPlayer {
     bool defenseFumble,
     bool defenseCritical,
   ) {
-    final selfDamage = (defender.damageValue / 2).ceil();
+    final selfDamage = (_damageBase(defender) / 2).ceil();
     attacker.woundValue -= selfDamage;
     return CombatResult(
       hit: false,
@@ -324,7 +354,7 @@ class ObjectPlayer {
     bool attackCritical,
     bool defenseFumble,
   ) {
-    final counterDamage = (defender.damageValue / 2).ceil();
+    final counterDamage = (_damageBase(defender) / 2).ceil();
     attacker.woundValue -= counterDamage;
     return CombatResult(
       hit: false,
@@ -342,7 +372,7 @@ class ObjectPlayer {
     ObjectToken defender,
     bool defenseFumble,
   ) {
-    final doubleDamage = attacker.damageValue * 2;
+    final doubleDamage = _damageBase(attacker) * 2;
     defender.woundValue -= doubleDamage;
     return CombatResult(
       hit: true,
@@ -355,7 +385,7 @@ class ObjectPlayer {
   /// Patzer des Verteidigers (Wurf > 90):
   /// Automatischer Treffer mit doppeltem Schaden.
   CombatResult _handleDefenderFumble(ObjectToken attacker, ObjectToken defender) {
-    final doubleDamage = attacker.damageValue * 2;
+    final doubleDamage = _damageBase(attacker) * 2;
     defender.woundValue -= doubleDamage;
     return CombatResult(
       hit: true,
@@ -390,10 +420,10 @@ class ObjectPlayer {
 
     if (!defenseSuccess || attackerComparison > defenderComparison) {
       // Angreifer trifft
-      defender.woundValue -= attacker.damageValue;
+      defender.woundValue -= _damageBase(attacker);
       return CombatResult(
         hit: true,
-        damage: attacker.damageValue,
+        damage: _damageBase(attacker),
         defenderFumbled: defenseFumble,
       );
     }
@@ -402,10 +432,10 @@ class ObjectPlayer {
       // Gleichstand → Münzwurf (W100 > 51 → Angreifer gewinnt)
       final coinToss = _rollD100();
       if (coinToss > EconomyBalance.tieBreakWinAbove) {
-        defender.woundValue -= attacker.damageValue;
+        defender.woundValue -= _damageBase(attacker);
         return CombatResult(
           hit: true,
-          damage: attacker.damageValue,
+          damage: _damageBase(attacker),
           defenderFumbled: defenseFumble,
         );
       }

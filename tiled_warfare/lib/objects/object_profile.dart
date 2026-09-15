@@ -2,11 +2,11 @@ import 'dart:math';
 
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
-import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
@@ -14,6 +14,7 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
 
 /// Verwaltet das Restaurant und alle Dinge, die ausserhalb des Gefechts
@@ -140,8 +141,12 @@ class ObjectProfile {
   /// berechnet (§ 4.5). Die erste Abbuchung erfolgt erst zum nächsten
   /// Wochen-Tick (kein anteiliger Einzug).
   void hireMedic(ObjectTeamMedic medic) {
-    medic.costPerWeek =
-        EconomyService.weeklyMedicCost(medic.quality, personalCount);
+    medic.costPerWeek = EconomyService.weeklyMedicCost(
+      medic.quality,
+      personalCount,
+      PersonalityTraits.forProfile(medic.enneagramProfile.id, medic.id)
+          .thriftiness,
+    );
     _hiredMedics.add(medic);
   }
 
@@ -155,13 +160,33 @@ class ObjectProfile {
   ///
   /// Gibt `true` zurück, wenn die Anheuerung erfolgreich war, andernfalls
   /// `false` (z. B. bei unzureichendem Budget trotz Negativgrenze).
-  bool hireApprentice({int cost = EconomyBalance.hireApprenticeCost}) {
+  /// [random]/[now] sind optional injizierbar (V7/L7) – damit sind
+  /// Persönlichkeitswahl und ID deterministisch testbar.
+  bool hireApprentice({
+    int cost = EconomyBalance.hireApprenticeCost,
+    Random? random,
+    DateTime? now,
+  }) {
     if (!EconomyService.canAfford(budget: budget, cost: cost)) {
       return false; // Negativgrenze würde überschritten
     }
     budget -= cost;
-    // Küche bestimmt Namensstamm und Token-Grafik (§ 9).
-    final apprentice = ObjectApprentice(cuisine: activeCuisine);
+    final rng = random ?? Random();
+    final createdAt = now ?? DateTime.now();
+    // Küche bestimmt Namensstamm und Token-Grafik (§ 9); die Persönlichkeit
+    // wird zufällig aus den zwölf Enneagramm-Profilen gewählt (V9).
+    final apprentice = ObjectApprentice(
+      cuisine: activeCuisine,
+      personalityId: rng.nextInt(EnneagramProfile.all.length),
+    );
+    // Stabile ID erst nach der Namensgenerierung (V9): Sie ist die Referenz
+    // für Persönlichkeits-Varianz und Ressourcen.
+    apprentice.id = CRC32.compute(
+        apprentice.name + createdAt.toIso8601String());
+    final traits =
+        PersonalityTraits.forProfile(apprentice.personalityId, apprentice.id);
+    apprentice.vitalityCurrent = traits.vitality;
+    apprentice.moraleCurrent = traits.morale;
     _personal.add(apprentice);
     return true;
   }
@@ -218,6 +243,11 @@ class ObjectProfile {
     lineCook.emergencyShotAt = apprentice.emergencyShotAt;
     lineCook.suppressedStatus = apprentice.suppressedStatus;
     lineCook.matchHistory = List.of(apprentice.matchHistory);
+    lineCook.id = apprentice.id;
+    lineCook.personalityId = apprentice.personalityId;
+    lineCook.vitalityCurrent = apprentice.vitalityCurrent;
+    lineCook.moraleCurrent = apprentice.moraleCurrent;
+    lineCook.lastResourceRefillAt = apprentice.lastResourceRefillAt;
 
     // Alten Lehrling entfernen und durch den Line Cook ersetzen
     _personal.remove(apprentice);
@@ -316,6 +346,8 @@ class ObjectProfile {
         targetValue -= EconomyBalance.survivalOverkillPenalty;
       }
       targetValue += medicBonus; // Teamarzt-Bonus
+      // V9 § 6: Der kumulative Erschöpfungs-Malus mindert alle W100-Zielwerte.
+      targetValue -= StressService.malusPercentForCharacter(unit, nowTime);
 
       // Erster Rettungswurf
       int roll = EconomyService.rollD100(rng);
@@ -394,6 +426,40 @@ class ObjectProfile {
   /// enthalten sind, gelten als gefallen und durchlaufen den Rettungswurf.
   void syncUnitsAfterBattle(List<ObjectApprentice> survivors,
       {Random? random, DateTime? now}) {
+    // V9 (Phase 3/4): Ein Gefechtseinsatz kostet Vitalität und Moral und kann
+    // Stress oder Ruhe auslösen (W100-Proben, § 6; injizierbarer Zufall).
+    final battleRng = random ?? Random();
+    final battleNow = now ?? DateTime.now();
+    for (final survivor in survivors) {
+      final vitalitySink = StressService.sink(
+          survivor.vitalityCurrent, EconomyBalance.resourceSinkPerBattle);
+      final moraleSink = StressService.sink(
+          survivor.moraleCurrent, EconomyBalance.resourceSinkPerBattle);
+      survivor.vitalityCurrent = vitalitySink.value;
+      survivor.moraleCurrent = moraleSink.value;
+      survivor.vitalityZeroSinceAt = StressService.updateZeroAnchor(
+          survivor.vitalityZeroSinceAt,
+          atZero: vitalitySink.atZero,
+          now: battleNow);
+      survivor.moraleZeroSinceAt = StressService.updateZeroAnchor(
+          survivor.moraleZeroSinceAt,
+          atZero: moraleSink.atZero,
+          now: battleNow);
+      final override = StressService.probe(
+        vitalityCurrent: survivor.vitalityCurrent,
+        moraleCurrent: survivor.moraleCurrent,
+        currentProfileId: survivor.personalityId,
+        random: battleRng,
+        malusPercent:
+            StressService.malusPercentForCharacter(survivor, battleNow),
+      );
+      if (override != null) {
+        survivor.personalityOverrideId = override.profileId;
+        survivor.personalityOverrideUntil = battleNow.add(override.duration);
+        survivor.personalityOverrideCause = override.cause;
+      }
+    }
+
     // Zuerst: existierende Einträge aus [_personal] mit den Überlebenden
     // aus dem Gefecht aktualisieren.
     // Vergleich über Identität statt name, da Namensgleichheit zu
@@ -687,9 +753,9 @@ class ObjectProfile {
   /// Holt fällige Wochen für das aktive Restaurant nach und schreibt Budget
   /// und Zeitanker zurück. Wird beim Login, beim Restaurant-Wechsel und beim
   /// Wiederaufnehmen der App (App-Resume) aufgerufen.
-  WeeklyTickResult runCatchUp(DateTime now) {
+  WeeklyTickResult runCatchUp(DateTime now, {Random? random}) {
     final snapshot = activeRestaurantSnapshot();
-    final result = GameClockService.catchUp(snapshot, now);
+    final result = GameClockService.catchUp(snapshot, now, random: random);
     budget = snapshot.budget;
     lastSeenAt = snapshot.lastSeenAt;
     weekAnchorAt = snapshot.weekAnchorAt;
@@ -723,6 +789,15 @@ class ObjectProfile {
               (e) => e.name == sd.suppressedStatus,
               orElse: () => CharacterStatus.dying,
             );
+      character.vitalityCurrent =
+          sd.vitalityCurrent ?? character.vitalityCurrent;
+      character.moraleCurrent = sd.moraleCurrent ?? character.moraleCurrent;
+      character.lastResourceRefillAt = sd.lastResourceRefillAt;
+      character.personalityOverrideId = sd.personalityOverrideId;
+      character.personalityOverrideUntil = sd.personalityOverrideUntil;
+      character.personalityOverrideCause = sd.personalityOverrideCause;
+      character.vitalityZeroSinceAt = sd.vitalityZeroSinceAt;
+      character.moraleZeroSinceAt = sd.moraleZeroSinceAt;
     }
   }
 
@@ -769,6 +844,16 @@ class ObjectProfile {
         injuryStartStatus: a.injuryStartStatus?.name,
         emergencyShotAt: a.emergencyShotAt,
         suppressedStatus: a.suppressedStatus?.name,
+        id: a.id,
+        personalityId: a.personalityId,
+        vitalityCurrent: a.vitalityCurrent,
+        moraleCurrent: a.moraleCurrent,
+        lastResourceRefillAt: a.lastResourceRefillAt,
+        personalityOverrideId: a.personalityOverrideId,
+        personalityOverrideUntil: a.personalityOverrideUntil,
+        personalityOverrideCause: a.personalityOverrideCause,
+        vitalityZeroSinceAt: a.vitalityZeroSinceAt,
+        moraleZeroSinceAt: a.moraleZeroSinceAt,
         matchHistory: a.matchHistory.map((m) => m.toJson()).toList(),
       );
 
@@ -826,6 +911,24 @@ class ObjectProfile {
             (e) => e.name == sd.suppressedStatus,
             orElse: () => CharacterStatus.dying,
           );
+    // Identität & Persönlichkeit (V9): stabile ID und Profil sicherstellen.
+    // Alt-Daten ohne Felder werden deterministisch aus dem Namen abgeleitet
+    // (kein Neu-Würfeln bei jedem Laden).
+    apprentice.id = sd.id >= 0 ? sd.id : CRC32.compute(sd.name);
+    apprentice.personalityId = sd.personalityId >= 0
+        ? sd.personalityId
+        : CRC32.compute(sd.name) % EnneagramProfile.all.length;
+    final traits =
+        PersonalityTraits.forProfile(apprentice.personalityId, apprentice.id);
+    apprentice.vitalityCurrent = sd.vitalityCurrent ?? traits.vitality;
+    apprentice.moraleCurrent = sd.moraleCurrent ?? traits.morale;
+    apprentice.lastResourceRefillAt = sd.lastResourceRefillAt;
+    apprentice.personalityOverrideId = sd.personalityOverrideId;
+    apprentice.personalityOverrideUntil = sd.personalityOverrideUntil;
+    apprentice.personalityOverrideCause = sd.personalityOverrideCause;
+    apprentice.vitalityZeroSinceAt = sd.vitalityZeroSinceAt;
+    apprentice.moraleZeroSinceAt = sd.moraleZeroSinceAt;
+
     // Match-Historie wiederherstellen
     apprentice.matchHistory = sd.matchHistory
         .map((m) => MatchRecord.fromJson(m))
@@ -840,6 +943,7 @@ class ObjectProfile {
         quality: m.quality.name,
         costPerWeek: m.costPerWeek,
         enneagramProfileName: m.enneagramProfile.name,
+        personalityId: m.enneagramProfile.id,
       );
 
   /// Konvertiert [MedicData] zurück in einen [ObjectTeamMedic].
@@ -854,10 +958,14 @@ class ObjectProfile {
       orElse: () => MedicQuality.niedrig,
     );
     medic.costPerWeek = md.costPerWeek;
-    medic.enneagramProfile = EnneagramProfile.all.firstWhere(
-      (p) => p.name == md.enneagramProfileName,
-      orElse: () => EnneagramProfile.all.first,
-    );
+    // Bevorzugt der stabile Index (V9); der Anzeigename bleibt Fallback für
+    // Alt-Spielstände (V6-Prinzip).
+    final medicProfileId = md.personalityId;
+    medic.enneagramProfile = medicProfileId != null &&
+            medicProfileId >= 0 &&
+            medicProfileId < EnneagramProfile.all.length
+        ? EnneagramProfile.all[medicProfileId]
+        : EnneagramProfile.byName(md.enneagramProfileName);
     return medic;
   }
 }

@@ -733,5 +733,35 @@
     "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
   },
   "healingComplete": "Fully fit for duty",
-  "@healingComplete": { "description": "Character is fully healed (V3)" }
+  "@healingComplete": { "description": "Character is fully healed (V3)" },
+  "personalityLabel": "Personality: {name}",
+  "@personalityLabel": {
+    "description": "Enneagram profile of the character (V9)",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "resourcesLine": "Vitality {vitality}/100 · Morale {morale}/100",
+  "@resourcesLine": {
+    "description": "Resource levels of the character (V9 § 2)",
+    "placeholders": { "vitality": { "type": "int" }, "morale": { "type": "int" } }
+  },
+  "stressCountdown": "Stressed – switching until {time}",
+  "@stressCountdown": {
+    "description": "Running stress override (V9 § 6)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "ruheCountdown": "At ease – switching until {time}",
+  "@ruheCountdown": {
+    "description": "Running calm override (V9 § 6)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "resourceZeroMalus": "Exhausted: −{malus} % on all rolls",
+  "@resourceZeroMalus": {
+    "description": "Cumulative exhaustion penalty (V9 § 6)",
+    "placeholders": { "malus": { "type": "int" } }
+  },
+  "medicScores": "Helpfulness {helpfulness} · Treatment quality {treatment}",
+  "@medicScores": {
+    "description": "Personality scores of the team medic (V9 § 4)",
+    "placeholders": { "helpfulness": { "type": "int" }, "treatment": { "type": "int" } }
+  }
 }

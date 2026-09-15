@@ -68,4 +68,62 @@ void main() {
     expect(restored.emergencyShotAt, isNull);
     expect(restored.suppressedStatus, isNull);
   });
+
+  test('StaffData serialisiert ID, Persönlichkeit und Ressourcen (V9)', () {
+    final s = StaffData(
+      name: 'Koch',
+      imagePath: 'x.png',
+      type: 'apprentice',
+      id: 424242,
+      personalityId: 7,
+      vitalityCurrent: 42,
+      moraleCurrent: 17,
+      lastResourceRefillAt: DateTime(2026, 3, 1, 8),
+    );
+
+    final restored = StaffData.fromJson(s.toJson());
+
+    expect(restored.id, 424242);
+    expect(restored.personalityId, 7);
+    expect(restored.vitalityCurrent, 42);
+    expect(restored.moraleCurrent, 17);
+    expect(restored.lastResourceRefillAt, DateTime(2026, 3, 1, 8));
+  });
+
+  test('StaffData defaultet V9-Felder bei Alt-Daten', () {
+    final legacy = StaffData.fromJson({
+      'name': 'Alt',
+      'imagePath': 'x.png',
+      'type': 'apprentice',
+    });
+    expect(legacy.id, -1);
+    expect(legacy.personalityId, -1);
+    expect(legacy.vitalityCurrent, isNull);
+    expect(legacy.moraleCurrent, isNull);
+    expect(legacy.lastResourceRefillAt, isNull);
+  });
+
+  test('MedicData serialisiert personalityId und liest Alt-Daten (V9)', () {
+    final medic = MedicData(
+      id: 1,
+      name: 'Dr. Test',
+      quality: 'hoch',
+      costPerWeek: 500,
+      enneagramProfileName: 'Der Chaot',
+      personalityId: 11,
+    );
+    final restored = MedicData.fromJson(medic.toJson());
+    expect(restored.personalityId, 11);
+    expect(restored.enneagramProfileName, 'Der Chaot');
+
+    final legacy = MedicData.fromJson({
+      'id': 2,
+      'name': 'Dr. Alt',
+      'quality': 'niedrig',
+      'costPerWeek': 500,
+      'enneagramProfileName': 'Der Helfer',
+    });
+    expect(legacy.personalityId, isNull);
+    expect(legacy.enneagramProfileName, 'Der Helfer');
+  });
 }

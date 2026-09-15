@@ -733,5 +733,35 @@
     "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
   },
   "healingComplete": "Voll einsatzbereit",
-  "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" }
+  "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" },
+  "personalityLabel": "Persönlichkeit: {name}",
+  "@personalityLabel": {
+    "description": "Enneagramm-Profil des Charakters (V9)",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "resourcesLine": "Vitalität {vitality}/100 · Moral {morale}/100",
+  "@resourcesLine": {
+    "description": "Ressourcenstände des Charakters (V9 § 2)",
+    "placeholders": { "vitality": { "type": "int" }, "morale": { "type": "int" } }
+  },
+  "stressCountdown": "Unter Stress – Wechsel bis {time}",
+  "@stressCountdown": {
+    "description": "Laufender Stress-Override (V9 § 6)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "ruheCountdown": "In Ruhe – Wechsel bis {time}",
+  "@ruheCountdown": {
+    "description": "Laufender Ruhe-Override (V9 § 6)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "resourceZeroMalus": "Erschöpft: −{malus} % auf alle Würfe",
+  "@resourceZeroMalus": {
+    "description": "Kumulativer Erschöpfungs-Malus (V9 § 6)",
+    "placeholders": { "malus": { "type": "int" } }
+  },
+  "medicScores": "Hilfsbereitschaft {helpfulness} · Behandlungsqualität {treatment}",
+  "@medicScores": {
+    "description": "Persönlichkeits-Scores des Teamarztes (V9 § 4)",
+    "placeholders": { "helpfulness": { "type": "int" }, "treatment": { "type": "int" } }
+  }
 }

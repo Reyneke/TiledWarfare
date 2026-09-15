@@ -133,6 +133,16 @@ Kurz zusammengefasst: Es gibt bereits viele Bausteine (Profile, Restaurants, Per
 
 **Auswirkung:** Balance-Anpassungen erfordern Code-Eingriffe an verteilten Stellen; Gefahr von Inkonsistenzen zwischen Regeln und Code.
 
+### 🟡 P9 – Personal ohne eigene Attribute & wirkungslose Persönlichkeit
+
+**Symptom:** Alle Charaktere einer Klasse sind identisch; die zwölf Enneagramm-Profile von Teamarzt und Host haben keine spürbare Wirkung.
+
+**Ursache (Belege):** `ObjectApprentice` besitzt keine eigenen Attribute – die Kampfwerte stammen aus den Klassen-Profilen (`EconomyBalance.apprenticeStats`/`lineCookStats`); `EnneagramProfile` (`object_host.dart`) wird beim Teamarzt nur als Anzeigetext/Listenindex genutzt und die Fuzzy-`ruleBase` des Hosts in `_initializePersonality()` verworfen; `StaffData` kennt nur `name` als Identität.
+
+**Auswirkung:** Kein „Your Guys“-Gefühl, keine Individualität, keine Bindung an den einzelnen Charakter – Persönlichkeit ist reine Kosmetik (Widerspruch zu `doc/doc/01_class_diagram.md`).
+
+**Ausarbeitung:** `9_Personal.md` (Attribute, Traits, Varianz, Ressourcen, Stress/Ruhe, Erschöpfungs-Malus).
+
 ---
 
 ## Verbesserungen
@@ -207,6 +217,18 @@ Kurz zusammengefasst: Es gibt bereits viele Bausteine (Profile, Restaurants, Per
 
 **Abnahmekriterium:** Nach mehreren Tagen ohne App-Start werden beim nächsten Öffnen alle fälligen Wochen-Abbuchungen und Heilungsfortschritte korrekt nachgerechnet, angezeigt und gespeichert.
 
+### V9 (→ P9): Personal – Attribute & Persönlichkeit
+
+**Ziel:** Jeder Charakter erhält einen **kanonischen Attributsatz** und eine **wirksame Persönlichkeit**; das Enneagramm-Modell wird von der Host-Klasse gelöst und für Personal und Host gemeinsam genutzt.
+
+- **Attribute:** Basis-, Zustands-, Fortschritts- und Persönlichkeits-Attribute für **alle** Charaktere (unabhängig von der Gefechtsbereitschaft) sowie eine stabile Charakter-`id` (CRC32).
+- **Persönlichkeit:** deterministische Traits aus dem Profil (`PersonalityTraits.forProfile(profile, charId)`), individuelle Ausprägung **±1W20** aus der Charakter-`id` (keine zusätzlichen Speicherfelder); Persistenz über `personalityId` statt über den Anzeigenamen.
+- **Ressourcen:** `vitalityCurrent`/`moraleCurrent` sinken um 5 je Tag und 10 je Gefechtseinsatz, werden im Wochen-Tick aufgefüllt; bei 0 greift der **kumulative Erschöpfungs-Malus** auf alle W100-Zielwerte.
+- **Stress & Ruhe:** W100-Proben bei jedem Ressourcenverlust; Überwurf/kritische Unterschreitung lösen einen **temporären Persönlichkeitswechsel** aus (Override mit Ablaufzeitpunkt).
+- **Grenze:** Heilzeit und Heilungsqualität bleiben persönlichkeitsunabhängig (V3, `team_rules.md` § 4.3/4.5).
+
+**Abnahmekriterium:** Zwei Charaktere derselben Klasse unterscheiden sich messbar in Attributen und Persönlichkeit; Persönlichkeit ist stabil persistiert und wirkt auf Management und Gefecht, ohne die V3-Heilung oder die Wundkette zu berühren.
+
 ---
 
 ## Entscheidungen (getroffen)
@@ -230,6 +252,6 @@ Kurz zusammengefasst: Es gibt bereits viele Bausteine (Profile, Restaurants, Per
 ## Nächste Schritte
 
 1. Diese Basis als Ausgangspunkt nutzen – die Grundsatzentscheidungen sind getroffen und im Abschnitt „Entscheidungen (getroffen)“ fixiert.
-2. Die Basis anschließend – analog zu `feat_metagame`/`feat_better_maps` – in Folge-Dokumente aufteilen (`1_Probleme.md`, `2_…md`), damit jedes Paket (V1–V8) eigenständig umsetz- und reviewbar ist.
+2. Die Basis anschließend – analog zu `feat_metagame`/`feat_better_maps` – in Folge-Dokumente aufteilen (`1_Probleme.md`, `2_…md`), damit jedes Paket (V1–V9) eigenständig umsetz- und reviewbar ist.
 3. Empfohlene Reihenfolge: zuerst das **Datenmodell** (Restaurant-IDs, Zustand auf Restaurant-Ebene, Migration – V1), dann das **Zeitsystem** (V8), darauf aufbauend Wirtschaft (V2) und Heilung (V3). V4–V7 (Zustandsbereinigung, tote Features, Persistenz, Konstanten) können parallel bzw. danach folgen.
 

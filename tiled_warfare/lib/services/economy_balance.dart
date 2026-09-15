@@ -111,6 +111,70 @@ class EconomyBalance {
   static const int medicScoreMin = 0;
   static const int medicScoreMax = 100;
 
+  // ── Persönlichkeits-Traits (V9) ───────────────────────────────────────
+
+  /// Offset des Profil-Anteils (`(offset + (index + 1) × step) % modulo`).
+  static const int personalityTraitOffset = 0;
+
+  /// Schrittweite des Profil-Anteils.
+  static const int personalityTraitStep = 8;
+
+  /// Modulo des Profil-Anteils.
+  static const int personalityTraitModulo = 100;
+
+  /// Breite der individuellen Varianz je Charakter (±N entspricht ±1W20).
+  static const int personalityVarianceRange = 20;
+
+  /// Modulo der Varianz (`(CRC32 % modulo) − range`).
+  static const int personalityVarianceModulo = 41;
+
+  /// Untere/obere Grenze der Trait-Werte (0–100).
+  static const int personalityTraitMin = 0;
+  static const int personalityTraitMax = 100;
+
+  /// Untere/obere Grenze der Ressourcen (`vitalityCurrent`/`moraleCurrent`).
+  static const int resourceMin = 0;
+  static const int resourceMax = 100;
+
+  /// Ressourcen-Sink pro Echtzeit-Tag (V9, § 2/§ 6).
+  static const int resourceSinkPerDay = 5;
+
+  /// Ressourcen-Sink je Gefechtseinsatz (V9, § 2/§ 6).
+  static const int resourceSinkPerBattle = 10;
+
+  /// Gewicht der Personal-Hilfsbereitschaft auf die Attraktivität (V9, Phase 3).
+  static const double personalityAttractivenessWeight = 0.25;
+
+  /// Max. Lohn-Spanne des Teamarztes (± %) aus seiner Thriftiness (V9, Phase 3).
+  static const double thriftinessWageSpread = 0.2;
+
+  // ── Stress & Ruhe / Erschöpfung (V9, § 6) ─────────────────────────────
+
+  /// Ruhe-Marge: Unterschreitung der Probe, ab der „Ruhe“ ausgelöst wird (§ 6).
+  static const int ruheMargin = 20;
+
+  /// Dauer eines „Einzelticks“ – reine Zeiteinheit, kein eigener Tick (§ 6).
+  static const Duration einzelTickUnit = Duration(hours: 3);
+
+  /// Staffelgrenzen der Über-/Unterschreitung (§ 6).
+  static const int stressMarginSingleTick = 5;
+  static const int stressMarginDays = 15;
+  static const int stressMarginWeeks = 25;
+
+  /// Würfel und Zeiteinheiten der Dauerstaffel (1W6 / 1W4).
+  static const int stressDiceW6 = 6;
+  static const int stressDiceW4 = 4;
+  static const Duration stressDayUnit = Duration(days: 1);
+  static const Duration stressWeekUnit = Duration(days: 7);
+  static const Duration stressMonthUnit = Duration(days: 30);
+
+  /// Erschöpfungs-Malus je Nulltag (§ 6): +5 pp, bei beiden auf 0 +10 pp.
+  static const int resourceZeroMalusPerDay = 5;
+  static const int resourceZeroMalusPerDayBoth = 10;
+
+  /// Max. Trait-Modifikator auf Kampf-Zielwerte (± %, V9 Phase 5).
+  static const double combatTraitMaxPercent = 15.0;
+
   // ── Gefechtsbelohnung (§ 2.2) ─────────────────────────────────────────
 
   /// Basisprämie bei Sieg (zusätzlich zur Beute).

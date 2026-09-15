@@ -50,13 +50,19 @@ class EconomyService {
   ///
   /// Ersetzt die frühere `_computeWeeklyCost`-Formel und macht Qualität **und**
   /// Teamgröße wirksam.
-  static int weeklyMedicCost(MedicQuality quality, int teamSize) {
+  static int weeklyMedicCost(MedicQuality quality, int teamSize,
+      [int thriftiness = 50]) {
     final spec = EconomyBalance.medicQualitySpecs[quality]!;
     final heads = math.max(0, teamSize);
     final teamMultiplier = 1.0 + heads * EconomyBalance.medicTeamCostPerHead;
+    // V9 (Phase 3): Die Thriftiness des Arztes verschiebt die Lohnforderung
+    // (50 = neutral, ± thriftinessWageSpread).
+    final wageFactor =
+        1.0 + (50 - thriftiness) / 50.0 * EconomyBalance.thriftinessWageSpread;
     return (EconomyBalance.medicBaseCostPerWeek *
             spec.costMultiplier *
-            teamMultiplier)
+            teamMultiplier *
+            wageFactor)
         .round();
   }
 

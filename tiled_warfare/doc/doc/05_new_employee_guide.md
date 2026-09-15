@@ -219,7 +219,7 @@ class ObjectChef extends ObjectToken {
 ### 3.4 KI-Verhalten anpassen
 
 1. `object_host.dart` → `_moveZombieTowardsTarget()` oder `performAllZombieAttacks()` ändern
-2. Enneagramm-Profile in `EnneagramProfile.all` erweitern
+2. Enneagramm-Profile in `EnneagramProfile.all` (`lib/models/personality.dart`) erweitern
 3. Fuzzy-Regeln in `HostPersonality.initializeRules()` anpassen
 
 ### 3.5 Neuen Geländetyp hinzufügen

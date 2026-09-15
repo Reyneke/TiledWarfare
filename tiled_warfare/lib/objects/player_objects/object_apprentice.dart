@@ -1,6 +1,7 @@
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
@@ -35,6 +36,9 @@ enum CharacterStatus {
 /// - Levelaufstieg erfolgt, sobald currentXPValue ≥ levelValue × 1000
 /// - Bei Überschreiten der Schwelle um mehr als das 1.000-Fache werden
 ///   mehrere Level auf einmal erreicht (überschüssige XP bleiben erhalten).
+/// Attribute & Persönlichkeit (V9): Jeder Charakter trägt eine stabile [id],
+/// ein Enneagramm-Profil ([personalityId]) sowie die daraus abgeleiteten
+/// Ressourcen [vitalityCurrent]/[moraleCurrent] (siehe `9_Personal.md`).
 class ObjectApprentice extends ObjectToken {
   /// Aktuelles Level (beginnt bei 1).
   int levelValue = 1;
@@ -59,6 +63,72 @@ class ObjectApprentice extends ObjectToken {
 
   /// Der von der Notfall-Spritze unterdrückte Status (V3).
   CharacterStatus? suppressedStatus;
+
+  /// Stabile Charakter-ID (V9) – Referenz für Attribute, Persönlichkeit und
+  /// Match-Historie (CRC32 aus Name + Erzeugungszeitpunkt; `0` = offen).
+  int id = 0;
+
+  /// Index des Enneagramm-Profils in `EnneagramProfile.all` (V9).
+  /// `-1` = noch nicht zugewiesen (Legacy/Fallback).
+  int personalityId = -1;
+
+  /// Aktueller Vitalitätsstand (V9), Domäne 0–100.
+  int vitalityCurrent = 0;
+
+  /// Aktueller Moralstand (V9), Domäne 0–100.
+  int moraleCurrent = 0;
+
+  /// Anker für idempotentes Sinken/Auffüllen der Ressourcen (V9).
+  DateTime? lastResourceRefillAt;
+
+  /// Temporär wirksames Enneagramm-Profil (Stress/Ruhe, V9 § 6); `-1` = keins.
+  int personalityOverrideId = -1;
+
+  /// Ablaufzeitpunkt des Overrides (V9 § 6).
+  DateTime? personalityOverrideUntil;
+
+  /// Auslöser des Overrides: `stress` oder `ruhe` (V9 § 6).
+  String? personalityOverrideCause;
+
+  /// Seit wann [vitalityCurrent] auf 0 steht (Erschöpfungs-Malus, V9 § 6).
+  DateTime? vitalityZeroSinceAt;
+
+  /// Seit wann [moraleCurrent] auf 0 steht (Erschöpfungs-Malus, V9 § 6).
+  DateTime? moraleZeroSinceAt;
+
+  /// Effektiv wirksames Enneagramm-Profil: Ein Stress-/Ruhe-Override hat
+  /// Vorrang vor dem Grundprofil (V9 § 6).
+  EnneagramProfile get effectivePersonality => EnneagramProfile.all[
+      EnneagramProfile.normalizeId(
+          personalityOverrideId >= 0 ? personalityOverrideId : personalityId)];
+
+  /// Persönlichkeits-Traits dieses Charakters (V9 § 4; berücksichtigt einen
+  /// laufenden Stress-/Ruhe-Override).
+  PersonalityTraits get traits =>
+      PersonalityTraits.forProfile(effectivePersonality.id, id);
+
+  /// Angriffs-Zielwert inkl. Persönlichkeits-Modifikator (V9 Phase 5).
+  int get personalityAttackValue =>
+      _withTraitPercent(attackValue, traits.aggressiveness);
+
+  /// Verteidigungs-Zielwert inkl. Persönlichkeits-Modifikator (V9 Phase 5).
+  int get personalityDefenseValue =>
+      _withTraitPercent(defenseValue, traits.aggressiveness);
+
+  /// Schadenswert inkl. Persönlichkeits-Modifikator (V9 Phase 5).
+  int get personalityDamageValue =>
+      _withTraitPercent(damageValue, traits.riskTolerance);
+
+  /// Bewegungswert inkl. Persönlichkeits-Modifikator (V9 Phase 5).
+  int get personalityMovementValue =>
+      _withTraitPercent(baseMovementValue, traits.tacticalComplexity);
+
+  /// Wendet den Trait-Anteil als ±-Prozent auf einen Basiswert an.
+  static int _withTraitPercent(int base, int trait) {
+    final percent =
+        ((trait - 50) / 50 * EconomyBalance.combatTraitMaxPercent).round();
+    return (base * (100 + percent) / 100).round();
+  }
 
   /// Match-Historie dieses Charakters.
   List<MatchRecord> matchHistory = [];
@@ -85,6 +155,16 @@ class ObjectApprentice extends ObjectToken {
     int? rangeValue,
     int? moneyValue,
     int? xpValue,
+    int? id,
+    int? personalityId,
+    int? vitalityCurrent,
+    int? moraleCurrent,
+    this.lastResourceRefillAt,
+    this.personalityOverrideId = -1,
+    this.personalityOverrideUntil,
+    this.personalityOverrideCause,
+    this.vitalityZeroSinceAt,
+    this.moraleZeroSinceAt,
   }) : super(
     name: name ??
         "Apprentice: ${RandomNames(nameZone ?? cuisine?.zone ?? Zone.italy).name()}",
@@ -98,7 +178,15 @@ class ObjectApprentice extends ObjectToken {
     rangeValue: rangeValue ?? EconomyBalance.apprenticeStats.range,
     moneyValue: moneyValue ?? EconomyBalance.apprenticeStats.money,
     xpValue: xpValue ?? EconomyBalance.apprenticeStats.xp,
-  );
+  ) {
+    this.id = id ?? 0;
+    this.personalityId = personalityId ?? -1;
+    final traits = PersonalityTraits.forProfile(this.personalityId, this.id);
+    this.vitalityCurrent = (vitalityCurrent ?? traits.vitality)
+        .clamp(EconomyBalance.resourceMin, EconomyBalance.resourceMax);
+    this.moraleCurrent = (moraleCurrent ?? traits.morale)
+        .clamp(EconomyBalance.resourceMin, EconomyBalance.resourceMax);
+  }
 
   /// Fügt [xp] Erfahrungspunkte hinzu und führt ggf. Levelaufstiege durch.
   ///

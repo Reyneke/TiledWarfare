@@ -628,4 +628,34 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get healingComplete => 'Voll einsatzbereit';
+
+  @override
+  String personalityLabel(String name) {
+    return 'Persönlichkeit: $name';
+  }
+
+  @override
+  String resourcesLine(int vitality, int morale) {
+    return 'Vitalität $vitality/100 · Moral $morale/100';
+  }
+
+  @override
+  String stressCountdown(String time) {
+    return 'Unter Stress – Wechsel bis $time';
+  }
+
+  @override
+  String ruheCountdown(String time) {
+    return 'In Ruhe – Wechsel bis $time';
+  }
+
+  @override
+  String resourceZeroMalus(int malus) {
+    return 'Erschöpft: −$malus % auf alle Würfe';
+  }
+
+  @override
+  String medicScores(int helpfulness, int treatment) {
+    return 'Hilfsbereitschaft $helpfulness · Behandlungsqualität $treatment';
+  }
 }

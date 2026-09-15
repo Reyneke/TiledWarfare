@@ -232,7 +232,8 @@ WidgetMapLoader._loadMap()
 | ScreenMain → WidgetMapLoader | Komposition | ScreenMain enthält MapLoader |
 | ScreenMain → WidgetCaretaker | Komposition | ScreenMain enthält Caretaker |
 | ObjectHost → HostPersonality | Komposition | Host hat eine Fuzzy-Persönlichkeit |
-| HostPersonality → EnneagramProfile | Komposition | Persönlichkeit basiert auf Enneagramm |
+| HostPersonality → EnneagramProfile | Komposition | Persönlichkeit basiert auf Enneagramm (`lib/models/personality.dart`, V9) |
+| ObjectApprentice → PersonalityTraits | Nutzung | Attribute/Ressourcen werden aus dem Profil abgeleitet (V9) |
 | WidgetMapLoader → MapParser | Nutzung | MapLoader nutzt Parser via Interface |
 | MapParser → MapData | Produktion | Parser erzeugt MapData-Instanzen |
 | WidgetMapLoader → MapData | Nutzung | MapLoader verwendet Kartendaten |
