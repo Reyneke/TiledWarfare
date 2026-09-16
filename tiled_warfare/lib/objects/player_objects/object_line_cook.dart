@@ -1,6 +1,7 @@
 
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
+import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 
@@ -21,5 +22,7 @@ class ObjectLineCook extends ObjectApprentice {
     rangeValue: EconomyBalance.lineCookStats.range,
     moneyValue: EconomyBalance.lineCookStats.money,
     xpValue: EconomyBalance.lineCookStats.xp,
-  );
+  ) {
+    rank = kRankLineCook;
+  }
 }

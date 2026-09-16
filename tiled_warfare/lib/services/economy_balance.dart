@@ -37,6 +37,15 @@ class EconomyBalance {
   /// Ab diesem Level ist die Fortbildung „Lehrling → Line Cook“ möglich (§ 2.3).
   static const int lineCookPromotionLevel = 5;
 
+  /// Ab diesem Level ist der Aufstieg zum `Chef de partie` möglich (V10).
+  static const int chefDePartiePromotionLevel = 10;
+
+  /// Ab diesem Level ist der Aufstieg zum `Sous-chef` möglich (V10).
+  static const int sousChefPromotionLevel = 15;
+
+  /// Ab diesem Level ist der Aufstieg zum `Chef de cuisine` möglich (V10).
+  static const int headChefPromotionLevel = 20;
+
   // ── W100-Domäne (§ 4.2) ───────────────────────────────────────────────
 
   /// Untere/obere Grenze eines W100-Wurfs.
@@ -59,7 +68,30 @@ class EconomyBalance {
 
   static const int hireApprenticeCost = 100;
   static const int upgradeToLineCookCost = 500;
+
+  /// Einmalkosten der weiteren Karriere-Aufstiege (Karrierepfade, V10).
+  static const int upgradeToChefDePartieCost = 1200;
+  static const int upgradeToSousChefCost = 3000;
+  static const int upgradeToHeadChefCost = 8000;
+
   static const int revivalCost = 200;
+
+  // ── Personal-Transfer & Karriere-Auren (V10) ──────────────────────────
+
+  /// Transferkosten einer Person: [transferCostBase] plus [transferCostPerLevel]
+  /// je Charakter-Level. Das **Ziel-Restaurant zahlt** (Karrierepfade, V10).
+  static const int transferCostBase = 200;
+  static const int transferCostPerLevel = 50;
+
+  /// Aura-Radius je Karriere-Rang (Hexfelder). Höhere Ränge wirken weiter; der
+  /// `Chef de cuisine` wirkt nur in der formellen (kämpfenden) Rolle. Bewusst
+  /// als String-Map (Schlüssel = `kRank*`-Werte), um keinen Import-Zyklus zu
+  /// `profile_data.dart` zu erzeugen.
+  static const Map<String, int> stationAuraRadiusByRank = {
+    'chef_de_partie': 1,
+    'sous_chef': 2,
+    'head_chef': 3,
+  };
 
   // ── Laufende Kosten ───────────────────────────────────────────────────
 
@@ -320,6 +352,20 @@ class EconomyBalance {
   /// Kampf-/Belohnungsprofil eines Line Cooks (§ 2.3).
   static const UnitStats lineCookStats = UnitStats(
     attack: 80, defense: 40, movement: 3, damage: 2, range: 3, money: 1000, xp: 100,
+  );
+
+  /// Kampfprofil der höheren Karriere-Ränge (V10, Tuning-Vorschläge).
+  static const UnitStats chefDePartieStats = UnitStats(
+    attack: 110, defense: 55, movement: 3, damage: 3, range: 3, money: 1000, xp: 150,
+  );
+  static const UnitStats sousChefStats = UnitStats(
+    attack: 140, defense: 70, movement: 3, damage: 4, range: 3, money: 1000, xp: 200,
+  );
+
+  /// Kampfprofil des **formellen** `Chef de cuisine`. Der aktive Rang kämpft
+  /// nicht, sondern wirkt als Management-Rolle (Karrierepfade, V10).
+  static const UnitStats headChefFormalStats = UnitStats(
+    attack: 160, defense: 80, movement: 2, damage: 5, range: 3, money: 1000, xp: 250,
   );
 
   /// Kampf-/Belohnungsprofil eines Dough Zombie.

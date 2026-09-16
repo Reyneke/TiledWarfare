@@ -288,6 +288,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get rankApprentice => 'Apprentice';
 
   @override
+  String get rankChefDePartie => 'Chef de partie';
+
+  @override
+  String get rankSousChef => 'Sous-chef';
+
+  @override
+  String get rankHeadChef => 'Chef de cuisine';
+
+  @override
   String level(int value) {
     return 'Level $value';
   }

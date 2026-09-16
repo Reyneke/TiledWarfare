@@ -578,6 +578,24 @@ abstract class AppLocalizations {
   /// **'Apprentice'**
   String get rankApprentice;
 
+  /// Rangbezeichnung: Chef de partie
+  ///
+  /// In de, this message translates to:
+  /// **'Chef de partie'**
+  String get rankChefDePartie;
+
+  /// Rangbezeichnung: Sous-chef
+  ///
+  /// In de, this message translates to:
+  /// **'Sous-chef'**
+  String get rankSousChef;
+
+  /// Rangbezeichnung: Chef de cuisine
+  ///
+  /// In de, this message translates to:
+  /// **'Chef de cuisine'**
+  String get rankHeadChef;
+
   /// Level-Anzeige
   ///
   /// In de, this message translates to:

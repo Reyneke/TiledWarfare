@@ -98,6 +98,39 @@ class EconomyService {
   static int levelUpThreshold(int level) =>
       level * EconomyBalance.levelUpXpPerLevel;
 
+  // ── Karrierepfade (V10) ───────────────────────────────────────────────
+
+  /// Aufstiegs-Level für den Ziel-Rang [rank] (Karrierepfade, V10).
+  static int promotionLevel(String rank) => switch (rank) {
+        'line_cook' => EconomyBalance.lineCookPromotionLevel,
+        'chef_de_partie' => EconomyBalance.chefDePartiePromotionLevel,
+        'sous_chef' => EconomyBalance.sousChefPromotionLevel,
+        'head_chef' => EconomyBalance.headChefPromotionLevel,
+        _ => 1,
+      };
+
+  /// Einmalkosten des Aufstiegs in den Ziel-Rang [rank] (Karrierepfade, V10).
+  static int promotionCost(String rank) => switch (rank) {
+        'line_cook' => EconomyBalance.upgradeToLineCookCost,
+        'chef_de_partie' => EconomyBalance.upgradeToChefDePartieCost,
+        'sous_chef' => EconomyBalance.upgradeToSousChefCost,
+        'head_chef' => EconomyBalance.upgradeToHeadChefCost,
+        _ => 0,
+      };
+
+  /// `true`, wenn [level] den Aufstieg in den Ziel-Rang [rank] erlaubt.
+  static bool canPromote({required String rank, required int level}) =>
+      level >= promotionLevel(rank);
+
+  /// Transferkosten einer Person mit [level] (Karrierepfade, V10).
+  static int transferCost({required int level}) =>
+      EconomyBalance.transferCostBase +
+      EconomyBalance.transferCostPerLevel * math.max(0, level);
+
+  /// Aura-Radius eines Kampfrangs [rank] in Hexfeldern (Karrierepfade, V10).
+  static int stationAuraRadius(String rank) =>
+      EconomyBalance.stationAuraRadiusByRank[rank] ?? 0;
+
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
   /// Fasst die relativen Boni aller [levels] zu drei Summenboni zusammen.

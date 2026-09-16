@@ -2,6 +2,7 @@ import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
+import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
@@ -132,6 +133,11 @@ class ObjectApprentice extends ObjectToken {
 
   /// Match-Historie dieses Charakters.
   List<MatchRecord> matchHistory = [];
+
+  /// Karriere-Rang (Karrierepfade, V10) – stabiler Schlüssel (`kRank*`).
+  ///
+  /// Bestimmt die Anzeige (l10n) und wird persistiert; nie der Anzeigename.
+  String rank = kRankApprentice;
 
   /// Erzeugt einen Lehrling.
   ///

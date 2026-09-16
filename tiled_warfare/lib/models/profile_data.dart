@@ -12,10 +12,12 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 
 /// Aktuelle Schema-Version der gespeicherten Spielstände (V6).
 ///
-/// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = aktuelle
-/// Struktur. Die Deserialisierung ist bewusst toleranter als die Version:
-/// fehlende oder unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 3;
+/// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = Restaurant-Ebene,
+/// Version 3 = Personal-Identität/Attribute (V9), Version 4 = Karriere-Rang &
+/// Station (Karrierepfade, V10). Die Deserialisierung ist bewusst toleranter als
+/// die Version: fehlende oder unbekannte Felder führen zu Defaults statt zu
+/// Fehlern.
+const int kProfileSchemaVersion = 4;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -40,6 +42,27 @@ MatchResult? _matchResultFromName(String? name) {
   }
   return null;
 }
+
+/// Karriere-Rang-Schlüssel des Personals (Karrierepfade, V10).
+///
+/// Die Werte sind stabil und dienen als Persistenz-Schlüssel (nie der
+/// Anzeigename). Die ersten beiden entsprechen den bisherigen [StaffData.type]-
+/// Werten, damit die Migration verlustfrei ist.
+const String kRankApprentice = 'apprentice';
+const String kRankLineCook = 'line_cook';
+const String kRankChefDePartie = 'chef_de_partie';
+const String kRankSousChef = 'sous_chef';
+const String kRankHeadChef = 'head_chef';
+
+/// Rollen-Schlüssel des `Chef de cuisine` (Karrierepfade): aktiv oder formell.
+const String kHeadChefRoleActive = 'aktiv';
+const String kHeadChefRoleFormal = 'formell';
+
+/// Leitet den Karriere-Rang aus dem (Legacy-)Klassen-Schlüssel [type] ab.
+String rankFromType(String? type) => switch (type) {
+      kRankLineCook => kRankLineCook,
+      _ => kRankApprentice,
+    };
 
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
@@ -132,8 +155,27 @@ class StaffData {
   /// Pfad zum Token-Bild.
   String imagePath;
 
-  /// Typ: 'apprentice' oder 'line_cook'.
+  /// Typ: 'apprentice' oder 'line_cook' (Legacy-Klassen-Schlüssel).
+  ///
+  /// Bleibt für die Abwärtskompatibilität erhalten und wird weiterhin
+  /// geschrieben; für die Karriere-Ränge ist [rank] führend (Karrierepfade, V10).
   String type;
+
+  /// Karriere-Rang (Karrierepfade, V10) – stabiler Schlüssel, nie der
+  /// Anzeigename. Einer der `kRank*`-Werte.
+  String rank;
+
+  /// Gewählte Station (Karrierepfade) – `null`, solange keine gewählt wurde.
+  /// Erst ab Rang `chef_de_partie` gesetzt.
+  String? station;
+
+  /// Rolle eines `Chef de cuisine`: `aktiv` oder `formell` (Karrierepfade).
+  /// `null` für alle anderen Ränge.
+  String? headChefRole;
+
+  /// Restaurant-ID, der ein **aktiver** `Chef de cuisine` zugeteilt ist
+  /// (Karrierepfade). `null`, wenn nicht zugeteilt.
+  int? assignedRestaurantId;
 
   /// Stabile Charakter-ID (CRC32 aus Name + Erzeugungszeitpunkt).
   ///
@@ -205,6 +247,10 @@ class StaffData {
     required this.name,
     required this.imagePath,
     required this.type,
+    String? rank,
+    this.station,
+    this.headChefRole,
+    this.assignedRestaurantId,
     this.id = -1,
     this.personalityId = -1,
     this.levelValue = 1,
@@ -231,12 +277,18 @@ class StaffData {
     this.vitalityZeroSinceAt,
     this.moraleZeroSinceAt,
     List<Map<String, dynamic>>? matchHistory,
-  }) : matchHistory = matchHistory ?? [];
+  })  : rank = rank ?? rankFromType(type),
+        matchHistory = matchHistory ?? [];
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'imagePath': imagePath,
         'type': type,
+        'rank': rank,
+        if (station != null) 'station': station,
+        if (headChefRole != null) 'headChefRole': headChefRole,
+        if (assignedRestaurantId != null)
+          'assignedRestaurantId': assignedRestaurantId,
         'id': id,
         'personalityId': personalityId,
         'levelValue': levelValue,
@@ -277,7 +329,11 @@ class StaffData {
   factory StaffData.fromJson(Map<String, dynamic> json) => StaffData(
         name: readString(json['name']) ?? '',
         imagePath: readString(json['imagePath']) ?? '',
-        type: readString(json['type']) ?? 'apprentice',
+        type: readString(json['type']) ?? kRankApprentice,
+        rank: readString(json['rank']),
+        station: readString(json['station']),
+        headChefRole: readString(json['headChefRole']),
+        assignedRestaurantId: readInt(json['assignedRestaurantId']),
         id: readInt(json['id']) ?? -1,
         personalityId: readInt(json['personalityId']) ?? -1,
         levelValue: readInt(json['levelValue']) ?? 1,
@@ -496,6 +552,31 @@ class RestaurantData {
     }
     return result;
   }
+
+  /// Erzeugt eine Kopie mit ersetzter [staff]-Liste und/oder [budget]
+  /// (Karrierepfade, V10).
+  ///
+  /// Wird beim Merging genutzt, um gezielt **nicht-aktive** Restaurants zu
+  /// verändern (z. B. Personal-Transfer), ohne das Objekt in `ProfileData`
+  /// in-place zu mutieren.
+  RestaurantData copyWith({List<StaffData>? staff, int? budget}) =>
+      RestaurantData(
+        id: id,
+        name: name,
+        logoPath: logoPath,
+        district: district,
+        cuisine: cuisine,
+        rebrandingPenaltyUntil: rebrandingPenaltyUntil,
+        budget: budget ?? this.budget,
+        staff: staff ?? this.staff,
+        medics: medics,
+        lastSeenAt: lastSeenAt,
+        weekAnchorAt: weekAnchorAt,
+        isDissolved: isDissolved,
+        dissolvedAt: dissolvedAt,
+        lastMatchResult: lastMatchResult,
+        upgrades: upgrades,
+      );
 
   @override
   String toString() => 'RestaurantData(id=$id, name=$name, district=$district, '

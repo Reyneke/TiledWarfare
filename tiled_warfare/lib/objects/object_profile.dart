@@ -17,6 +17,15 @@ import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
 
+/// Aufgeschobene Änderung an einem **nicht-aktiven** Restaurant (V10).
+///
+/// Sammelt Personal-Transfers bis zum nächsten [ObjectProfile.toProfileData]:
+/// anzuhängende [StaffData] und eine Budget-Änderung (negativ = Kosten).
+class _TargetRestaurantEdit {
+  final List<StaffData> appendStaff = [];
+  int budgetDelta = 0;
+}
+
 /// Verwaltet das Restaurant und alle Dinge, die ausserhalb des Gefechts
 /// stattfinden (Teamverwaltung, Budget, Anheuerung etc.).
 ///
@@ -108,6 +117,21 @@ class ObjectProfile {
   List<RestaurantData> get profileRestaurants =>
       _profileData?.restaurants ?? const [];
 
+  /// Aufgeschobene Änderungen an **nicht-aktiven** Restaurants (Karrierepfade,
+  /// V10). Werden in [toProfileData] auf den jeweiligen Slot angewendet und
+  /// danach verworfen. Genutzt vom Personal-Transfer.
+  final Map<int, _TargetRestaurantEdit> _pendingTargetEdits = {};
+
+  /// Sucht ein Restaurant des geladenen Profils anhand seiner [restaurantId].
+  RestaurantData? _findRestaurant(int restaurantId) {
+    final restaurants = _profileData?.restaurants;
+    if (restaurants == null) return null;
+    for (final restaurant in restaurants) {
+      if (restaurant.id == restaurantId) return restaurant;
+    }
+    return null;
+  }
+
   /// Startbudget (wird zu Spielbeginn festgelegt, V7).
   static const int startBudget = EconomyBalance.startBudget;
 
@@ -196,6 +220,49 @@ class ObjectProfile {
   /// Es gibt keine Rückerstattung des Anheuerungspreises.
   void fireCharacter(ObjectApprentice character) {
     _personal.remove(character);
+  }
+
+  /// Verschiebt [staff] gegen die Transferkosten in das Restaurant
+  /// [targetRestaurantId] (Karrierepfade, V10 – Personal-Transfer).
+  ///
+  /// Das **Ziel-Restaurant zahlt** (`EconomyService.transferCost`). Die
+  /// Verschiebung wird **erst beim nächsten Speichern** wirksam
+  /// ([toProfileData]/[saveToStorage]): die Quelle verliert den Charakter
+  /// sofort (In-Memory-Zustand für die UI), das nicht-aktive Ziel wird als
+  /// aufgeschobene Änderung vorgemerkt.
+  ///
+  /// Abgelehnt (Rückgabe `false`, Zustand unverändert), wenn der Charakter
+  /// nicht (mehr) im Team ist, das Ziel unbekannt oder aufgelöst ist, das Ziel
+  /// das aktive Restaurant ist oder das Ziel-Budget die Kosten nicht tragen
+  /// kann ([EconomyService.canAfford]). Die Charakter-Identität bleibt erhalten.
+  bool transferStaff({
+    required ObjectApprentice staff,
+    required int targetRestaurantId,
+  }) {
+    if (!_personal.contains(staff)) return false;
+    if (targetRestaurantId == activeRestaurantId) return false;
+
+    final target = _findRestaurant(targetRestaurantId);
+    if (target == null || target.isDissolved) return false;
+
+    final cost = EconomyService.transferCost(level: staff.levelValue);
+
+    final existing = _pendingTargetEdits[targetRestaurantId];
+    final pendingDelta = existing?.budgetDelta ?? 0;
+    if (!EconomyService.canAfford(
+        budget: target.budget + pendingDelta, cost: cost)) {
+      return false;
+    }
+
+    // Quelle (aktives Restaurant): sofort aus dem Team entfernen.
+    _personal.remove(staff);
+
+    // Ziel (nicht-aktiv): für den nächsten Speichervorgang vormerken.
+    final edit = existing ?? _TargetRestaurantEdit();
+    edit.appendStaff.add(_apprenticeToStaffData(staff));
+    edit.budgetDelta -= cost;
+    _pendingTargetEdits[targetRestaurantId] = edit;
+    return true;
   }
 
   /// Bildet einen Lehrling zu einem [ObjectLineCook] fort, sofern er
@@ -539,6 +606,7 @@ class ObjectProfile {
     activeUpgrades = {};
     _personal.clear();
     _hiredMedics.clear();
+    _pendingTargetEdits.clear();
     _player = ObjectPlayer();
   }
 
@@ -552,6 +620,7 @@ class ObjectProfile {
   /// is kept for the merge performed on save.
   void loadFromData(ProfileData data, {int? restaurantId}) {
     _profileData = data;
+    _pendingTargetEdits.clear();
     id = data.id;
     name = data.name;
     profileImagePath = data.profileImagePath;
@@ -638,6 +707,21 @@ class ObjectProfile {
     final restaurants = _profileData != null
         ? List<RestaurantData>.from(_profileData!.restaurants)
         : <RestaurantData>[];
+
+    // V10: aufgeschobene Änderungen an nicht-aktiven Restaurants anwenden
+    // (Personal-Transfer) und danach verwerfen – sie sind nun persistiert.
+    if (_pendingTargetEdits.isNotEmpty) {
+      _pendingTargetEdits.forEach((targetId, edit) {
+        final index = restaurants.indexWhere((r) => r.id == targetId);
+        if (index < 0) return;
+        restaurants[index] = restaurants[index].copyWith(
+          staff: [...restaurants[index].staff, ...edit.appendStaff],
+          budget: restaurants[index].budget + edit.budgetDelta,
+        );
+      });
+      _pendingTargetEdits.clear();
+    }
+
     final existingIndex = restaurants.indexWhere((r) => r.id == activeId);
 
     final active = RestaurantData(
@@ -674,13 +758,18 @@ class ObjectProfile {
       activeRestaurantId = activeId;
     }
 
-    return ProfileData(
+    final result = ProfileData(
       id: id,
       name: name,
       creationDate: _profileData?.creationDate ?? DateTime.now(),
       profileImagePath: profileImagePath,
       restaurants: restaurants,
     );
+    // Die gemergte Fassung wird zur neuen Merge-Basis: So bleiben auch
+    // Änderungen an nicht-aktiven Restaurants (Personal-Transfer) über mehrere
+    // Aufrufe hinweg stabil und werden nicht doppelt oder gar nicht angewendet.
+    _profileData = result;
+    return result;
   }
 
   /// Liefert einen Snapshot des aktiven Restaurants (ohne zu speichern) –
@@ -829,6 +918,7 @@ class ObjectProfile {
         name: a.name,
         imagePath: a.imagePath,
         type: a is ObjectLineCook ? 'line_cook' : 'apprentice',
+        rank: a.rank,
         levelValue: a.levelValue,
         currentXPValue: a.currentXPValue,
         woundValue: a.woundValue,
@@ -858,22 +948,24 @@ class ObjectProfile {
       );
 
   static ObjectApprentice? _staffDataToApprentice(StaffData sd) {
-    if (sd.type == 'line_cook') {
+    // Karriere-Rang ist führend; `type` bleibt als Fallback für Alt-Daten (V10).
+    final rank = sd.rank.isNotEmpty ? sd.rank : rankFromType(sd.type);
+    if (rank == kRankLineCook) {
       return _buildApprentice<ObjectLineCook>(sd, ObjectLineCook());
-    } else if (sd.type == 'apprentice') {
-      return _buildApprentice<ObjectApprentice>(sd, ObjectApprentice(
-        name: sd.name,
-        imagePath: sd.imagePath,
-        attackValue: sd.attackValue,
-        defenseValue: sd.defenseValue,
-        movementValue: sd.movementValue,
-        damageValue: sd.damageValue,
-        rangeValue: sd.rangeValue,
-        moneyValue: sd.moneyValue,
-        xpValue: sd.xpValue,
-      ));
     }
-    return null;
+    // Alle anderen Ränge (u. a. die späteren höheren Klassen) werden vorerst als
+    // Basisklasse geladen; der Rang bleibt in `apprentice.rank` erhalten.
+    return _buildApprentice<ObjectApprentice>(sd, ObjectApprentice(
+      name: sd.name,
+      imagePath: sd.imagePath,
+      attackValue: sd.attackValue,
+      defenseValue: sd.defenseValue,
+      movementValue: sd.movementValue,
+      damageValue: sd.damageValue,
+      rangeValue: sd.rangeValue,
+      moneyValue: sd.moneyValue,
+      xpValue: sd.xpValue,
+    ));
   }
 
   /// Wendet die modifizierbaren Felder aus [StaffData] auf [apprentice] an.
@@ -893,6 +985,7 @@ class ObjectProfile {
     apprentice.rangeValue = sd.rangeValue;
     apprentice.moneyValue = sd.moneyValue;
     apprentice.xpValue = sd.xpValue;
+    apprentice.rank = sd.rank.isNotEmpty ? sd.rank : rankFromType(sd.type);
     apprentice.status = CharacterStatus.values.firstWhere(
       (e) => e.name == sd.status,
       orElse: () => CharacterStatus.ready,

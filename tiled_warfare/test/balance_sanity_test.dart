@@ -224,4 +224,83 @@ void main() {
       expect(EconomyBalance.doughDumpsterStats.wound, greaterThan(0));
     });
   });
+
+  group('Karrierepfade (V10): Aufstiegsleiter & Auren sind konsistent', () {
+    test('Aufstiegs-Level steigen monoton', () {
+      final levels = [
+        EconomyService.promotionLevel('line_cook'),
+        EconomyService.promotionLevel('chef_de_partie'),
+        EconomyService.promotionLevel('sous_chef'),
+        EconomyService.promotionLevel('head_chef'),
+      ];
+      for (var i = 1; i < levels.length; i++) {
+        expect(levels[i], greaterThan(levels[i - 1]));
+      }
+    });
+
+    test('Aufstiegs-Kosten sind positiv und steigen mit dem Rang', () {
+      final costs = [
+        EconomyService.promotionCost('line_cook'),
+        EconomyService.promotionCost('chef_de_partie'),
+        EconomyService.promotionCost('sous_chef'),
+        EconomyService.promotionCost('head_chef'),
+      ];
+      for (final cost in costs) {
+        expect(cost, greaterThan(0));
+      }
+      for (var i = 1; i < costs.length; i++) {
+        expect(costs[i], greaterThan(costs[i - 1]));
+      }
+    });
+
+    test('Aura-Radius steigt monoton mit dem Rang', () {
+      expect(EconomyService.stationAuraRadius('apprentice'), 0);
+      expect(
+        EconomyService.stationAuraRadius('chef_de_partie'),
+        greaterThan(0),
+      );
+      expect(
+        EconomyService.stationAuraRadius('sous_chef'),
+        greaterThan(EconomyService.stationAuraRadius('chef_de_partie')),
+      );
+      expect(
+        EconomyService.stationAuraRadius('head_chef'),
+        greaterThan(EconomyService.stationAuraRadius('sous_chef')),
+      );
+    });
+
+    test('Transferkosten sind positiv und steigen mit dem Level', () {
+      expect(EconomyBalance.transferCostBase, greaterThan(0));
+      expect(
+        EconomyService.transferCost(level: 5),
+        greaterThan(EconomyService.transferCost(level: 1)),
+      );
+    });
+
+    test('Karriere-Kampfprofile steigen in ATK (V10)', () {
+      expect(
+        EconomyBalance.chefDePartieStats.attack,
+        greaterThan(EconomyBalance.lineCookStats.attack),
+      );
+      expect(
+        EconomyBalance.sousChefStats.attack,
+        greaterThan(EconomyBalance.chefDePartieStats.attack),
+      );
+      expect(
+        EconomyBalance.headChefFormalStats.attack,
+        greaterThan(EconomyBalance.sousChefStats.attack),
+      );
+    });
+
+    test('canPromote respektiert die Level-Gates', () {
+      expect(
+        EconomyService.canPromote(rank: 'chef_de_partie', level: 9),
+        isFalse,
+      );
+      expect(
+        EconomyService.canPromote(rank: 'chef_de_partie', level: 10),
+        isTrue,
+      );
+    });
+  });
 }

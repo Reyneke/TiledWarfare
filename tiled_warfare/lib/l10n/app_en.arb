@@ -371,6 +371,18 @@
   "@rankApprentice": {
     "description": "Rank name: Apprentice"
   },
+  "rankChefDePartie": "Chef de partie",
+  "@rankChefDePartie": {
+    "description": "Rank name: Chef de partie"
+  },
+  "rankSousChef": "Sous-chef",
+  "@rankSousChef": {
+    "description": "Rank name: Sous-chef"
+  },
+  "rankHeadChef": "Chef de cuisine",
+  "@rankHeadChef": {
+    "description": "Rank name: Chef de cuisine"
+  },
   "level": "Level {value}",
   "@level": {
     "description": "Level display",

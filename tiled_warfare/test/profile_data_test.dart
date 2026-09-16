@@ -126,4 +126,77 @@ void main() {
     expect(legacy.personalityId, isNull);
     expect(legacy.enneagramProfileName, 'Der Helfer');
   });
+
+  test('StaffData serialisiert Rang/Station/Rolle und migriert Alt-Daten (V10)',
+      () {
+    final staff = StaffData(
+      name: 'Koch',
+      imagePath: 'x.png',
+      type: 'apprentice',
+      rank: kRankHeadChef,
+      station: 'saucier',
+      headChefRole: kHeadChefRoleFormal,
+      assignedRestaurantId: 42,
+    );
+
+    final restored = StaffData.fromJson(staff.toJson());
+
+    expect(restored.rank, kRankHeadChef);
+    expect(restored.station, 'saucier');
+    expect(restored.headChefRole, kHeadChefRoleFormal);
+    expect(restored.assignedRestaurantId, 42);
+  });
+
+  test('StaffData leitet den Rang bei Alt-Daten aus dem Typ ab (V10)', () {
+    final apprentice = StaffData.fromJson({
+      'name': 'Alt',
+      'imagePath': 'x.png',
+      'type': 'apprentice',
+    });
+    final lineCook = StaffData.fromJson({
+      'name': 'Alt',
+      'imagePath': 'x.png',
+      'type': 'line_cook',
+    });
+
+    expect(apprentice.rank, kRankApprentice);
+    expect(apprentice.station, isNull);
+    expect(apprentice.headChefRole, isNull);
+    expect(apprentice.assignedRestaurantId, isNull);
+    expect(lineCook.rank, kRankLineCook);
+  });
+
+  test('kProfileSchemaVersion ist 4 (V10)', () {
+    expect(kProfileSchemaVersion, 4);
+  });
+
+  test('RestaurantData.copyWith ersetzt nur staff/budget (V10)', () {
+    final original = RestaurantData(
+      id: 5,
+      name: 'Test',
+      district: 'Harlem',
+      cuisine: Cuisine.mexican,
+      budget: 1000,
+      staff: [
+        StaffData(name: 'A', imagePath: 'a.png', type: 'apprentice'),
+      ],
+    );
+
+    final patched = original.copyWith(
+      staff: [
+        StaffData(name: 'B', imagePath: 'b.png', type: 'apprentice'),
+      ],
+      budget: 750,
+    );
+
+    expect(patched.id, 5);
+    expect(patched.name, 'Test');
+    expect(patched.district, 'Harlem');
+    expect(patched.cuisine, Cuisine.mexican);
+    expect(patched.budget, 750);
+    expect(patched.staff.single.name, 'B');
+    // Original bleibt unberührt.
+    expect(original.budget, 1000);
+    expect(original.staff.single.name, 'A');
+  });
 }
