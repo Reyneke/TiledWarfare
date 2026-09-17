@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/l10n/staff_rank.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/map_data.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
-import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/screens/screen_character_detail.dart';
 import 'package:tiled_warfare/screens/screen_hire_and_fire.dart';
 import 'package:tiled_warfare/screens/screen_main.dart';
@@ -569,8 +569,10 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       itemBuilder: (context, index) {
         final character = sortedPersonal[index];
         final isReady = _battleReadyCharacters.contains(character);
-        final bool canFight =
-            character.status != CharacterStatus.dying;
+        // V10 § 6: Der **aktive** Chef de cuisine hat ein Management-Profil und
+        // zieht nicht ins Gefecht; formelle Chefs kämpfen weiter.
+        final bool canFight = character.status != CharacterStatus.dying &&
+            character.headChefRole != kHeadChefRoleActive;
         final hasMedic = _profile.hiredMedics.isNotEmpty;
         final needsTreat = character.status != CharacterStatus.ready;
 
@@ -598,9 +600,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                   height: 40,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Icon(
-                    character is ObjectLineCook
-                        ? Icons.restaurant
-                        : Icons.school,
+                    _rankIcon(character),
                     color: character.status == CharacterStatus.dying
                         ? Colors.white
                         : null,
@@ -620,8 +620,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                 '⚔️ ${character.attackValue}',
                 '🛡️ ${character.defenseValue}',
                 '🏃 ${character.movementValue}',
-                if (character is ObjectLineCook)
-                  '🎯 ${character.rangeValue}',
+                if (character.rank != kRankApprentice)
+                  '🎯 ${character.stationRangeValue}',
+                if (stationLabel(l10n, character.station) != null)
+                  stationLabel(l10n, character.station)!,
+                if (character.rank == kRankHeadChef)
+                  character.headChefRole == kHeadChefRoleActive
+                      ? l10n.headChefRoleActive
+                      : l10n.headChefRoleFormal,
               ].join(' · '),
             ),
             trailing: Row(
@@ -658,12 +664,30 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                       }
                     },
                   ),
-                  if (character is! ObjectLineCook)
+                  if (_nextRankOf(character) != null)
                     IconButton(
                       icon: const Icon(Icons.arrow_upward,
                           color: Colors.amber),
-                      tooltip: l10n.promoteToLineCook,
+                      tooltip: _promoteActionLabel(
+                        l10n,
+                        _nextRankOf(character)!,
+                      ),
                       onPressed: () => _promoteCharacter(character),
+                    ),
+                  if (character.rank == kRankHeadChef &&
+                      character.headChefRole != kHeadChefRoleActive)
+                    IconButton(
+                      icon: const Icon(Icons.workspace_premium,
+                          color: Colors.amber),
+                      tooltip: l10n.headChefAssign,
+                      onPressed: () => _assignHeadChef(character),
+                    ),
+                  if (_transferTargets.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.drive_file_move_outline,
+                          color: Colors.blueGrey),
+                      tooltip: l10n.transferTo,
+                      onPressed: () => _transferCharacter(character),
                     ),
                   IconButton(
                     icon: const Icon(Icons.person_remove,
@@ -723,31 +747,42 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     );
   }
 
-  /// Führt die Fortbildung eines Lehrlings zum Line Cook durch (V5).
+  /// Führt die Beförderung eines Charakters in den nächsten Rang durch (V5/V10).
   ///
-  /// Zeigt die Kosten, holt eine Bestätigung ein und überträgt anschließend
-  /// die Kader-Auswahl auf den neuen Line Cook, damit der Haken nicht am
-  /// alten Objekt hängen bleibt.
+  /// Zeigt Zielrang und Kosten, holt eine Bestätigung ein und überträgt
+  /// anschließend die Kader-Auswahl auf den neuen Charakter, damit der Haken
+  /// nicht am alten Objekt hängen bleibt. Die Stationswahl folgt ab
+  /// `chef_de_partie` auf der Detailseite (V10, Phase 4).
   Future<void> _promoteCharacter(ObjectApprentice character) async {
     final l10n = AppLocalizations.of(context)!;
+    final targetRank = _nextRankOf(character);
+    if (targetRank == null) return;
 
-    if (character is ObjectLineCook) return;
-    if (character.levelValue < EconomyBalance.lineCookPromotionLevel) {
+    final requiredLevel = EconomyService.promotionLevel(targetRank);
+    if (character.levelValue < requiredLevel) {
+      final message = targetRank == kRankLineCook
+          ? l10n.promoteLevelRequired
+          : l10n.promoteLevelRequiredFor(requiredLevel);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(l10n.promoteLevelRequired)));
+        ..showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
+    final cost = EconomyService.promotionCost(targetRank);
+    final actionLabel = _promoteActionLabel(l10n, targetRank);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.promoteToLineCook),
+        title: Text(actionLabel),
         content: Text(
-          l10n.promoteConfirm(
-            character.name,
-            EconomyBalance.upgradeToLineCookCost,
-          ),
+          targetRank == kRankLineCook
+              ? l10n.promoteConfirm(character.name, cost)
+              : l10n.promoteConfirmRank(
+                  character.name,
+                  rankLabel(l10n, targetRank),
+                  cost,
+                ),
         ),
         actions: [
           TextButton(
@@ -756,7 +791,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.promoteToLineCook),
+            child: Text(actionLabel),
           ),
         ],
       ),
@@ -764,7 +799,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (confirmed != true) return;
 
     final wasInSquad = _battleReadyCharacters.contains(character);
-    final promoted = _profile.upgradeToLineCook(character);
+    final promoted = _profile.promoteToRank(character, targetRank);
     if (promoted == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -790,6 +825,134 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         SnackBar(content: Text(l10n.promoteSuccess(promoted.name))),
       );
   }
+
+  /// Nächster Rang des Charakters (V10) – `null`, wenn die Kette endet.
+  String? _nextRankOf(ObjectApprentice character) =>
+      EconomyService.nextRank(character.rank);
+
+  /// Beschriftung der Beförderungsaktion für [targetRank] (l10n).
+  String _promoteActionLabel(AppLocalizations l10n, String targetRank) =>
+      switch (targetRank) {
+        kRankChefDePartie => l10n.promoteToChefDePartie,
+        kRankSousChef => l10n.promoteToSousChef,
+        kRankHeadChef => l10n.promoteToHeadChef,
+        _ => l10n.promoteToLineCook,
+      };
+
+  /// Mögliche Ziel-Restaurants für einen Personal-Transfer (V10, Phase 8):
+  /// eigene, nicht aufgelöste Spielstände außer dem aktiven.
+  List<RestaurantData> get _transferTargets => _profile.profileRestaurants
+      .where((r) => r.id != _profile.activeRestaurantId && !r.isDissolved)
+      .toList();
+
+  /// Verschiebt [character] in ein anderes eigenes Restaurant (V10, Phase 8).
+  ///
+  /// Das Ziel-Restaurant zahlt die level-/ranggestaffelten Transferkosten; die
+  /// Verschiebung wird beim nächsten Speichervorgang im Ziel-Spielstand
+  /// wirksam (`ObjectProfile.transferStaff`/`toProfileData`).
+  Future<void> _transferCharacter(ObjectApprentice character) async {
+    final l10n = AppLocalizations.of(context)!;
+    final targets = _transferTargets;
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.transferNoTargets)));
+      return;
+    }
+
+    final target = await showDialog<RestaurantData>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.transferSelectTitle),
+        children: [
+          for (final restaurant in targets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, restaurant),
+              child: Text('${restaurant.name} · ${restaurant.budget} €'),
+            ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+
+    final cost = EconomyService.transferCost(level: character.levelValue);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.transferTo),
+        content: Text(
+          l10n.transferConfirm(character.name, target.name, cost),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.transferTo),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final wasInSquad = _battleReadyCharacters.contains(character);
+    final ok = _profile.transferStaff(
+      staff: character,
+      targetRestaurantId: target.id,
+    );
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.transferFailed)));
+      return;
+    }
+
+    setState(() {
+      if (wasInSquad) _battleReadyCharacters.remove(character);
+    });
+    await _saveState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.transferSuccess(character.name, target.name)),
+        ),
+      );
+  }
+
+  /// Teilt einen formellen Chef de cuisine dem Restaurant als **aktiven** Chef
+  /// zu (V10 § 6); die Unikat-Invariante prüft [ObjectProfile.assignHeadChef].
+  Future<void> _assignHeadChef(ObjectApprentice character) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_profile.assignHeadChef(character)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.headChefAssignForbidden)),
+        );
+      return;
+    }
+    setState(() {});
+    await _saveState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(l10n.headChefAssigned(character.name))),
+      );
+  }
+
+  /// Rangabhängiges Symbol für die Personal-Liste (V10).
+  IconData _rankIcon(ObjectApprentice character) =>
+      switch (character.rank) {
+        kRankChefDePartie => Icons.restaurant_menu,
+        kRankLineCook => Icons.restaurant,
+        _ => Icons.school,
+      };
 
   /// Kompakter Heil-/Rückfall-Countdown für die Personal-Liste (V3).
   String _healingInfoText(ObjectApprentice character, AppLocalizations l10n) {

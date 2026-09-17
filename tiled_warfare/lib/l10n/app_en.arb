@@ -383,6 +383,169 @@
   "@rankHeadChef": {
     "description": "Rank name: Chef de cuisine"
   },
+  "station": "Station",
+  "@station": {
+    "description": "Label of the kitchen station (career paths, V10)"
+  },
+  "stationNone": "No station chosen",
+  "@stationNone": {
+    "description": "Hint while no station has been chosen"
+  },
+  "stationChoose": "Choose station",
+  "@stationChoose": {
+    "description": "Action: choose a kitchen station"
+  },
+  "stationChooseHint": "The station affects the character itself and acts as an aura for nearby allies.",
+  "@stationChooseHint": {
+    "description": "Explanation of the station effect"
+  },
+  "stationSwitchConfirm": "Switch station? This costs {cost} €.",
+  "@stationSwitchConfirm": {
+    "description": "Confirmation of a paid station switch",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "stationNotAllowed": "This station is not selectable here (base station missing).",
+  "@stationNotAllowed": {
+    "description": "Message for an invalid station choice"
+  },
+  "stationVariantOf": "Variant of {base}",
+  "@stationVariantOf": {
+    "description": "Subtitle of a variant station",
+    "placeholders": { "base": { "type": "String" } }
+  },
+  "promoteToChefDePartie": "Promote to Chef de partie",
+  "@promoteToChefDePartie": {
+    "description": "Action: promotion to Chef de partie"
+  },
+  "promoteLevelRequiredFor": "Promotion requires level {level}!",
+  "@promoteLevelRequiredFor": {
+    "description": "Message when the level is too low for the promotion",
+    "placeholders": { "level": { "type": "int" } }
+  },
+  "promoteConfirmRank": "Promote {name} to {rank}? Cost: {cost} €",
+  "@promoteConfirmRank": {
+    "description": "Generic confirmation dialog of a promotion",
+    "placeholders": { "name": { "type": "String" }, "rank": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "promoteToSousChef": "Promote to Sous-chef",
+  "@promoteToSousChef": {
+    "description": "Action: promotion to Sous-chef"
+  },
+  "promoteToHeadChef": "Promote to Chef de cuisine",
+  "@promoteToHeadChef": {
+    "description": "Action: promotion to Chef de cuisine"
+  },
+  "headChefRoleActive": "Active",
+  "@headChefRoleActive": {
+    "description": "Role of an assigned head chef (V10 § 6)"
+  },
+  "headChefRoleFormal": "Formal",
+  "@headChefRoleFormal": {
+    "description": "Role of a non-assigned head chef (V10 § 6)"
+  },
+  "headChefAssign": "Make active head chef",
+  "@headChefAssign": {
+    "description": "Action: assign the head chef to the restaurant"
+  },
+  "headChefAssignForbidden": "An active head chef is already assigned.",
+  "@headChefAssignForbidden": {
+    "description": "Uniqueness invariant: only one active head chef per restaurant"
+  },
+  "headChefAssigned": "{name} now runs the restaurant as active head chef.",
+  "@headChefAssigned": {
+    "description": "Confirmation of the assignment",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "headChefNachrueck": "{name} steps up as active head chef.",
+  "@headChefNachrueck": {
+    "description": "Message when a formal head chef steps up",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "weeklyWage": "Weekly wage: {amount} €",
+  "@weeklyWage": {
+    "description": "Weekly wage of a character (V10, phase 7)",
+    "placeholders": { "amount": { "type": "int" } }
+  },
+  "supportRoles": "Helper and service roles",
+  "@supportRoles": {
+    "description": "Section for helper/service roles (V10, phase 6)"
+  },
+  "supportRoleCommunard": "Communard (staff cook)",
+  "@supportRoleCommunard": { "description": "Role: Communard" },
+  "supportRoleEffectCommunard": "Improves the weekly refill of the colleagues.",
+  "@supportRoleEffectCommunard": { "description": "Effect: Communard" },
+  "supportRoleTournant": "Tournant (roundsman)",
+  "@supportRoleTournant": { "description": "Role: Tournant" },
+  "supportRoleEffectTournant": "Reduces the exhaustion penalty of zero days.",
+  "@supportRoleEffectTournant": { "description": "Effect: Tournant" },
+  "supportRoleAboyeur": "Aboyeur (expediter)",
+  "@supportRoleAboyeur": { "description": "Role: Aboyeur" },
+  "supportRoleEffectAboyeur": "Improves the order flow (income).",
+  "@supportRoleEffectAboyeur": { "description": "Effect: Aboyeur" },
+  "supportRolePlongeur": "Plongeur (dishwasher)",
+  "@supportRolePlongeur": { "description": "Role: Plongeur" },
+  "supportRoleEffectPlongeur": "Lowers the running operating costs.",
+  "@supportRoleEffectPlongeur": { "description": "Effect: Plongeur" },
+  "supportRoleCommis": "Commis de débarrasseur (busser)",
+  "@supportRoleCommis": { "description": "Role: Commis" },
+  "supportRoleEffectCommis": "Slightly positive attractiveness effect.",
+  "@supportRoleEffectCommis": { "description": "Effect: Commis" },
+  "supportRoleBoucher": "Boucher (butcher)",
+  "@supportRoleBoucher": { "description": "Role: Boucher" },
+  "supportRoleEffectBoucher": "Increases the loot after battles.",
+  "@supportRoleEffectBoucher": { "description": "Effect: Boucher" },
+  "supportRoleGarcon": "Garçon de cuisine (kitchen boy)",
+  "@supportRoleGarcon": { "description": "Role: Garçon de cuisine" },
+  "supportRoleEffectGarcon": "Small bonus to attractiveness and satisfaction.",
+  "@supportRoleEffectGarcon": { "description": "Effect: Garçon de cuisine" },
+  "transferTo": "Move to …",
+  "@transferTo": {
+    "description": "Action: move staff to one of your own restaurants (V10)"
+  },
+  "transferSelectTitle": "Choose target restaurant",
+  "@transferSelectTitle": {
+    "description": "Title of the target picker for staff transfers"
+  },
+  "transferConfirm": "Move {name} to {target}? Cost: {cost} € – the target restaurant pays.",
+  "@transferConfirm": {
+    "description": "Confirmation of the staff transfer",
+    "placeholders": { "name": { "type": "String" }, "target": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "transferSuccess": "{name} moves to {target}.",
+  "@transferSuccess": {
+    "description": "Success message of the staff transfer",
+    "placeholders": { "name": { "type": "String" }, "target": { "type": "String" } }
+  },
+  "transferFailed": "Transfer not possible (target dissolved or budget too low).",
+  "@transferFailed": {
+    "description": "Error message of the staff transfer"
+  },
+  "transferNoTargets": "No other restaurant available.",
+  "@transferNoTargets": {
+    "description": "Hint when there is no target restaurant"
+  },
+  "stationSaucier": "Saucier",
+  "@stationSaucier": { "description": "Station name (FR): Saucier" },
+  "stationPoissonnier": "Poissonnier",
+  "@stationPoissonnier": { "description": "Station name (FR): Poissonnier" },
+  "stationRotisseur": "Rôtisseur",
+  "@stationRotisseur": { "description": "Station name (FR): Rôtisseur" },
+  "stationGrillardin": "Grillardin",
+  "@stationGrillardin": { "description": "Station name (FR): Grillardin" },
+  "stationFriturier": "Friturier",
+  "@stationFriturier": { "description": "Station name (FR): Friturier" },
+  "stationEntremetier": "Entremétier",
+  "@stationEntremetier": { "description": "Station name (FR): Entremétier" },
+  "stationPotager": "Potager",
+  "@stationPotager": { "description": "Station name (FR): Potager" },
+  "stationLegumier": "Légumier",
+  "@stationLegumier": { "description": "Station name (FR): Légumier" },
+  "stationGardeManger": "Garde manger",
+  "@stationGardeManger": { "description": "Station name (FR): Garde manger" },
+  "stationCharcutier": "Charcutier",
+  "@stationCharcutier": { "description": "Station name (FR): Charcutier" },
+  "stationPatissier": "Pâtissier",
+  "@stationPatissier": { "description": "Station name (FR): Pâtissier" },
   "level": "Level {value}",
   "@level": {
     "description": "Level display",

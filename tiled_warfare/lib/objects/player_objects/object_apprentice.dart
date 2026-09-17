@@ -3,6 +3,7 @@ import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
@@ -131,6 +132,45 @@ class ObjectApprentice extends ObjectToken {
     return (base * (100 + percent) / 100).round();
   }
 
+  // ── Stations-Modifikatoren (Karrierepfade, V10) ─────────────────────────
+
+  /// Angriffswert inkl. Stations-Bonus (Selbstwirkung, ohne Aura).
+  int get stationAttackValue =>
+      _withStationPercent(attackValue, StationStat.attack);
+
+  /// Verteidigungswert inkl. Stations-Bonus (Selbstwirkung, ohne Aura).
+  int get stationDefenseValue =>
+      _withStationPercent(defenseValue, StationStat.defense);
+
+  /// Schadenswert inkl. Stations-Bonus (Selbstwirkung, ohne Aura).
+  int get stationDamageValue =>
+      _withStationPercent(damageValue, StationStat.damage);
+
+  /// Reichweite inkl. Stations-Bonus (Selbstwirkung, ohne Aura).
+  int get stationRangeValue =>
+      _withStationPercent(rangeValue, StationStat.range);
+
+  /// Reiner Bonus-Betrag der Station auf den Angriffswert.
+  int get stationAttackBonus => stationAttackValue - attackValue;
+
+  /// Reiner Bonus-Betrag der Station auf den Verteidigungswert.
+  int get stationDefenseBonus => stationDefenseValue - defenseValue;
+
+  /// Reiner Bonus-Betrag der Station auf den Schadenswert.
+  int get stationDamageBonus => stationDamageValue - damageValue;
+
+  /// Reiner Bonus-Betrag der Station auf die Reichweite.
+  int get stationRangeBonus => stationRangeValue - rangeValue;
+
+  /// Wendet den Stations-Prozentsatz aus [EconomyBalance] auf einen Basiswert
+  /// an (0 % = unverändert); die Deckelung liegt in `EconomyService`.
+  int _withStationPercent(int base, StationStat stat) {
+    final percent =
+        EconomyService.stationBonusPercent(station, stat);
+    if (percent == 0) return base;
+    return (base * (100 + percent) / 100).round();
+  }
+
   /// Match-Historie dieses Charakters.
   List<MatchRecord> matchHistory = [];
 
@@ -138,6 +178,34 @@ class ObjectApprentice extends ObjectToken {
   ///
   /// Bestimmt die Anzeige (l10n) und wird persistiert; nie der Anzeigename.
   String rank = kRankApprentice;
+
+  /// Gewählte Küchenstation (Karrierepfade, V10) – `null`, solange keine
+  /// gewählt wurde. Erst ab Rang `chef_de_partie` möglich
+  /// (s. `lib/models/stations.dart`).
+  String? station;
+
+  /// Rolle eines `Chef de cuisine` (Karrierepfade, V10): `aktiv` oder `formell`.
+  ///
+  /// `aktiv` = dem Restaurant zugeteilt (Management-Profil, kein Kampfeinsatz);
+  /// `formell` = kämpfender Titelträger ohne Zuteilung (rückt bei Ausfall des
+  /// aktiven Chefs nach). `null` für alle anderen Ränge.
+  String? headChefRole;
+
+  /// Restaurant-ID, der ein **aktiver** `Chef de cuisine` zugeteilt ist
+  /// (Karrierepfade, V10); `null`, solange nicht zugeteilt.
+  int? assignedRestaurantId;
+
+  /// Transienter Aura-Angriffsbonus aus verbündeten Stationen (V10).
+  ///
+  /// Wird zu Gefechtsbeginn sowie vor jedem Angriff von `StationService`
+  /// neu berechnet – analog zu [timesAttackedThisTurn] kein Persistenzwert.
+  int stationAuraAttack = 0;
+
+  /// Transienter Aura-Verteidigungsbonus aus verbündeten Stationen (V10).
+  int stationAuraDefense = 0;
+
+  /// Transienter Aura-Schadensbonus aus verbündeten Stationen (V10).
+  int stationAuraDamage = 0;
 
   /// Erzeugt einen Lehrling.
   ///

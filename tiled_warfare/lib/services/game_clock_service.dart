@@ -4,12 +4,14 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
+import 'package:tiled_warfare/services/support_role_service.dart';
 
 /// Abrechnung eines vollendeten 7-Tage-Blocks (Wochen-Zusammenfassung, § 6).
 class WeekSettlement {
@@ -28,6 +30,9 @@ class WeekSettlement {
   /// Abgebuchte Teamarzt-Kosten des Blocks.
   final int medicCosts;
 
+  /// Abgebuchte Wochenlöhne des Personals des Blocks (V10, Phase 7).
+  final int staffCosts;
+
   /// Abgebuchter Erweiterungs-Unterhalt des Blocks.
   final int upgradeUpkeep;
 
@@ -43,6 +48,7 @@ class WeekSettlement {
     required this.periodEnd,
     required this.income,
     required this.medicCosts,
+    this.staffCosts = 0,
     required this.upgradeUpkeep,
     required this.negativeInterest,
     required this.budgetAfter,
@@ -59,6 +65,9 @@ class WeeklyTickResult {
 
   /// Abgebuchte Teamarzt-Kosten insgesamt.
   final int medicCosts;
+
+  /// Abgebuchte Wochenlöhne des Personals insgesamt (V10, Phase 7).
+  final int staffCosts;
 
   /// Abgebuchter Erweiterungs-Unterhalt insgesamt.
   final int upgradeUpkeep;
@@ -85,6 +94,7 @@ class WeeklyTickResult {
     required this.weeks,
     required this.passiveIncome,
     required this.medicCosts,
+    this.staffCosts = 0,
     required this.upgradeUpkeep,
     required this.negativeInterest,
     required this.budgetAfter,
@@ -99,6 +109,7 @@ class WeeklyTickResult {
         weeks: 0,
         passiveIncome: 0,
         medicCosts: 0,
+        staffCosts: 0,
         upgradeUpkeep: 0,
         negativeInterest: 0,
         budgetAfter: budget,
@@ -461,11 +472,17 @@ class GameClockService {
     var weekAnchor = restaurant.weekAnchorAt ?? lastSeen;
 
     // Eingangswerte des passiven Einkommens (§ 8) aus dem Endzustand (L5).
-    final incomePerWeek = PassiveIncomeService.passiveIncomePerWeek(
+    var incomePerWeek = PassiveIncomeService.passiveIncomePerWeek(
       attractiveness: attractivenessOf(restaurant, now: now),
       satisfaction: satisfactionOf(restaurant),
       capacity: capacityOf(restaurant),
     );
+    // V10 (Phase 6): Der Aboyeur verbessert den Bestellfluss (Einnahmen).
+    final incomeBonusPercent =
+        SupportRoleService.incomePercent(restaurant.supportStaff);
+    if (incomeBonusPercent != 0) {
+      incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100).round();
+    }
     // Tagesertrag; der 7. Tag eines Blocks trägt den Rundungsrest.
     final incomePerDay = incomePerWeek ~/ 7;
     final incomeLastDayOfBlock = incomePerWeek - incomePerDay * 6;
@@ -473,12 +490,29 @@ class GameClockService {
       restaurant.medics.map((m) => m.costPerWeek),
       1,
     );
-    final upkeepPerWeek =
+    // V10 (Phase 7): Wochenlöhne des gesamten Brigade-Personals inkl. der
+    // angestellten Hilfs-/Service-Rollen (Phase 6).
+    final wagePerWeek = EconomyService.billWeeklyStaffWages(
+      [
+        ...restaurant.staff.map(_staffWagePerWeekOf),
+        SupportRoleService.weeklyWages(restaurant.supportStaff),
+      ],
+      1,
+    );
+    var upkeepPerWeek =
         EconomyService.totalUpgradeUpkeepPerWeek(restaurant.upgrades);
+    // V10 (Phase 6): Der Plongeur senkt die laufenden Betriebskosten.
+    final upkeepReductionPercent =
+        SupportRoleService.upkeepReductionPercent(restaurant.supportStaff);
+    if (upkeepReductionPercent != 0) {
+      upkeepPerWeek =
+          (upkeepPerWeek * (100 - upkeepReductionPercent) / 100).round();
+    }
 
     var budget = restaurant.budget;
     var totalIncome = 0;
     var totalMedic = 0;
+    var totalWage = 0;
     var totalUpkeep = 0;
     var totalInterest = 0;
     final settlements = <WeekSettlement>[];
@@ -500,6 +534,8 @@ class GameClockService {
       // werden auf den jeweiligen Saldo am Blockende angewandt.
       budget -= medicPerWeek;
       totalMedic += medicPerWeek;
+      budget -= wagePerWeek;
+      totalWage += wagePerWeek;
       budget -= upkeepPerWeek;
       totalUpkeep += upkeepPerWeek;
       final beforeInterest = budget;
@@ -513,6 +549,7 @@ class GameClockService {
         periodEnd: weekAnchor.add(week),
         income: incomePerDay * 6 + incomeLastDayOfBlock,
         medicCosts: medicPerWeek,
+        staffCosts: wagePerWeek,
         upgradeUpkeep: upkeepPerWeek,
         negativeInterest: interest,
         budgetAfter: budget,
@@ -538,6 +575,7 @@ class GameClockService {
       weeks: settlements.length,
       passiveIncome: totalIncome,
       medicCosts: totalMedic,
+      staffCosts: totalWage,
       upgradeUpkeep: totalUpkeep,
       negativeInterest: totalInterest,
       budgetAfter: budget,
@@ -573,32 +611,64 @@ class GameClockService {
 
   /// Setzt Vitalität/Moral am Wochenblock-Ende auf den Trait-Basiswert zurück
   /// (V9, Phase 3; deterministisch über Persönlichkeit + Charakter-ID).
+  ///
+  /// Zusätzlich wirkt die Support-Station `Pâtissier` (V10 § 2): Ist sie im
+  /// Restaurant vertreten, erhalten die **übrigen** Charaktere einen Bonus auf
+  /// den Refill (`EconomyBalance.patissierRefillBonusPercent`).
   static void _refillStaffResources(RestaurantData restaurant) {
+    final hasPatissier = restaurant.staff.any(
+      (s) => s.station == kStationPatissier,
+    );
+    // V10 (Phase 6): Der Communard stapelt sich additiv mit dem Pâtissier-Bonus.
+    final bonusPercent =
+        (hasPatissier ? EconomyBalance.patissierRefillBonusPercent : 0) +
+            SupportRoleService.refillBonusPercent(restaurant.supportStaff);
+
     for (final s in restaurant.staff) {
       if (s.personalityId < 0) continue;
       final base = PersonalityTraits.forProfile(s.personalityId, s.id);
-      s.vitalityCurrent = base.vitality;
-      s.moraleCurrent = base.morale;
+      // Der Pâtissier ist Support und profitiert nicht von seiner eigenen Wirkung.
+      final ownBonus =
+          bonusPercent > 0 && s.station != kStationPatissier ? bonusPercent : 0;
+      s.vitalityCurrent = _withRefillBonus(base.vitality, ownBonus);
+      s.moraleCurrent = _withRefillBonus(base.morale, ownBonus);
       // Der Refill löscht die Null-Anker – der Malus fällt auf 0 zurück (§ 6).
       s.vitalityZeroSinceAt = null;
       s.moraleZeroSinceAt = null;
     }
   }
 
+  /// Wendet den Pâtissier-Refill-Bonus an und deckelt auf die Ressourcen-Domäne.
+  static int _withRefillBonus(int base, int percent) {
+    if (percent == 0) return base;
+    final boosted = (base * (100 + percent) / 100).round();
+    return boosted.clamp(
+      EconomyBalance.resourceMin,
+      EconomyBalance.resourceMax,
+    );
+  }
+
   /// Führt je Charakter ein Proben-Paar für die abgerechnete Staffel aus
   /// (V9 § 6; der Zufall ist injizierbar, V7/L7).
   static void _probeResources(
       RestaurantData restaurant, DateTime now, Random rng) {
+    // V10 (Phase 6): Der Tournant senkt den Erschöpfungs-Malus der Nulltage.
+    final reliefPercent =
+        SupportRoleService.exhaustionReliefPercent(restaurant.supportStaff);
     for (final s in restaurant.staff) {
       final vitality = s.vitalityCurrent;
       final morale = s.moraleCurrent;
       if (vitality == null || morale == null) continue;
+      final malus = StressService.malusPercentForStaffData(s, now);
+      final relievedMalus = reliefPercent == 0
+          ? malus
+          : (malus * (100 - reliefPercent) / 100).round();
       final override = StressService.probe(
         vitalityCurrent: vitality,
         moraleCurrent: morale,
         currentProfileId: s.personalityId < 0 ? 0 : s.personalityId,
         random: rng,
-        malusPercent: StressService.malusPercentForStaffData(s, now),
+        malusPercent: relievedMalus,
       );
       if (override == null) continue;
       s.personalityOverrideId = override.profileId;
@@ -632,6 +702,33 @@ class GameClockService {
     return n == 0 ? 0.0 : sum / n;
   }
 
+  /// `true`, wenn dieses Restaurant einen **aktiven** (zugeteilten)
+  /// Chef de cuisine führt (Karrierepfade, V10 § 6).
+  static bool hasActiveHeadChef(RestaurantData restaurant) =>
+      restaurant.staff.any((s) =>
+          s.rank == kRankHeadChef && s.headChefRole == kHeadChefRoleActive);
+
+  /// Management-Faktor des aktiven Chef de cuisine auf die drei Werte des
+  /// passiven Einkommens (`1.0` ohne aktiven Chef, sonst `1 + Prozent`).
+  static double _headChefManagementFactor(RestaurantData restaurant) =>
+      hasActiveHeadChef(restaurant)
+          ? 1.0 + EconomyBalance.headChefManagementBuffPercent / 100
+          : 1.0;
+
+  /// Wochenlohn eines Charakters inkl. Thriftiness-Faktor (V10, Phase 7).
+  ///
+  /// Alt-Daten ohne Persönlichkeit erhalten den neutralen Faktor (`50`), damit
+  /// der Lohn auch ohne Profil deterministisch bleibt.
+  static int _staffWagePerWeekOf(StaffData staff) {
+    final rank =
+        staff.rank.isNotEmpty ? staff.rank : rankFromType(staff.type);
+    final thriftiness = staff.personalityId < 0
+        ? 50
+        : PersonalityTraits.forProfile(staff.personalityId, staff.id)
+            .thriftiness;
+    return EconomyService.staffWagePerWeek(rank, thriftiness);
+  }
+
   /// Attraktivität: `1 + (Prestige − 1) + Personalanzahl × Kopf-Bonus`,
   /// geclamped auf die Domäne `0–inputDomainMax`. Ein aktiver Rebranding-Malus
   /// (§ 9) wird abgezogen, sofern [now] übergeben wird und noch innerhalb des
@@ -644,6 +741,10 @@ class GameClockService {
     // V9 (Phase 3): Die Hilfsbereitschaft des Personals trägt zur Attraktivität bei.
     value += EconomyBalance.personalityAttractivenessWeight *
         _staffHelpfulnessAverage(restaurant);
+    // V10 (Phase 5): Ein aktiver Chef de cuisine führt das Restaurant.
+    value *= _headChefManagementFactor(restaurant);
+    // V10 (Phase 6): Commis und Garçon de cuisine heben die Attraktivität.
+    value += SupportRoleService.attractivenessBonus(restaurant.supportStaff);
     // Erweiterungen wirken multiplikativ vor dem Clamp (§ 10).
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).attractiveness;
     final penaltyUntil = restaurant.rebrandingPenaltyUntil;
@@ -670,6 +771,10 @@ class GameClockService {
     var value = EconomyBalance.satisfactionBase +
         teamHealthOf(restaurant) * EconomyBalance.satisfactionHealthWeight +
         _resultBonus(restaurant.lastMatchResult);
+    // V10 (Phase 5): Ein aktiver Chef de cuisine hebt die Zufriedenheit.
+    value *= _headChefManagementFactor(restaurant);
+    // V10 (Phase 6): Der Garçon de cuisine hebt die Zufriedenheit leicht.
+    value += SupportRoleService.satisfactionBonus(restaurant.supportStaff);
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).satisfaction;
     return value.clamp(0.0, EconomyBalance.inputDomainMax);
   }
@@ -683,6 +788,8 @@ class GameClockService {
         .fold<int>(0, (a, b) => a + b);
     final mean = sum / restaurant.staff.length;
     var value = mean / EconomyBalance.capacityMoneyNorm;
+    // V10 (Phase 5): Ein aktiver Chef de cuisine hebt die Kapazität.
+    value *= _headChefManagementFactor(restaurant);
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).capacity;
     return value.clamp(0.0, EconomyBalance.capacityMax);
   }

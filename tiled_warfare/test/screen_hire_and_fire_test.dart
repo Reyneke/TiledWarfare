@@ -85,4 +85,34 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.textContaining('Gesamtwochenlast'), findsNothing);
   });
+
+  testWidgets('Hilfs-/Service-Rollen sind anstellbar (V10, Phase 6)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    loadProfile();
+
+    await tester.pumpWidget(app(const ScreenHireAndFire()));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    // Der Rollen-Abschnitt ist sichtbar (Auswahlkarten inkl. Communard).
+    expect(find.text('Hilfs- und Service-Rollen'), findsOneWidget);
+    expect(find.text('Communard (Staff cook)'), findsOneWidget);
+
+    // Erste Rolle anstellen.
+    final hireButton = find.widgetWithText(FilledButton, 'Anstellen').first;
+    await tester.ensureVisible(hireButton);
+    await tester.pumpAndSettle();
+    await tester.tap(hireButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(ObjectProfile().supportStaffCount, 1);
+    // Mit angestellter Rolle erscheint die Gesamtwochenlast.
+    expect(find.textContaining('Gesamtwochenlast'), findsOneWidget);
+  });
 }

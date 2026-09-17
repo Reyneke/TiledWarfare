@@ -14,10 +14,10 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 ///
 /// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = Restaurant-Ebene,
 /// Version 3 = Personal-Identität/Attribute (V9), Version 4 = Karriere-Rang &
-/// Station (Karrierepfade, V10). Die Deserialisierung ist bewusst toleranter als
-/// die Version: fehlende oder unbekannte Felder führen zu Defaults statt zu
-/// Fehlern.
-const int kProfileSchemaVersion = 4;
+/// Station (Karrierepfade, V10), Version 5 = Hilfs-/Service-Rollen (V10).
+/// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
+/// unbekannte Felder führen zu Defaults statt zu Fehlern.
+const int kProfileSchemaVersion = 5;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -412,6 +412,55 @@ class MedicData {
       );
 }
 
+/// Serialisierbare Daten einer Hilfs-/Service-Rolle (Karrierepfade, V10).
+///
+/// Diese Rollen ziehen **nicht** ins Gefecht; sie wirken auf die
+/// Management-Schleife und werden wie die Teamärzte verwaltet. Der Rollen-Typ
+/// wird als stabiler String (`SupportRole.name`) persistiert.
+class SupportRoleData {
+  /// Stabile ID (CRC32 aus Name + Anstellungszeitpunkt).
+  final int id;
+
+  /// Anzeigename der angestellten Person.
+  final String name;
+
+  /// Rollen-Schlüssel (`SupportRole.name`); unbekannte Werte werden beim Laden
+  /// übersprungen (tolerant, V6).
+  final String role;
+
+  /// Wöchentlicher Lohn in Euro.
+  final int costPerWeek;
+
+  /// Zeitpunkt der Anstellung (optional, für Sortierung/Anzeige).
+  final DateTime? hiredAt;
+
+  SupportRoleData({
+    required this.id,
+    required this.name,
+    required this.role,
+    required this.costPerWeek,
+    this.hiredAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'role': role,
+        'costPerWeek': costPerWeek,
+        if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
+      };
+
+  /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
+  factory SupportRoleData.fromJson(Map<String, dynamic> json) =>
+      SupportRoleData(
+        id: readInt(json['id']) ?? -1,
+        name: readString(json['name']) ?? '',
+        role: readString(json['role']) ?? '',
+        costPerWeek: readInt(json['costPerWeek']) ?? 0,
+        hiredAt: readDateTime(json['hiredAt']),
+      );
+}
+
 /// Datenmodell für ein Restaurant innerhalb eines Profils.
 class RestaurantData {
   /// Stable, unique id of the savegame (CRC32 of name + creation time).
@@ -444,6 +493,9 @@ class RestaurantData {
 
   /// Hired team medics of this savegame (serialized).
   List<MedicData> medics;
+
+  /// Angestellte Hilfs-/Service-Rollen dieses Spielstands (serialized, V10).
+  List<SupportRoleData> supportStaff;
 
   /// Zeitanker des Echtzeit-Systems (V8/§ 6): bis hierhin sind alle **vollen
   /// Echtzeittage** abgerechnet (Tages-Schritt). Wird nur um abgerechnete Tage
@@ -481,6 +533,7 @@ class RestaurantData {
     this.budget = kDefaultRestaurantBudget,
     List<StaffData>? staff,
     List<MedicData>? medics,
+    List<SupportRoleData>? supportStaff,
     this.lastSeenAt,
     this.weekAnchorAt,
     this.isDissolved = false,
@@ -489,6 +542,7 @@ class RestaurantData {
     Map<UpgradeType, int>? upgrades,
   })  : staff = staff ?? [],
         medics = medics ?? [],
+        supportStaff = supportStaff ?? [],
         upgrades = upgrades ?? {};
 
   Map<String, dynamic> toJson() => {
@@ -502,6 +556,7 @@ class RestaurantData {
         'budget': budget,
         'staff': staff.map((s) => s.toJson()).toList(),
         'medics': medics.map((m) => m.toJson()).toList(),
+        'supportStaff': supportStaff.map((s) => s.toJson()).toList(),
         if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
         if (weekAnchorAt != null)
           'weekAnchorAt': weekAnchorAt!.toIso8601String(),
@@ -525,6 +580,8 @@ class RestaurantData {
         budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
         staff: _mapList(json['staff'], StaffData.fromJson),
         medics: _mapList(json['medics'], MedicData.fromJson),
+        supportStaff:
+            _mapList(json['supportStaff'], SupportRoleData.fromJson),
         lastSeenAt: readDateTime(json['lastSeenAt']),
         weekAnchorAt: readDateTime(json['weekAnchorAt']),
         isDissolved: readBool(json['isDissolved']) ?? false,
@@ -570,6 +627,7 @@ class RestaurantData {
         budget: budget ?? this.budget,
         staff: staff ?? this.staff,
         medics: medics,
+        supportStaff: supportStaff,
         lastSeenAt: lastSeenAt,
         weekAnchorAt: weekAnchorAt,
         isDissolved: isDissolved,

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 
 /// Reine, zustandslose Wirtschaftsfunktionen (V2).
@@ -130,6 +131,92 @@ class EconomyService {
   /// Aura-Radius eines Kampfrangs [rank] in Hexfeldern (Karrierepfade, V10).
   static int stationAuraRadius(String rank) =>
       EconomyBalance.stationAuraRadiusByRank[rank] ?? 0;
+
+  /// Nächster Rang in der Aufstiegsleiter (Karrierepfade, V10).
+  ///
+  /// `apprentice → line_cook → chef_de_partie → sous_chef → head_chef`;
+  /// `null` = Ende der Kette (derzeit der Chef de cuisine).
+  static String? nextRank(String rank) => switch (rank) {
+        'apprentice' => 'line_cook',
+        'line_cook' => 'chef_de_partie',
+        'chef_de_partie' => 'sous_chef',
+        'sous_chef' => 'head_chef',
+        _ => null,
+      };
+
+  /// Vorheriger Rang in der Aufstiegsleiter – die Bedingung für einen Aufstieg
+  /// in den Zielrang [rank]; `null` = unbekanntes Ziel.
+  static String? previousRankOf(String rank) => switch (rank) {
+        'line_cook' => 'apprentice',
+        'chef_de_partie' => 'line_cook',
+        'sous_chef' => 'chef_de_partie',
+        'head_chef' => 'sous_chef',
+        _ => null,
+      };
+
+  /// `true`, wenn [rank] eine Station wählen darf (Chef de partie und höher).
+  static bool isStationRank(String rank) =>
+      EconomyBalance.stationAuraRadiusByRank.containsKey(rank);
+
+  /// `true`, wenn [station] eine bekannte Station ist.
+  static bool isValidStation(String? station) =>
+      station != null && EconomyBalance.stationSpecs.containsKey(station);
+
+  /// Basis-Station einer Variante (`null` für Basis-Stationen/Unbekanntes).
+  static String? baseStationOf(String? station) =>
+      isValidStation(station)
+          ? EconomyBalance.stationSpecs[station]!.baseStation
+          : null;
+
+  /// `true`, wenn [station] eine Support-Station ohne Kampf-Aura ist.
+  static bool isSupportStation(String? station) =>
+      isValidStation(station) &&
+      EconomyBalance.stationSpecs[station]!.isSupport;
+
+  /// Prozent-Bonus (Selbstwirkung) der [station] auf [stat], gedeckelt über
+  /// [EconomyBalance.stationBonusMaxPercent]. `0` für unbekannte/keine Station.
+  static int stationBonusPercent(String? station, StationStat stat) =>
+      _capStationPercent(
+          isValidStation(station)
+              ? EconomyBalance.stationSpecs[station]!.selfBonusPercent(stat)
+              : 0);
+
+  /// Prozent-Bonus (Aura) der [station] auf [stat], gedeckelt und `0` für
+  /// unbekannte/keine Station sowie für Support-Stationen.
+  static int stationAuraPercent(String? station, StationStat stat) =>
+      isValidStation(station) && !isSupportStation(station)
+          ? _capStationPercent(
+              EconomyBalance.stationSpecs[station]!.auraBonusPercent(stat))
+          : 0;
+
+  /// Begrenzt einen Stations-Prozentsatz auf
+  /// `[-stationBonusMaxPercent, +stationBonusMaxPercent]` (V10 § 6).
+  static int _capStationPercent(int percent) => percent.clamp(
+        -EconomyBalance.stationBonusMaxPercent,
+        EconomyBalance.stationBonusMaxPercent,
+      );
+
+  // ── Wöchentliche Löhne (V10, Phase 7) ──────────────────────────────────
+
+  /// Wochenlohn eines Brigade-Rangs [rank] (Karrierepfade, V10).
+  ///
+  /// `Basislohn des Rangs × Thriftiness-Faktor` – derselbe Faktor wie beim
+  /// Teamarzt (`weeklyMedicCost`): `50` = neutral, Sparsamkeit senkt den Lohn,
+  /// Verschwendung hebt ihn (`EconomyBalance.thriftinessWageSpread`).
+  static int staffWagePerWeek(String rank, [int thriftiness = 50]) {
+    final base = EconomyBalance.staffWagePerWeekByRank[rank] ??
+        EconomyBalance.staffWageFallbackPerWeek;
+    final wageFactor = 1.0 +
+        (50 - thriftiness) / 50.0 * EconomyBalance.thriftinessWageSpread;
+    return (base * wageFactor).round();
+  }
+
+  /// Summe der Wochenlöhne mehrerer Personen × [weeks].
+  static int billWeeklyStaffWages(Iterable<int> wagesPerWeek, int weeks) {
+    if (weeks <= 0) return 0;
+    final perWeek = wagesPerWeek.fold<int>(0, (sum, value) => sum + value);
+    return perWeek * weeks;
+  }
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 

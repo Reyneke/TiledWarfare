@@ -3,6 +3,8 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/stations.dart';
+import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
@@ -300,6 +302,70 @@ void main() {
       expect(
         EconomyService.canPromote(rank: 'chef_de_partie', level: 10),
         isTrue,
+      );
+    });
+
+    test('Stations-Bonusse sind definiert und gedeckelt (V10 § 6)', () {
+      for (final station in kAllStations) {
+        expect(
+          EconomyBalance.stationSpecs[station],
+          isNotNull,
+          reason: 'Fehlende Spec: $station',
+        );
+        for (final stat in StationStat.values) {
+          expect(
+            EconomyService.stationBonusPercent(station, stat).abs(),
+            lessThanOrEqualTo(EconomyBalance.stationBonusMaxPercent),
+          );
+          expect(
+            EconomyService.stationAuraPercent(station, stat).abs(),
+            lessThanOrEqualTo(EconomyBalance.stationBonusMaxPercent),
+          );
+        }
+      }
+      // Jede Variante ersetzt eine bekannte Basis-Station.
+      for (final variant in kVariantStations) {
+        expect(kBaseStations, contains(EconomyService.baseStationOf(variant)));
+      }
+      expect(EconomyBalance.stationSwitchCost, greaterThan(0));
+      expect(EconomyBalance.patissierRefillBonusPercent, greaterThan(0));
+    });
+
+    test('Wochenlöhne, Chef-Buff und Support-Rollen sind konsistent (V10)', () {
+      // Chef-de-cuisine-Management-Buff (Phase 5).
+      expect(EconomyBalance.headChefManagementBuffPercent, greaterThan(0));
+
+      // Wochenlöhne steigen monoton mit dem Rang (Phase 7).
+      const ranks = [
+        'apprentice',
+        'line_cook',
+        'chef_de_partie',
+        'sous_chef',
+        'head_chef',
+      ];
+      for (var i = 1; i < ranks.length; i++) {
+        expect(
+          EconomyService.staffWagePerWeek(ranks[i]),
+          greaterThan(EconomyService.staffWagePerWeek(ranks[i - 1])),
+        );
+      }
+
+      // Hilfs-/Service-Rollen (Phase 6): Lohn und Effekt-Deckel.
+      for (final role in SupportRole.values) {
+        expect(
+          EconomyBalance.supportRoleWagePerWeek[role],
+          greaterThan(0),
+          reason: 'Fehlender Lohn: $role',
+        );
+      }
+      expect(EconomyBalance.aboyeurIncomePercent, lessThan(100));
+      expect(
+        EconomyBalance.plongeurUpkeepReductionPercent,
+        lessThanOrEqualTo(100),
+      );
+      expect(
+        EconomyBalance.tournantExhaustionReliefPercent,
+        lessThanOrEqualTo(100),
       );
     });
   });

@@ -1,15 +1,20 @@
 import 'dart:math';
 
+import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
+import 'package:tiled_warfare/objects/player_objects/object_chef_de_partie.dart';
+import 'package:tiled_warfare/objects/player_objects/object_head_chef.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/player_objects/object_sous_chef.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
@@ -159,6 +164,39 @@ class ObjectProfile {
   /// Gibt die Anzahl der angestellten Teamärzte zurück.
   int get hiredMedicsCount => _hiredMedics.length;
 
+  /// Angestellte Hilfs-/Service-Rollen (Karrierepfade, V10, Phase 6).
+  final List<SupportRoleData> _supportStaff = [];
+
+  /// Gibt die Liste aller angestellten Hilfs-/Service-Rollen zurück.
+  List<SupportRoleData> get supportStaff => List.unmodifiable(_supportStaff);
+
+  /// Gibt die Anzahl der angestellten Hilfs-/Service-Rollen zurück.
+  int get supportStaffCount => _supportStaff.length;
+
+  /// Stellt eine Hilfs-/Service-Rolle ein (Karrierepfade, V10, Phase 6).
+  ///
+  /// Der Wochenlohn stammt aus `EconomyBalance.supportRoleWagePerWeek` und wird
+  /// erst zum nächsten Wochen-Tick abgebucht (kein anteiliger Einzug). Gibt die
+  /// angestellte Rolle zurück.
+  SupportRoleData hireSupportRole(SupportRole role, {DateTime? now}) {
+    final hiredAt = now ?? DateTime.now();
+    final roleName = RandomNames(activeCuisine.zone).fullName();
+    final entry = SupportRoleData(
+      id: CRC32.compute('$roleName${hiredAt.toIso8601String()}'),
+      name: roleName,
+      role: role.name,
+      costPerWeek: EconomyBalance.supportRoleWagePerWeek[role] ?? 0,
+      hiredAt: hiredAt,
+    );
+    _supportStaff.add(entry);
+    return entry;
+  }
+
+  /// Entlässt eine Hilfs-/Service-Rolle (keine Rückerstattung).
+  void fireSupportRole(SupportRoleData entry) {
+    _supportStaff.remove(entry);
+  }
+
   /// Stellt einen Teamarzt ein.
   ///
   /// Die Wochenkosten werden aus Qualität und **aktueller Teamgröße** neu
@@ -217,9 +255,13 @@ class ObjectProfile {
 
   /// Entlässt einen Charakter unwiderruflich aus dem Team.
   ///
-  /// Es gibt keine Rückerstattung des Anheuerungspreises.
+  /// Es gibt keine Rückerstattung des Anheuerungspreises. Fällt dabei der
+  /// aktive Chef de cuisine aus, rückt ein formeller Chef nach (V10 § 6).
   void fireCharacter(ObjectApprentice character) {
+    final wasActiveHeadChef = character.rank == kRankHeadChef &&
+        character.headChefRole == kHeadChefRoleActive;
     _personal.remove(character);
+    if (wasActiveHeadChef) nachrueckenHeadChef();
   }
 
   /// Verschiebt [staff] gegen die Transferkosten in das Restaurant
@@ -255,82 +297,273 @@ class ObjectProfile {
     }
 
     // Quelle (aktives Restaurant): sofort aus dem Team entfernen.
+    final wasActiveHeadChef = staff.rank == kRankHeadChef &&
+        staff.headChefRole == kHeadChefRoleActive;
     _personal.remove(staff);
+    // V10 § 6: Im Ziel ist der transferierte Chef zunächst **formell**; im
+    // Quell-Restaurant rückt ein formeller Chef nach.
+    if (wasActiveHeadChef) {
+      staff.headChefRole = kHeadChefRoleFormal;
+      staff.assignedRestaurantId = null;
+    }
 
     // Ziel (nicht-aktiv): für den nächsten Speichervorgang vormerken.
     final edit = existing ?? _TargetRestaurantEdit();
     edit.appendStaff.add(_apprenticeToStaffData(staff));
     edit.budgetDelta -= cost;
     _pendingTargetEdits[targetRestaurantId] = edit;
+
+    if (wasActiveHeadChef) nachrueckenHeadChef();
     return true;
   }
 
   /// Bildet einen Lehrling zu einem [ObjectLineCook] fort, sofern er
   /// Level 5 oder höher erreicht hat.
   ///
-  /// Die Fortbildung kostet Geld (deutlich teurer als Neuanheuerung). Der
-  /// Charakter behält seine Identität: der Personenname (nur der Rang-Präfix
-  /// wechselt), das Bild und die Match-Historie werden auf den neuen
-  /// [ObjectLineCook] übertragen; Status und Verletzungszustand werden ebenfalls
-  /// übernommen. Die Statwerte wechseln auf das feste Line-Cook-Profil
-  /// (Beförderung, keine Neuwürfelung).
-  ///
-  /// Gibt den fortgebildeten [ObjectApprentice] (den neuen Line Cook) zurück –
-  /// oder `null`, wenn das Level zu niedrig, der Charakter bereits ein Line Cook
-  /// oder das Budget zu gering ist. Bei `null` bleibt der Zustand unverändert.
+  /// Dünner Wrapper um [promoteToRank]; die Kosten bleiben als Parameter
+  /// erhalten (Alt-Aufrufer/Tests), Standard ist
+  /// `EconomyBalance.upgradeToLineCookCost`.
   ObjectApprentice? upgradeToLineCook(ObjectApprentice apprentice,
-      {int cost = EconomyBalance.upgradeToLineCookCost}) {
-    if (apprentice is ObjectLineCook) {
-      return null; // bereits fortgebildet
+          {int cost = EconomyBalance.upgradeToLineCookCost}) =>
+      promoteToRank(apprentice, kRankLineCook, cost: cost);
+
+  /// Befördert [character] in den Zielrang [targetRank] (Karrierepfade, V10).
+  ///
+  /// Voraussetzungen: [character] steht genau eine Stufe unter dem Zielrang
+  /// (`EconomyService.previousRankOf`), erreicht das Level-Gate
+  /// (`EconomyService.canPromote`) und das Budget deckt die Einmalkosten bis
+  /// zur Negativgrenze (`EconomyService.canAfford`).
+  ///
+  /// Die Identität bleibt vollständig erhalten (V9/V10): stabile `id`,
+  /// Persönlichkeit, Ressourcen, Match-Historie, Verletzungszustand,
+  /// Rangfortschritt und gewählte Station wandern in das neue Klassenobjekt;
+  /// nur der Rang-Präfix des Namens wechselt (Beförderung, keine Neuwürfelung).
+  ///
+  /// Gibt den beförderten [ObjectApprentice] zurück – oder `null`, wenn eine
+  /// Bedingung nicht erfüllt ist (der Zustand bleibt dann unverändert).
+  ObjectApprentice? promoteToRank(
+    ObjectApprentice character,
+    String targetRank, {
+    int? cost,
+  }) {
+    final previousRank = EconomyService.previousRankOf(targetRank);
+    if (previousRank == null || character.rank != previousRank) {
+      return null; // falscher Ausgangsrang oder unbekannter Zielrang
     }
-    if (apprentice.levelValue < EconomyBalance.lineCookPromotionLevel) {
-      return null; // Fortbildung erst ab dem konfigurierten Level möglich
+    if (!EconomyService.canPromote(
+        rank: targetRank, level: character.levelValue)) {
+      return null; // Level-Gate nicht erreicht
     }
-    if (!EconomyService.canAfford(budget: budget, cost: cost)) {
+    final promotionCost = cost ?? EconomyService.promotionCost(targetRank);
+    if (!EconomyService.canAfford(budget: budget, cost: promotionCost)) {
       return null; // Budget reicht nicht
     }
-    budget -= cost;
 
-    // Identität bewahren: Personenname (nur Rang-Präfix wechseln), Bild und
-    // Match-Historie werden auf den Line Cook übertragen (V5).
-    // Die Küche bestimmt Namensstamm und Token-Grafik (§ 9).
-    final lineCook = ObjectLineCook(
-      cuisine: activeCuisine,
-      name: _promotedName(apprentice.name),
-      imagePath: apprentice.imagePath,
+    final promoted = _createForRank(
+      targetRank,
+      name: _rankPrefixedName(character.name, targetRank),
+      imagePath: character.imagePath,
     );
+    if (promoted == null) return null; // Rang (noch) ohne Klasse
 
-    // Fortschritt und Verletzungszustand übernehmen.
-    lineCook.levelValue = apprentice.levelValue;
-    lineCook.currentXPValue = apprentice.currentXPValue;
-    lineCook.woundValue = apprentice.woundValue;
-    lineCook.status = apprentice.status;
-    lineCook.injuryStartedAt = apprentice.injuryStartedAt;
-    lineCook.injuryStartStatus = apprentice.injuryStartStatus;
-    lineCook.emergencyShotAt = apprentice.emergencyShotAt;
-    lineCook.suppressedStatus = apprentice.suppressedStatus;
-    lineCook.matchHistory = List.of(apprentice.matchHistory);
-    lineCook.id = apprentice.id;
-    lineCook.personalityId = apprentice.personalityId;
-    lineCook.vitalityCurrent = apprentice.vitalityCurrent;
-    lineCook.moraleCurrent = apprentice.moraleCurrent;
-    lineCook.lastResourceRefillAt = apprentice.lastResourceRefillAt;
+    budget -= promotionCost;
+    _transferIdentity(promoted, character);
 
-    // Alten Lehrling entfernen und durch den Line Cook ersetzen
-    _personal.remove(apprentice);
-    _personal.add(lineCook);
-    return lineCook;
+    // V10 § 6: Beförderung überschreitet die Unikat-Invariante nicht – ein neuer
+    // Chef de cuisine startet immer als **formeller** Titelträger und wird nur
+    // ausdrücklich zugeteilt (`assignHeadChef`). Bewusst **nach** dem
+    // Identitätstransfer, damit die Rolle nicht überschrieben wird.
+    if (targetRank == kRankHeadChef) {
+      promoted.headChefRole = kHeadChefRoleFormal;
+      promoted.assignedRestaurantId = null;
+    }
+
+    _personal.remove(character);
+    _personal.add(promoted);
+    return promoted;
   }
 
-  /// Ersetzt den Rang-Präfix eines Lehrlingsnamens durch „Line Cook: “.
+  /// Erzeugt das Klassenobjekt zum Zielrang.
   ///
-  /// Alt-Daten oder abweichend benannte Charaktere werden defensiv behandelt:
-  /// Beginnt der Name nicht mit dem Lehrlings-Präfix, wird er unverändert
-  /// übernommen.
-  static String _promotedName(String name) {
-    const apprenticePrefix = 'Apprentice: ';
-    if (name.startsWith(apprenticePrefix)) {
-      return 'Line Cook: ${name.substring(apprenticePrefix.length)}';
+  /// Umgesetzt sind alle Ränge der Aufstiegsleiter: `line_cook`
+  /// ([ObjectLineCook]), `chef_de_partie` ([ObjectChefDePartie]), `sous_chef`
+  /// ([ObjectSousChef]) und `head_chef` ([ObjectHeadChef]). Die Küche bestimmt
+  /// Namensstamm und Token-Grafik (§ 9).
+  ObjectApprentice? _createForRank(
+    String targetRank, {
+    required String name,
+    required String? imagePath,
+  }) {
+    switch (targetRank) {
+      case kRankLineCook:
+        return ObjectLineCook(
+          cuisine: activeCuisine,
+          name: name,
+          imagePath: imagePath,
+        );
+      case kRankChefDePartie:
+        return ObjectChefDePartie(
+          cuisine: activeCuisine,
+          name: name,
+          imagePath: imagePath,
+        );
+      case kRankSousChef:
+        return ObjectSousChef(
+          cuisine: activeCuisine,
+          name: name,
+          imagePath: imagePath,
+        );
+      case kRankHeadChef:
+        return ObjectHeadChef(
+          cuisine: activeCuisine,
+          name: name,
+          imagePath: imagePath,
+        );
+      default:
+        return null;
+    }
+  }
+
+  /// Überträgt Identität, Fortschritt, Zustand und Station von [source] auf
+  /// [target] (V9/V10) – die einzige Stelle des Identitätserhalts bei Aufstieg.
+  static void _transferIdentity(
+      ObjectApprentice target, ObjectApprentice source) {
+    target.levelValue = source.levelValue;
+    target.currentXPValue = source.currentXPValue;
+    target.woundValue = source.woundValue;
+    target.status = source.status;
+    target.injuryStartedAt = source.injuryStartedAt;
+    target.injuryStartStatus = source.injuryStartStatus;
+    target.emergencyShotAt = source.emergencyShotAt;
+    target.suppressedStatus = source.suppressedStatus;
+    target.matchHistory = List.of(source.matchHistory);
+    target.id = source.id;
+    target.personalityId = source.personalityId;
+    target.vitalityCurrent = source.vitalityCurrent;
+    target.moraleCurrent = source.moraleCurrent;
+    target.lastResourceRefillAt = source.lastResourceRefillAt;
+    target.personalityOverrideId = source.personalityOverrideId;
+    target.personalityOverrideUntil = source.personalityOverrideUntil;
+    target.personalityOverrideCause = source.personalityOverrideCause;
+    target.vitalityZeroSinceAt = source.vitalityZeroSinceAt;
+    target.moraleZeroSinceAt = source.moraleZeroSinceAt;
+    target.station = source.station;
+    target.headChefRole = source.headChefRole;
+    target.assignedRestaurantId = source.assignedRestaurantId;
+  }
+
+  /// Wählt bzw. wechselt die Küchenstation eines Charakters (V10, Phase 4).
+  ///
+  /// Voraussetzungen: Rang `chef_de_partie` oder höher, [station] ist bekannt
+  /// und Varianten setzen ihre Basis-Station voraus. Die erste Wahl ist
+  /// kostenfrei; ein Wechsel kostet `EconomyBalance.stationSwitchCost` (bis zur
+  /// Negativgrenze, `canAfford`). Gibt `true` zurück, wenn die Station gesetzt
+  /// wurde.
+  bool assignStation(ObjectApprentice character, String station) {
+    if (!EconomyService.isStationRank(character.rank)) return false;
+    if (!EconomyService.isValidStation(station)) return false;
+    if (character.station == station) return true; // unverändert, kostenfrei
+
+    // Varianten setzen ihre Basis-Station voraus: Die aktuell gewählte Station
+    // muss die Basis selbst oder eine Variante derselben Basis sein.
+    final targetBase = EconomyService.baseStationOf(station);
+    if (targetBase != null &&
+        _baseStationKeyOf(character.station) != targetBase) {
+      return false;
+    }
+
+    final isSwitch = character.station != null;
+    final cost = isSwitch ? EconomyBalance.stationSwitchCost : 0;
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
+    budget -= cost;
+    character.station = station;
+    return true;
+  }
+
+  /// Basis-Schlüssel einer gewählten Station: eine Variante liefert ihre
+  /// Basis, eine Basis-Station sich selbst, `null` bleibt `null`.
+  static String? _baseStationKeyOf(String? station) => station == null
+      ? null
+      : (EconomyService.baseStationOf(station) ?? station);
+
+  // ── Chef de cuisine: Doppelrolle & Unikat-Invariante (V10 § 6) ─────────
+
+  /// Der aktuell **aktive** (zugeteilte) Chef de cuisine dieses Restaurants –
+  /// oder `null`. Pro Restaurant ist höchstens einer möglich.
+  ObjectApprentice? activeHeadChef() {
+    for (final character in _personal) {
+      if (character.rank == kRankHeadChef &&
+          character.headChefRole == kHeadChefRoleActive) {
+        return character;
+      }
+    }
+    return null;
+  }
+
+  /// Kandidaten für das Nachrücken: alle **formellen** Chef de cuisine,
+  /// sortiert nach höchstem Level, bei Gleichstand nach ältester (kleinster) ID.
+  List<ObjectApprentice> formalHeadChefCandidates() {
+    final candidates = _personal
+        .where((c) =>
+            c.rank == kRankHeadChef && c.headChefRole != kHeadChefRoleActive)
+        .toList();
+    candidates.sort((a, b) {
+      final byLevel = b.levelValue.compareTo(a.levelValue);
+      return byLevel != 0 ? byLevel : a.id.compareTo(b.id);
+    });
+    return candidates;
+  }
+
+  /// Teilt [character] als **aktiven** Chef de cuisine diesem Restaurant zu
+  /// (Karrierepfade, V10 § 6).
+  ///
+  /// Abgelehnt (`false`, Zustand unverändert), wenn [character] kein Chef de
+  /// cuisine im Team ist oder bereits ein aktiver Chef zugeteilt ist
+  /// (Unikat-Invariante). Ein Rückweg aktiv → formell ist bewusst **nicht**
+  /// vorgesehen (V10 § 6: Reversibilität einseitig).
+  bool assignHeadChef(ObjectApprentice character) {
+    if (character.rank != kRankHeadChef) return false;
+    if (!_personal.contains(character)) return false;
+    if (activeHeadChef() != null) return false;
+    character.headChefRole = kHeadChefRoleActive;
+    character.assignedRestaurantId = activeRestaurantId;
+    return true;
+  }
+
+  /// Lässt bei Ausfall des aktiven Chef de cuisine den ranghöchsten formellen
+  /// Chef nachrücken (V10 § 6: „Ausfall“ = Tod, Entlassung oder Transfer).
+  ///
+  /// Die Auswahl ist deterministisch (höchstes Level, dann kleinste ID) und
+  /// damit testbar; die UI meldet den Nachrücker. Gibt den Nachrücker zurück –
+  /// oder `null`, wenn der Posten besetzt ist bzw. kein Chef verfügbar ist.
+  ObjectApprentice? nachrueckenHeadChef() {
+    if (activeHeadChef() != null) return null;
+    final candidates = formalHeadChefCandidates();
+    if (candidates.isEmpty) return null;
+    final next = candidates.first;
+    next.headChefRole = kHeadChefRoleActive;
+    next.assignedRestaurantId = activeRestaurantId;
+    return next;
+  }
+
+  /// Rang-Präfixe der internen Anzeigenamen (Alt-Muster `Apprentice: …`).
+  static const Map<String, String> _rankNamePrefixes = {
+    kRankApprentice: 'Apprentice: ',
+    kRankLineCook: 'Line Cook: ',
+    kRankChefDePartie: 'Chef de partie: ',
+    kRankSousChef: 'Sous-chef: ',
+    kRankHeadChef: 'Chef de cuisine: ',
+  };
+
+  /// Ersetzt einen bekannten Rang-Präfix im Namen durch den Präfix von
+  /// [targetRank]. Namen ohne bekannten Präfix bleiben unverändert (defensiv).
+  static String _rankPrefixedName(String name, String targetRank) {
+    final targetPrefix = _rankNamePrefixes[targetRank];
+    if (targetPrefix == null) return name;
+    for (final prefix in _rankNamePrefixes.values) {
+      if (name.startsWith(prefix)) {
+        return '$targetPrefix${name.substring(prefix.length)}';
+      }
     }
     return name;
   }
@@ -453,6 +686,10 @@ class ObjectProfile {
 
     // Tote Einheiten aus dem Personal entfernen
     _personal.removeWhere((unit) => unit.status == CharacterStatus.dead);
+
+    // V10 § 6: Fällt der aktive Chef de cuisine im Gefecht, rückt ein formeller
+    // Chef automatisch nach (Auswahl: höchstes Level, dann älteste ID).
+    nachrueckenHeadChef();
   }
 
   /// Fügt für alle angestellten Charaktere einen Match-Record hinzu.
@@ -606,6 +843,7 @@ class ObjectProfile {
     activeUpgrades = {};
     _personal.clear();
     _hiredMedics.clear();
+    _supportStaff.clear();
     _pendingTargetEdits.clear();
     _player = ObjectPlayer();
   }
@@ -640,6 +878,7 @@ class ObjectProfile {
       activeUpgrades = {};
       _personal.clear();
       _hiredMedics.clear();
+      _supportStaff.clear();
       return;
     }
 
@@ -670,6 +909,15 @@ class ObjectProfile {
       final medic = _medicDataToTeamMedic(md);
       if (medic != null) {
         _hiredMedics.add(medic);
+      }
+    }
+
+    // Restore Hilfs-/Service-Rollen (V10, Phase 6) – unbekannte Rollen werden
+    // tolerant übersprungen (V6).
+    _supportStaff.clear();
+    for (final sd in restaurant.supportStaff) {
+      if (SupportRole.values.any((r) => r.name == sd.role)) {
+        _supportStaff.add(sd);
       }
     }
   }
@@ -734,6 +982,7 @@ class ObjectProfile {
       budget: budget,
       staff: _personal.map(_apprenticeToStaffData).toList(),
       medics: _hiredMedics.map(_medicToMedicData).toList(),
+      supportStaff: List.of(_supportStaff),
       upgrades: Map.of(activeUpgrades),
       // V3/V8: den (ggf. durch den Catch-up fortgeschriebenen) Zeitanker
       // persistieren, damit verpasste Zeit nicht erneut abgerechnet wird.
@@ -784,6 +1033,7 @@ class ObjectProfile {
         budget: budget,
         staff: _personal.map(_apprenticeToStaffData).toList(),
         medics: _hiredMedics.map(_medicToMedicData).toList(),
+        supportStaff: List.of(_supportStaff),
         upgrades: Map.of(activeUpgrades),
         lastSeenAt: lastSeenAt,
         weekAnchorAt: weekAnchorAt,
@@ -917,8 +1167,11 @@ class ObjectProfile {
   static StaffData _apprenticeToStaffData(ObjectApprentice a) => StaffData(
         name: a.name,
         imagePath: a.imagePath,
-        type: a is ObjectLineCook ? 'line_cook' : 'apprentice',
+        type: a.rank,
         rank: a.rank,
+        station: a.station,
+        headChefRole: a.headChefRole,
+        assignedRestaurantId: a.assignedRestaurantId,
         levelValue: a.levelValue,
         currentXPValue: a.currentXPValue,
         woundValue: a.woundValue,
@@ -953,6 +1206,15 @@ class ObjectProfile {
     if (rank == kRankLineCook) {
       return _buildApprentice<ObjectLineCook>(sd, ObjectLineCook());
     }
+    if (rank == kRankChefDePartie) {
+      return _buildApprentice<ObjectChefDePartie>(sd, ObjectChefDePartie());
+    }
+    if (rank == kRankSousChef) {
+      return _buildApprentice<ObjectSousChef>(sd, ObjectSousChef());
+    }
+    if (rank == kRankHeadChef) {
+      return _buildApprentice<ObjectHeadChef>(sd, ObjectHeadChef());
+    }
     // Alle anderen Ränge (u. a. die späteren höheren Klassen) werden vorerst als
     // Basisklasse geladen; der Rang bleibt in `apprentice.rank` erhalten.
     return _buildApprentice<ObjectApprentice>(sd, ObjectApprentice(
@@ -986,6 +1248,11 @@ class ObjectProfile {
     apprentice.moneyValue = sd.moneyValue;
     apprentice.xpValue = sd.xpValue;
     apprentice.rank = sd.rank.isNotEmpty ? sd.rank : rankFromType(sd.type);
+    // Gewählte Küchenstation (Phase 4) – additiv/tolerant, `null` bei Alt-Daten.
+    apprentice.station = sd.station;
+    // Doppelrolle des Chef de cuisine (Phase 5) – additiv/tolerant.
+    apprentice.headChefRole = sd.headChefRole;
+    apprentice.assignedRestaurantId = sd.assignedRestaurantId;
     apprentice.status = CharacterStatus.values.firstWhere(
       (e) => e.name == sd.status,
       orElse: () => CharacterStatus.ready,

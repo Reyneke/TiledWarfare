@@ -285,6 +285,117 @@ Beim Umsetzen verbleiben **keine offenen Design-Fragen** mehr; offen sind aussch
 | 7 | **Wöchentliche Löhne** für alle Ränge (Wochentick, `weeklyMedicCost`-Muster). | klein | mittel (Wirtschaftsschleife) |
 | 8 | **Personal Transfer** zwischen eigenen Restaurants (Merge über `toProfileData()`, Kosten, Nachrücken des Chefs). | mittel | mittel |
 
+## Umsetzung: Phase 3 & 4 (erledigt)
+
+**Phase 3 – Aufstieg `Line Cook → Chef de partie`**
+
+- **Neue Klasse:** `lib/objects/player_objects/object_chef_de_partie.dart` (`ObjectChefDePartie extends ObjectApprentice`,
+  Stats aus `EconomyBalance.chefDePartieStats`, Rang `kRankChefDePartie`).
+- **Generischer Aufstieg:** `ObjectProfile.promoteToRank(character, targetRank)` prüft Ausgangsrang
+  (`EconomyService.previousRankOf`), Level-Gate (`canPromote`) und Budget (`canAfford`); `upgradeToLineCook` ist
+  jetzt ein dünner Wrapper darauf. `_transferIdentity` überträgt Identität, Persönlichkeit, Ressourcen,
+  Match-Historie, Verletzungszustand, Overrides und Station; `_createForRank` erzeugt die Zielklasse,
+  `_rankPrefixedName` den Anzeigenamen (`Chef de partie: …`).
+- **Persistenz:** `StaffData.type` wird als `rank` geschrieben, `station` mitgeführt; beim Laden erzeugt
+  `_staffDataToApprentice` für `chef_de_partie` eine `ObjectChefDePartie`, `_buildApprentice` stellt `station` wieder her.
+- **UI:** Rang-Anzeige über den neuen Helfer `l10n/staff_rank.dart` (`rankLabel`) statt `is ObjectLineCook`
+  (Detailseite, Personal-Liste, Token-Farbe/-Label im Gefecht). Der Beförderungs-Button in `ScreenRestaurant`
+  arbeitet über `EconomyService.nextRank` + `promoteToRank` (Kader-Mitnahme bleibt erhalten).
+
+**Phase 4 – Stationen (Modifikatoren) für `Chef de partie`**
+
+- **Modell/Balance:** `lib/models/stations.dart` (stabile Schlüssel für Basis-Stationen Saucier, Poissonnier,
+  Rôtisseur, Entremétier, Garde manger, Pâtissier + Varianten Grillardin, Friturier, Potager, Légumier,
+  Charcutier; `StationStat`). In `EconomyBalance`: `StationSpec` (Selbst- und Aura-Prozente),
+  `stationSpecs`, `stationBonusMaxPercent` (Deckel), `stationSwitchCost`, `patissierRefillBonusPercent`.
+- **Regeln:** `EconomyService.nextRank`/`previousRankOf`, `isStationRank`, `isValidStation`,
+  `baseStationOf`, `isSupportStation`, `stationBonusPercent`/`stationAuraPercent` (gedeckelt).
+- **Laufzeit/Kampf:** `ObjectApprentice.station` + Selbst-Getter (`stationAttackValue`, `…DefenseValue`,
+  `…DamageValue`, `…RangeValue`) und transiente Aura-Felder; `object_player` summiert Persönlichkeit + Station +
+  Aura; Reichweitenprüfungen nutzen `stationRangeValue`.
+- **Aura:** `lib/services/station_service.dart` (neu) mit `applyStationAuras` – reine, widget-freie Funktion
+  (Selbstwirkung über die Getter, Aura auf Verbündete im `stationAuraRadiusByRank`-Radius via
+  `HexGrid.distance`); Aufruf zu Rundenbeginn und unmittelbar vor jedem Angriff in `widget_caretaker`.
+- **Wahl/Wechsel:** `ObjectProfile.assignStation` (nur ab `chef_de_partie`, Varianten erst nach ihrer Basis,
+  erste Wahl kostenfrei, Wechsel kostet `stationSwitchCost`, `canAfford`); UI: Stationszeile + Auswahl-Dialog
+  auf der Charakter-Detailseite.
+- **Pâtissier:** Support-Station ohne Kampf-Aura; verbessert den Wochen-Refill der übrigen Charaktere
+  (`GameClockService._refillStaffResources`).
+
+**Tests:** `test/promote_chef_de_partie_test.dart` (6), `test/station_test.dart` (9) sowie der neue
+Sanity-Test „Stations-Bonusse sind definiert und gedeckelt“ in `balance_sanity_test.dart`.
+
+**Weiterhin offen (Phase 5–8):** `ObjectSousChef`/`ObjectHeadChef`, Doppelrolle aktiv/formell,
+Unikat-Invariante + Nachrücken, Hilfs-/Service-Rollen, wöchentliche Löhne, Transfer-UI.
+
+## Umsetzung: Phase 5–8 (erledigt)
+
+**Phase 5 – `Sous-chef` & `Chef de cuisine` (Doppelrolle)**
+
+- **Klassen:** `object_sous_chef.dart`, `object_head_chef.dart` (`extends ObjectApprentice`, Stats aus
+  `sousChefStats`/`headChefFormalStats`); die Aufstiegsleiter ist damit komplett
+  (`apprentice → line_cook → chef_de_partie → sous_chef → head_chef`) – `EconomyService.nextRank`/`previousRankOf`
+  und `ObjectProfile._createForRank` bedienen alle Ränge, der Promote-Button nutzt sie automatisch.
+- **Doppelrolle:** `ObjectApprentice.headChefRole`/`assignedRestaurantId` (persistiert über `StaffData`).
+  Eine Beförderung erzeugt immer einen **formellen** Titelträger; `ObjectProfile.assignHeadChef` teilt zu,
+  `activeHeadChef`/`formalHeadChefCandidates` liefern die Lage. **Unikat-Invariante:** pro Restaurant höchstens
+  **ein aktiver** Chef – nicht überschreitbar durch Anheuern, Befördern oder Zuteilen. Ein Rückweg
+  aktiv → formell ist bewusst **nicht** implementiert (V10 § 6: Reversibilität einseitig).
+- **Nachrücken:** `ObjectProfile.nachrueckenHeadChef()` (höchstes Level, bei Gleichstand älteste ID) – automatisch bei
+  Tod (Gefecht), Entlassung und Transfer des aktiven Chefs.
+- **Management-Profil:** `EconomyBalance.headChefManagementBuffPercent`; ein aktiver Chef hebt Attraktivität,
+  Zufriedenheit und Kapazität (`GameClockService.hasActiveHeadChef`). Aktive Chefs sind vom Gefecht ausgeschlossen
+  (Checkbox), formelle kämpfen weiter – ihre Stations-Aura wirkt mit Radius 2/3.
+- **UI:** Rollen-Anzeige in Personal-Liste und Detailseite, Zuteilungs-Button inkl. Meldung bei belegtem Posten.
+
+**Phase 6 – Hilfs-/Service-Rollen**
+
+- **Modell/Persistenz:** `lib/models/support_role.dart` (`SupportRole`: Communard, Tournant, Aboyeur, Plongeur,
+  Commis, Boucher, Garçon) und `SupportRoleData` in `RestaurantData.supportStaff` (`kProfileSchemaVersion = 5`,
+  additiv/tolerant – unbekannte Rollen werden beim Laden übersprungen).
+- **Verwaltung:** `ObjectProfile.hireSupportRole`/`fireSupportRole`; eigener Abschnitt in `ScreenHireAndFire`
+  (Auswahlkarten mit Wirkung + Wochenlohn; angestellte Rollen mit Entlassen), Verwaltung wie Teamärzte.
+- **Wirkung:** `lib/services/support_role_service.dart` (reine Auswertung), verdrahtet in der Wirtschaftsschleife:
+
+  | Rolle | Wirkung | Hook |
+  |---|---|---|
+  | Communard | Refill-Bonus der Kollegen (stapelt mit Pâtissier) | `_refillStaffResources` |
+  | Tournant | senkt den Erschöpfungs-Malus der Nulltage | `_probeResources` |
+  | Aboyeur | +% passives Einkommen | `catchUp` |
+  | Plongeur | senkt den Erweiterungs-Unterhalt | `catchUp` |
+  | Commis / Garçon | +Attraktivität / +Zufriedenheit | `attractivenessOf`/`satisfactionOf` |
+  | Boucher | +% Beute nach Gefechten | `screen_battle_result` |
+
+**Phase 7 – Wöchentliche Löhne**
+
+- `EconomyBalance.staffWagePerWeekByRank` (100/200/350/600/1000 €) und `supportRoleWagePerWeek`;
+  `EconomyService.staffWagePerWeek(rank, thriftiness)` nutzt denselben Thriftiness-Faktor wie die
+  Teamarzt-Abrechnung.
+- `GameClockService.catchUp` bucht am Blockende `Σ Personal + Σ Hilfsrollen` ab und weist sie als `staffCosts` in
+  `WeekSettlement`/`WeeklyTickResult` aus. `ScreenHireAndFire` zeigt die Gesamtwochenlast (Ärzte + Personal +
+  Rollen), die Charakter-Detailseite den Wochenlohn.
+
+**Phase 8 – Personal-Transfer (Vervollständigung)**
+
+- **UI:** Aktion **„Verschieben nach …“** in der Personal-Liste: Zielauswahl aus den eigenen, nicht aufgelösten
+  Restaurants und Bestätigungsdialog mit den Kosten (das Ziel-Restaurant zahlt).
+- **Chef-Sonderfall:** Ein transferierter aktiver Chef wird im Ziel **formell**; in der Quelle rückt sofort ein
+  formeller Chef nach. Der Merge im Speichervorgang trägt die Ziel-Liste unverändert mit (`copyWith`).
+
+**Tests:** `test/head_chef_role_test.dart` (12), `test/weekly_wages_test.dart` (5), `test/support_role_test.dart` (12)
+und ein neuer Widget-Test in `test/screen_hire_and_fire_test.dart`; `balance_sanity_test.dart` prüft zusätzlich
+Lohn-Monotonie, Chef-Buff und die Deckel der Rollen-Effekte. Gesamt **342 Tests grün**, `flutter analyze` ohne
+Fehler/Warnungen im neuen Code.
+
+**Bewusste Abweichungen / offen:**
+
+- „Nachrücken in Rücksprache mit dem Spieler“ ist als **deterministische** Auswahl (höchstes Level, dann älteste ID)
+  plus UI-Meldung umgesetzt; ein interaktiver Auswahl-Dialog bleibt offen.
+- Die Tournant-Erleichterung wirkt dort, wo das Restaurant bekannt ist (Wochen-Proben); der Kampf-Malus bleibt
+  unverändert (Durchreichung wäre ein eigener Schritt).
+- Der „Neustart des Charakters bei Level 0“ (einzige Rückholmöglichkeit eines aktiven Chefs laut V10 § 6) ist
+  nicht implementiert.
+
 ## Anhang: Belege
 
 - Referenz: `https://en.wikipedia.org/wiki/Kitchen_brigade` (Abschnitt „Kitchen brigade“); die dortigen

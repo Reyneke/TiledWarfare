@@ -8,9 +8,10 @@ import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
-import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/station_service.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
 import 'package:tiled_warfare/models/map_data.dart';
+import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/sector.dart';
 
 import 'package:tiled_warfare/utils/hex_grid.dart';
@@ -418,6 +419,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     for (final cook in _player.unitList) {
       _resetTokenRoundState(cook);
     }
+    // Stations-Auren (V10, Phase 4) an den neuen Rundenstart anpassen.
+    _recomputeStationAuras();
     // Gegnerische Dough Dumpster und deren Zombies
     for (final dumpster in _host.doughDumpsterList) {
       _resetTokenRoundState(dumpster);
@@ -696,6 +699,19 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// basierend auf seiner aktuellen Pixel-Position.
   ({int x, int y}) _getTokenHex(ObjectToken token) {
     return widget.hexGrid.pixelToHex(token.position);
+  }
+
+  /// Berechnet die Stations-Auren (V10, Phase 4) aller lebenden Spieler-Einheiten
+  /// neu und bucht sie als transiente Boni auf die Einheiten.
+  ///
+  /// Wird zu Rundenbeginn und unmittelbar vor jedem Angriff aufgerufen, damit
+  /// Bewegung und Rundenwechsel korrekt berücksichtigt sind.
+  void _recomputeStationAuras() {
+    StationService.applyStationAuras(
+      allies: _player.unitList.where((unit) => unit.woundValue > 0),
+      grid: widget.hexGrid,
+      hexOf: _getTokenHex,
+    );
   }
 
   /// Baut eine Menge aller blockierten Hex-Felder auf.
@@ -1195,6 +1211,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     );
     if (distanceInHex < 1) return;
 
+    // Stations-Auren vor dem Angriff aktualisieren (V10, Phase 4).
+    _recomputeStationAuras();
+
     // Kampfaktion ausführen
     final result = _player.performAction(
       action: action,
@@ -1243,6 +1262,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
       _showMessage('Keine verfügbaren Einheiten für FocusFire!');
       return;
     }
+
+    // Stations-Auren vor dem Massenangriff aktualisieren (V10, Phase 4).
+    _recomputeStationAuras();
 
     // FocusFire ausführen – jeder Angreifer wählt automatisch die beste
     // verfügbare Aktion (Nahkampf wenn benachbart, sonst Fernkampf)
@@ -1479,7 +1501,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
             subtitle: Text(
               'AW: ${cook.attackValue} | VW: ${cook.defenseValue} | '
               'BW: ${cook.movementValue} | SW: ${cook.damageValue} | '
-              'RW: ${cook.rangeValue} | LP: ${cook.woundValue}',
+              'RW: ${cook.stationRangeValue} | LP: ${cook.woundValue}',
             ),
           ),
         ),
@@ -1503,7 +1525,7 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
           'Verteidigung: ${cook.defenseValue}\n'
           'Bewegung: ${cook.movementValue}\n'
           'Schaden: ${cook.damageValue}\n'
-          'Reichweite: ${cook.rangeValue}\n'
+          'Reichweite: ${cook.stationRangeValue}\n'
           'Trefferpunkte: ${cook.woundValue}',
         );
       } else if (value == CombatAction.melee.name) {
@@ -2502,16 +2524,30 @@ class _TokenWidget extends StatelessWidget {
   }
 
   Color _getTokenColor() {
-    if (token is ObjectLineCook) return Colors.blue;
-    if (token is ObjectDoughDumpster) return Colors.purple;
-    if (token is ObjectDoughZombie) return Colors.red.shade700;
+    final current = token;
+    if (current is ObjectApprentice) {
+      return switch (current.rank) {
+        kRankChefDePartie => Colors.deepOrange,
+        kRankLineCook => Colors.blue,
+        _ => Colors.grey,
+      };
+    }
+    if (current is ObjectDoughDumpster) return Colors.purple;
+    if (current is ObjectDoughZombie) return Colors.red.shade700;
     return Colors.grey;
   }
 
   String _getTokenLabel() {
-    if (token is ObjectLineCook) return 'LC';
-    if (token is ObjectDoughDumpster) return 'DD';
-    if (token is ObjectDoughZombie) return 'DZ';
+    final current = token;
+    if (current is ObjectApprentice) {
+      return switch (current.rank) {
+        kRankChefDePartie => 'CdP',
+        kRankLineCook => 'LC',
+        _ => '??',
+      };
+    }
+    if (current is ObjectDoughDumpster) return 'DD';
+    if (current is ObjectDoughZombie) return 'DZ';
     return '??';
   }
 }

@@ -174,7 +174,7 @@ void main() {
       expect(result.passiveIncome, weekly);
       expect(result.leftoverDays, 0);
       expect(result.leftoverIncome, 0);
-      expect(r.budget, 10000 + weekly - 500);
+      expect(r.budget, 10000 + weekly - 500 - result.staffCosts);
       expect(r.lastSeenAt, base.add(const Duration(days: 7)));
       expect(r.weekAnchorAt, base.add(const Duration(days: 7)));
     });

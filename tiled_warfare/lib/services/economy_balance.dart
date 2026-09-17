@@ -1,5 +1,7 @@
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/stations.dart';
+import 'package:tiled_warfare/models/support_role.dart';
 
 /// Zentrale Balance-Werte der Wirtschaft (V7).
 ///
@@ -92,6 +94,141 @@ class EconomyBalance {
     'sous_chef': 2,
     'head_chef': 3,
   };
+
+  // ── Karriere-Stationen (V10, Phase 4) ──────────────────────────────────
+
+  /// Einmalkosten einer **kostenpflichtigen Stations-Wechsel** (Karrierepfade,
+  /// V10: „Stations-Wahl: einmalig bindend, mit kostenpflichtigem Wechsel“).
+  static const int stationSwitchCost = 150;
+
+  /// Deckel für jeden einzelnen Stations-Bonus in Prozent (V10 § 6).
+  static const int stationBonusMaxPercent = 20;
+
+  /// Zusätzlicher Refill-Anteil, den die Support-Station `Pâtissier` den
+  /// übrigen Charakteren am Wochen-Refill verschafft (V10, § 2).
+  static const int patissierRefillBonusPercent = 10;
+
+  /// Modifikatoren je Station (Werte sind Tuning und gedeckelt über
+  /// [stationBonusMaxPercent]). Varianten ersetzen den Bonus ihrer
+  /// [StationSpec.baseStation] (kein Stapeln).
+  static const Map<String, StationSpec> stationSpecs = {
+    kStationSaucier: StationSpec(
+      attackBonusPercent: 15,
+      auraAttackPercent: 5,
+    ),
+    kStationPoissonnier: StationSpec(
+      attackBonusPercent: 10,
+      damageBonusPercent: 5,
+      rangeBonusPercent: 20,
+      auraDamagePercent: 5,
+    ),
+    kStationRotisseur: StationSpec(
+      damageBonusPercent: 15,
+      auraDamagePercent: 5,
+    ),
+    kStationGrillardin: StationSpec(
+      baseStation: kStationRotisseur,
+      attackBonusPercent: 5,
+      damageBonusPercent: 15,
+      auraDamagePercent: 5,
+    ),
+    kStationFriturier: StationSpec(
+      baseStation: kStationRotisseur,
+      attackBonusPercent: 5,
+      damageBonusPercent: 15,
+      rangeBonusPercent: 10,
+      auraDamagePercent: 5,
+    ),
+    kStationEntremetier: StationSpec(
+      defenseBonusPercent: 15,
+      auraDefensePercent: 5,
+    ),
+    kStationPotager: StationSpec(
+      baseStation: kStationEntremetier,
+      defenseBonusPercent: 10,
+      damageBonusPercent: 5,
+      auraDefensePercent: 5,
+    ),
+    kStationLegumier: StationSpec(
+      baseStation: kStationEntremetier,
+      defenseBonusPercent: 10,
+      damageBonusPercent: 5,
+      auraDefensePercent: 5,
+    ),
+    kStationGardeManger: StationSpec(
+      defenseBonusPercent: 20,
+      auraDefensePercent: 5,
+    ),
+    kStationCharcutier: StationSpec(
+      baseStation: kStationGardeManger,
+      defenseBonusPercent: 15,
+      damageBonusPercent: 5,
+      auraDefensePercent: 5,
+    ),
+    // Support-Station ohne Kampf-Aura: verbessert den Wochen-Refill (V10 § 2).
+    kStationPatissier: StationSpec(isSupport: true),
+  };
+
+  // ── Chef de cuisine: Management-Profil (V10, Phase 5) ──────────────────
+
+  /// Prozentualer Zuschlag des **aktiven** (zugeteilten) Chef de cuisine auf
+  /// die drei Werte des passiven Einkommens (Attraktivität, Kundenzufriedenheit
+  /// und Kapazität). Formelle Chefs zählen nicht (Kampf-Profil).
+  static const int headChefManagementBuffPercent = 15;
+
+  // ── Wöchentliche Löhne (V10, Phase 7) ──────────────────────────────────
+
+  /// Wochenlohn je Brigade-Rang (Basiswert in Euro, Tuning).
+  ///
+  /// Schlüssel = `kRank*`-Werte. Der tatsächliche Lohn wird über den
+  /// Thriftiness-Faktor des Charakters angepasst
+  /// (`EconomyService.staffWagePerWeek`), analog zur Teamarzt-Abrechnung.
+  static const Map<String, int> staffWagePerWeekByRank = {
+    'apprentice': 100,
+    'line_cook': 200,
+    'chef_de_partie': 350,
+    'sous_chef': 600,
+    'head_chef': 1000,
+  };
+
+  /// Fallback-Wochenlohn für unbekannte Ränge.
+  static const int staffWageFallbackPerWeek = 100;
+
+  // ── Hilfs-/Service-Rollen (V10, Phase 6) ───────────────────────────────
+
+  /// Wochenlohn je Hilfs-/Service-Rolle (Tuning, V10 § 3).
+  static const Map<SupportRole, int> supportRoleWagePerWeek = {
+    SupportRole.communard: 150,
+    SupportRole.tournant: 120,
+    SupportRole.aboyeur: 160,
+    SupportRole.plongeur: 70,
+    SupportRole.commis: 90,
+    SupportRole.boucher: 100,
+    SupportRole.garcon: 60,
+  };
+
+  /// Refill-Bonus der Rolle `Communard` auf die Kollegen (Prozent).
+  /// Stapelt sich additiv mit dem Pâtissier-Bonus (V10 § 2).
+  static const int communardRefillBonusPercent = 15;
+
+  /// Senkung des Erschöpfungs-Malus (Nulltage) durch den `Tournant` (Prozent).
+  static const int tournantExhaustionReliefPercent = 25;
+
+  /// Einkommens-Zuschlag des `Aboyeur` auf das passive Einkommen (Prozent).
+  static const int aboyeurIncomePercent = 10;
+
+  /// Senkung des Erweiterungs-Unterhalts durch den `Plongeur` (Prozent).
+  static const int plongeurUpkeepReductionPercent = 25;
+
+  /// Attraktivitäts-Zuschlag des `Commis` (absolut, auf der Eingangs-Domäne).
+  static const double commisAttractivenessBonus = 0.05;
+
+  /// Kleiner Attraktivitäts-/Zufriedenheits-Zuschlag des `Garçon de cuisine`.
+  static const double garconAttractivenessBonus = 0.05;
+  static const double garconSatisfactionBonus = 0.05;
+
+  /// Beute-Zuschlag des `Boucher` auf die Gefechtsbelohnung (Prozent).
+  static const int boucherLootPercent = 10;
 
   // ── Laufende Kosten ───────────────────────────────────────────────────
 
@@ -425,6 +562,71 @@ class EconomyBalance {
       attractivenessBonusPerLevel: 0.20,
     ),
   };
+}
+
+/// Balance-Definition einer Küchenstation (Karrierepfade, V10).
+///
+/// Alle Prozentwerte sind Tuning-Werte; `EconomyService.stationBonusPercent`
+/// deckelt sie über [EconomyBalance.stationBonusMaxPercent]. Die Selbstwirkung
+/// (`*BonusPercent`) gilt für den Stationsinhaber, die Aura-Werte
+/// (`aura*Percent`) zusätzlich für verbündete Einheiten im Radius.
+class StationSpec {
+  /// Prozent-Bonus auf den Angriffswert (Selbstwirkung).
+  final int attackBonusPercent;
+
+  /// Prozent-Bonus auf den Verteidigungswert (Selbstwirkung).
+  final int defenseBonusPercent;
+
+  /// Prozent-Bonus auf den Schadenswert (Selbstwirkung).
+  final int damageBonusPercent;
+
+  /// Prozent-Bonus auf die Reichweite (Selbstwirkung).
+  final int rangeBonusPercent;
+
+  /// Prozent-Bonus auf den Angriffswert verbündeter Einheiten (Aura).
+  final int auraAttackPercent;
+
+  /// Prozent-Bonus auf den Verteidigungswert verbündeter Einheiten (Aura).
+  final int auraDefensePercent;
+
+  /// Prozent-Bonus auf den Schadenswert verbündeter Einheiten (Aura).
+  final int auraDamagePercent;
+
+  /// Basis-Station dieser Variante (`null` für Basis-Stationen). Varianten
+  /// ersetzen den Basis-Bonus, sobald die Basis gewählt wurde.
+  final String? baseStation;
+
+  /// Support-Station ohne Kampf-Aura (nur `Pâtissier`, V10 § 2).
+  final bool isSupport;
+
+  const StationSpec({
+    this.attackBonusPercent = 0,
+    this.defenseBonusPercent = 0,
+    this.damageBonusPercent = 0,
+    this.rangeBonusPercent = 0,
+    this.auraAttackPercent = 0,
+    this.auraDefensePercent = 0,
+    this.auraDamagePercent = 0,
+    this.baseStation,
+    this.isSupport = false,
+  });
+
+  /// Prozent-Bonus (Selbstwirkung) für [stat].
+  int selfBonusPercent(StationStat stat) => switch (stat) {
+        StationStat.attack => attackBonusPercent,
+        StationStat.defense => defenseBonusPercent,
+        StationStat.damage => damageBonusPercent,
+        StationStat.range => rangeBonusPercent,
+      };
+
+  /// Prozent-Bonus (Aura) für [stat].
+  int auraBonusPercent(StationStat stat) => switch (stat) {
+        StationStat.attack => auraAttackPercent,
+        StationStat.defense => auraDefensePercent,
+        StationStat.damage => auraDamagePercent,
+        // Für die Reichweite gibt es (bewusst) keine Aura – Tuning-Entscheidung.
+        StationStat.range => 0,
+      };
 }
 
 /// Balance-Definition einer Teamarzt-Qualität (V7/L2).

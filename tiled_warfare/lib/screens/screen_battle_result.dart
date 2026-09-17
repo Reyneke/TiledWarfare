@@ -5,6 +5,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/support_role_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 
 /// Ergebnis-Bildschirm nach einem Kampf.
@@ -99,10 +100,16 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
     // Wirtschafts-Abrechnung (V2): Belohnung gutschreiben → Negativzinsen →
     // Bankrott prüfen. Die Rettungswürfe (inkl. Wiederbelebungskosten) laufen
     // in syncUnitsAfterBattle unmittelbar danach.
-    final reward = EconomyService.battleReward(
+    final baseReward = EconomyService.battleReward(
       playerWon: widget.playerWon,
       enemyMoneyValues: [widget.enemyLoot],
     );
+    // V10 (Phase 6): Der Boucher erhöht die Beute (Nachschub).
+    final lootPercent =
+        SupportRoleService.lootPercent(_profile.supportStaff);
+    final reward = lootPercent == 0
+        ? baseReward
+        : (baseReward * (100 + lootPercent) / 100).round();
     _profile.budget += reward;
     _profile.lastMatchResult =
         widget.playerWon ? MatchResult.win : MatchResult.loss;

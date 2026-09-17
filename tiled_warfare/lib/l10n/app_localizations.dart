@@ -596,6 +596,204 @@ abstract class AppLocalizations {
   /// **'Chef de cuisine'**
   String get rankHeadChef;
 
+  /// Bezeichnung der Küchenstation (Karrierepfade, V10)
+  ///
+  /// In de, this message translates to:
+  /// **'Station'**
+  String get station;
+
+  /// Hinweis, solange keine Station gewählt wurde
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Station gewählt'**
+  String get stationNone;
+
+  /// Aktion: Küchenstation wählen
+  ///
+  /// In de, this message translates to:
+  /// **'Station wählen'**
+  String get stationChoose;
+
+  /// Erläuterung der Stationswirkung
+  ///
+  /// In de, this message translates to:
+  /// **'Die Station wirkt auf den Charakter selbst und als Aura auf Verbündete im Umkreis.'**
+  String get stationChooseHint;
+
+  /// Bestätigung eines kostenpflichtigen Stations-Wechsels
+  ///
+  /// In de, this message translates to:
+  /// **'Station wechseln? Das kostet {cost} €.'**
+  String stationSwitchConfirm(int cost);
+
+  /// Meldung bei unzulässiger Stationswahl
+  ///
+  /// In de, this message translates to:
+  /// **'Diese Station ist hier nicht wählbar (Basis-Station fehlt).'**
+  String get stationNotAllowed;
+
+  /// Untertitel einer Varianten-Station
+  ///
+  /// In de, this message translates to:
+  /// **'Variante von {base}'**
+  String stationVariantOf(String base);
+
+  /// Aktion: Beförderung zum Chef de partie
+  ///
+  /// In de, this message translates to:
+  /// **'Zum Chef de partie befördern'**
+  String get promoteToChefDePartie;
+
+  /// Meldung, wenn das Level für die Beförderung zu niedrig ist
+  ///
+  /// In de, this message translates to:
+  /// **'Beförderung erst ab Level {level} möglich!'**
+  String promoteLevelRequiredFor(int level);
+
+  /// Generischer Bestätigungsdialog einer Beförderung
+  ///
+  /// In de, this message translates to:
+  /// **'{name} zum {rank} befördern? Kosten: {cost} €'**
+  String promoteConfirmRank(String name, String rank, int cost);
+
+  /// Aktion: Beförderung zum Sous-chef
+  ///
+  /// In de, this message translates to:
+  /// **'Zum Sous-chef befördern'**
+  String get promoteToSousChef;
+
+  /// Aktion: Beförderung zum Chef de cuisine
+  ///
+  /// In de, this message translates to:
+  /// **'Zum Chef de cuisine befördern'**
+  String get promoteToHeadChef;
+
+  /// Rolle eines zugeteilten Chef de cuisine (V10 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Aktiv'**
+  String get headChefRoleActive;
+
+  /// Rolle eines nicht zugeteilten Chef de cuisine (V10 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Formell'**
+  String get headChefRoleFormal;
+
+  /// Aktion: Chef de cuisine dem Restaurant zuteilen
+  ///
+  /// In de, this message translates to:
+  /// **'Zum aktiven Chef machen'**
+  String get headChefAssign;
+
+  /// Unikat-Invariante: nur ein aktiver Chef pro Restaurant
+  ///
+  /// In de, this message translates to:
+  /// **'Es ist bereits ein aktiver Chef de cuisine zugeteilt.'**
+  String get headChefAssignForbidden;
+
+  /// Bestätigung der Zuteilung
+  ///
+  /// In de, this message translates to:
+  /// **'{name} führt das Restaurant jetzt als aktiver Chef de cuisine.'**
+  String headChefAssigned(String name);
+
+  /// Meldung beim Nachrücken eines formellen Chefs
+  ///
+  /// In de, this message translates to:
+  /// **'{name} rückt als aktiver Chef de cuisine nach.'**
+  String headChefNachrueck(String name);
+
+  /// Wochenlohn eines Charakters (V10, Phase 7)
+  ///
+  /// In de, this message translates to:
+  /// **'Wochenlohn: {amount} €'**
+  String weeklyWage(int amount);
+
+  /// Abschnitt für Hilfs-/Service-Rollen (V10, Phase 6)
+  String get supportRoles;
+
+  /// Rolle: Communard
+  String get supportRoleCommunard;
+  /// Wirkung: Communard
+  String get supportRoleEffectCommunard;
+
+  /// Rolle: Tournant
+  String get supportRoleTournant;
+  /// Wirkung: Tournant
+  String get supportRoleEffectTournant;
+
+  /// Rolle: Aboyeur
+  String get supportRoleAboyeur;
+  /// Wirkung: Aboyeur
+  String get supportRoleEffectAboyeur;
+
+  /// Rolle: Plongeur
+  String get supportRolePlongeur;
+  /// Wirkung: Plongeur
+  String get supportRoleEffectPlongeur;
+
+  /// Rolle: Commis de débarrasseur
+  String get supportRoleCommis;
+  /// Wirkung: Commis de débarrasseur
+  String get supportRoleEffectCommis;
+
+  /// Rolle: Boucher
+  String get supportRoleBoucher;
+  /// Wirkung: Boucher
+  String get supportRoleEffectBoucher;
+
+  /// Rolle: Garçon de cuisine
+  String get supportRoleGarcon;
+  /// Wirkung: Garçon de cuisine
+  String get supportRoleEffectGarcon;
+
+  /// Aktion: Personal in ein eigenes Restaurant verschieben (V10)
+  String get transferTo;
+  /// Titel der Zielauswahl beim Personal-Transfer
+  String get transferSelectTitle;
+  /// Bestätigung des Personal-Transfers
+  String transferConfirm(String name, String target, int cost);
+  /// Erfolgsmeldung des Personal-Transfers
+  String transferSuccess(String name, String target);
+  /// Fehlermeldung des Personal-Transfers
+  String get transferFailed;
+  /// Hinweis, wenn es kein Ziel-Restaurant gibt
+  String get transferNoTargets;
+
+  /// Stationsname (FR): Saucier
+  String get stationSaucier;
+
+  /// Stationsname (FR): Poissonnier
+  String get stationPoissonnier;
+
+  /// Stationsname (FR): Rôtisseur
+  String get stationRotisseur;
+
+  /// Stationsname (FR): Grillardin
+  String get stationGrillardin;
+
+  /// Stationsname (FR): Friturier
+  String get stationFriturier;
+
+  /// Stationsname (FR): Entremétier
+  String get stationEntremetier;
+
+  /// Stationsname (FR): Potager
+  String get stationPotager;
+
+  /// Stationsname (FR): Légumier
+  String get stationLegumier;
+
+  /// Stationsname (FR): Garde manger
+  String get stationGardeManger;
+
+  /// Stationsname (FR): Charcutier
+  String get stationCharcutier;
+
+  /// Stationsname (FR): Pâtissier
+  String get stationPatissier;
+
   /// Level-Anzeige
   ///
   /// In de, this message translates to:

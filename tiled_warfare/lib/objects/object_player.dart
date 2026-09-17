@@ -113,7 +113,7 @@ class ObjectPlayer {
     // Nur Aktionen anbieten, wenn die Einheit noch nicht gehandelt hat
     if (!unit.hasActed) {
       actions.add(CombatAction.melee);
-      if (unit.rangeValue > 0) {
+      if (unit.stationRangeValue > 0) {
         actions.add(CombatAction.ranged);
       }
       // FocusFire ist verfügbar, solange die Einheit noch nicht gehandelt hat
@@ -145,14 +145,15 @@ class ObjectPlayer {
   }) {
     // V9 (Phase 5): Basis inkl. Persönlichkeits-Modifikator + Erschöpfungs-Malus.
     final int attackBase = _attackTargetBase(attacker, now);
+    final int rangeValue = _rangeValueOf(attacker);
     int effectiveAttackValue;
 
     // Angriffswert basierend auf der Aktion und Entfernung bestimmen
     if (action == CombatAction.ranged) {
       // Fernkampf: Entfernungsmalus gemäß combat_rules.md
-      if (distance <= attacker.rangeValue * 0.5) {
+      if (distance <= rangeValue * 0.5) {
         effectiveAttackValue = attackBase; // kein Malus
-      } else if (distance <= attacker.rangeValue * 0.75) {
+      } else if (distance <= rangeValue * 0.75) {
         effectiveAttackValue = attackBase - 10; // −10 Malus
       } else {
         effectiveAttackValue = attackBase - 20; // −20 Malus
@@ -183,24 +184,38 @@ class ObjectPlayer {
     return effectiveDefenseValue.clamp(0, 100);
   }
 
-  /// Angriffs-Basiswert inkl. Persönlichkeit und Erschöpfungs-Malus (V9 § 5).
+  /// Angriffs-Basiswert inkl. Persönlichkeit, Station, Aura und
+  /// Erschöpfungs-Malus (V9 § 5; V10 Phase 4).
   int _attackTargetBase(ObjectToken attacker, DateTime now) {
     if (attacker is! ObjectApprentice) return attacker.attackValue;
-    return attacker.personalityAttackValue -
+    return attacker.personalityAttackValue +
+        attacker.stationAttackBonus +
+        attacker.stationAuraAttack -
         StressService.malusPercentForCharacter(attacker, now);
   }
 
-  /// Verteidigungs-Basiswert inkl. Persönlichkeit und Erschöpfungs-Malus.
+  /// Verteidigungs-Basiswert inkl. Persönlichkeit, Station, Aura und
+  /// Erschöpfungs-Malus.
   int _defenseTargetBase(ObjectToken defender, DateTime now) {
     if (defender is! ObjectApprentice) return defender.defenseValue;
-    return defender.personalityDefenseValue -
+    return defender.personalityDefenseValue +
+        defender.stationDefenseBonus +
+        defender.stationAuraDefense -
         StressService.malusPercentForCharacter(defender, now);
   }
 
-  /// Schadenswert inkl. Persönlichkeits-Modifikator (V9 § 5).
+  /// Schadenswert inkl. Persönlichkeits-, Stations- und Aura-Modifikator
+  /// (V9 § 5; V10 Phase 4).
   int _damageBase(ObjectToken token) => token is ObjectApprentice
-      ? token.personalityDamageValue
+      ? token.personalityDamageValue +
+          token.stationDamageBonus +
+          token.stationAuraDamage
       : token.damageValue;
+
+  /// Reichweite inkl. Stations-Bonus; Gegner (kein [ObjectApprentice]) nutzen
+  /// ihren Basiswert. Nötig, weil die Aufrufer nur [ObjectToken] kennen.
+  int _rangeValueOf(ObjectToken token) =>
+      token is ObjectApprentice ? token.stationRangeValue : token.rangeValue;
 
   /// Führt einen Angriff mit der angegebenen [action] vom [attacker] auf den
   /// [defender] aus.
@@ -490,7 +505,8 @@ class ObjectPlayer {
       CombatAction bestAction;
       if (distance <= 1) {
         bestAction = CombatAction.melee;
-      } else if (attacker.rangeValue > 0 && distance <= attacker.rangeValue) {
+      } else if (_rangeValueOf(attacker) > 0 &&
+          distance <= _rangeValueOf(attacker)) {
         bestAction = CombatAction.ranged;
       } else {
         continue; // Angreifer ist außer Reichweite

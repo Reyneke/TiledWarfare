@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/l10n/staff_rank.dart';
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/personality.dart';
+import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
-import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
@@ -25,7 +29,6 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final isLineCook = character is ObjectLineCook;
 
     return Scaffold(
       appBar: AppBar(
@@ -43,8 +46,9 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(context, theme, isLineCook),
+            _buildHeader(context, theme),
             const SizedBox(height: 16),
+            _buildStationSection(context, theme),
             _buildMedicActions(context, theme),
             const SizedBox(height: 16),
             _buildXpBar(context, theme),
@@ -61,7 +65,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, ThemeData theme, bool isLineCook) {
+  Widget _buildHeader(BuildContext context, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
 
     return Row(
@@ -79,7 +83,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
               height: 120,
               color: theme.colorScheme.surfaceContainerHighest,
               child: Icon(
-                isLineCook ? Icons.restaurant : Icons.school,
+                _rankIcon(),
                 size: 48,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -92,7 +96,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isLineCook ? l10n.rankLineCook : l10n.rankApprentice,
+                rankLabel(l10n, character.rank),
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.primary,
                   fontWeight: FontWeight.bold,
@@ -101,6 +105,21 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
               Text(
                 character.name,
                 style: theme.textTheme.titleMedium,
+              ),
+              // V10 (Phase 5): Doppelrolle des Chef de cuisine.
+              if (character.rank == kRankHeadChef)
+                Text(
+                  character.headChefRole == kHeadChefRoleActive
+                      ? l10n.headChefRoleActive
+                      : l10n.headChefRoleFormal,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              // V10 (Phase 7): laufender Wochenlohn des Charakters.
+              Text(
+                l10n.weeklyWage(_weeklyWage),
+                style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
               Row(
@@ -180,6 +199,143 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
         ),
       ],
     );
+  }
+
+  /// Rang-Symbol des Charakters (Karrierepfade, V10).
+  IconData _rankIcon() => switch (character.rank) {
+        kRankHeadChef => Icons.workspace_premium,
+        kRankSousChef => Icons.restaurant_menu,
+        kRankChefDePartie => Icons.restaurant_menu,
+        kRankLineCook => Icons.restaurant,
+        _ => Icons.school,
+      };
+
+  /// Wochenlohn des Charakters inkl. Thriftiness-Faktor (V10, Phase 7).
+  int get _weeklyWage => EconomyService.staffWagePerWeek(
+        character.rank,
+        PersonalityTraits.forProfile(character.personalityId, character.id)
+            .thriftiness,
+      );
+
+  /// Stations-Zeile (Karrierepfade, V10, Phase 4): zeigt die gewählte Station
+  /// und öffnet – ab Rang `chef_de_partie` – den Stations-Dialog.
+  Widget _buildStationSection(BuildContext context, ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+    if (!EconomyService.isStationRank(character.rank)) {
+      return const SizedBox.shrink();
+    }
+    final label = stationLabel(l10n, character.station);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.local_dining,
+                color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.station, style: theme.textTheme.labelLarge),
+                  Text(label ?? l10n.stationNone,
+                      style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => _chooseStation(context),
+              child: Text(l10n.stationChoose),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Öffnet den Stations-Dialog und bucht die Wahl über [ObjectProfile].
+  Future<void> _chooseStation(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.stationChoose),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Text(l10n.stationChooseHint,
+                style: Theme.of(ctx).textTheme.bodySmall),
+          ),
+          for (final station in kAllStations)
+            SimpleDialogOption(
+              onPressed: _stationSelectable(station)
+                  ? () => Navigator.pop(ctx, station)
+                  : null,
+              child: Text(_stationOptionText(l10n, station)),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || selected == character.station) return;
+    if (!context.mounted) return;
+
+    // Ein Wechsel (es ist bereits eine Station gewählt) ist kostenpflichtig.
+    if (character.station != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.station),
+          content: Text(
+            l10n.stationSwitchConfirm(EconomyBalance.stationSwitchCost),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.stationChoose),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    final assigned = _profile.assignStation(character, selected);
+    if (!mounted) return;
+    setState(() {});
+    if (assigned) await _profile.saveToStorage();
+    if (!context.mounted) return;
+    final message = assigned
+        ? '${l10n.station}: ${stationLabel(l10n, selected) ?? selected}'
+        : l10n.stationNotAllowed;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// `true`, wenn [station] für diesen Charakter wählbar ist: Basis-Stationen
+  /// immer, Varianten erst nach Wahl ihrer Basis-Station (eine Variante
+  /// derselben Basis bleibt wählbar).
+  bool _stationSelectable(String station) {
+    final base = EconomyService.baseStationOf(station);
+    if (base == null) return true;
+    final current = character.station;
+    if (current == null) return false;
+    return (EconomyService.baseStationOf(current) ?? current) == base;
+  }
+
+  /// Beschriftung einer Stations-Option inkl. Varianten-Hinweis und Haken.
+  String _stationOptionText(AppLocalizations l10n, String station) {
+    final label = stationLabel(l10n, station) ?? station;
+    final base = EconomyService.baseStationOf(station);
+    final baseLabel = base == null ? null : stationLabel(l10n, base);
+    final marker = character.station == station ? ' ✓' : '';
+    if (baseLabel == null) return '$label$marker';
+    return '$label · ${l10n.stationVariantOf(baseLabel)}$marker';
   }
 
   Widget _buildMedicActions(BuildContext context, ThemeData theme) {

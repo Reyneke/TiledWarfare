@@ -297,6 +297,187 @@ class AppLocalizationsDe extends AppLocalizations {
   String get rankHeadChef => 'Chef de cuisine';
 
   @override
+  String get station => 'Station';
+
+  @override
+  String get stationNone => 'Keine Station gewählt';
+
+  @override
+  String get stationChoose => 'Station wählen';
+
+  @override
+  String get stationChooseHint =>
+      'Die Station wirkt auf den Charakter selbst und als Aura auf Verbündete im Umkreis.';
+
+  @override
+  String stationSwitchConfirm(int cost) {
+    return 'Station wechseln? Das kostet $cost €.';
+  }
+
+  @override
+  String get stationNotAllowed =>
+      'Diese Station ist hier nicht wählbar (Basis-Station fehlt).';
+
+  @override
+  String stationVariantOf(String base) {
+    return 'Variante von $base';
+  }
+
+  @override
+  String get promoteToChefDePartie => 'Zum Chef de partie befördern';
+
+  @override
+  String promoteLevelRequiredFor(int level) {
+    return 'Beförderung erst ab Level $level möglich!';
+  }
+
+  @override
+  String promoteConfirmRank(String name, String rank, int cost) {
+    return '$name zum $rank befördern? Kosten: $cost €';
+  }
+
+  @override
+  String get promoteToSousChef => 'Zum Sous-chef befördern';
+
+  @override
+  String get promoteToHeadChef => 'Zum Chef de cuisine befördern';
+
+  @override
+  String get headChefRoleActive => 'Aktiv';
+
+  @override
+  String get headChefRoleFormal => 'Formell';
+
+  @override
+  String get headChefAssign => 'Zum aktiven Chef machen';
+
+  @override
+  String get headChefAssignForbidden =>
+      'Es ist bereits ein aktiver Chef de cuisine zugeteilt.';
+
+  @override
+  String headChefAssigned(String name) {
+    return '$name führt das Restaurant jetzt als aktiver Chef de cuisine.';
+  }
+
+  @override
+  String headChefNachrueck(String name) {
+    return '$name rückt als aktiver Chef de cuisine nach.';
+  }
+
+  @override
+  String weeklyWage(int amount) {
+    return 'Wochenlohn: $amount €';
+  }
+
+  @override
+  String get supportRoles => 'Hilfs- und Service-Rollen';
+
+  @override
+  String get supportRoleCommunard => 'Communard (Staff cook)';
+
+  @override
+  String get supportRoleEffectCommunard =>
+      'Verbessert den Wochen-Refill der Kollegen.';
+
+  @override
+  String get supportRoleTournant => 'Tournant (Roundsman)';
+
+  @override
+  String get supportRoleEffectTournant =>
+      'Senkt den Erschöpfungs-Malus der Nulltage.';
+
+  @override
+  String get supportRoleAboyeur => 'Aboyeur (Expediter)';
+
+  @override
+  String get supportRoleEffectAboyeur =>
+      'Verbessert den Bestellfluss (Einnahmen).';
+
+  @override
+  String get supportRolePlongeur => 'Plongeur (Dishwasher)';
+
+  @override
+  String get supportRoleEffectPlongeur =>
+      'Senkt die laufenden Betriebskosten.';
+
+  @override
+  String get supportRoleCommis => 'Commis de débarrasseur (Busser)';
+
+  @override
+  String get supportRoleEffectCommis =>
+      'Leicht positiver Attraktivitäts-Effekt.';
+
+  @override
+  String get supportRoleBoucher => 'Boucher (Butcher)';
+
+  @override
+  String get supportRoleEffectBoucher => 'Erhöht die Beute nach Gefechten.';
+
+  @override
+  String get supportRoleGarcon => 'Garçon de cuisine (Kitchen boy)';
+
+  @override
+  String get supportRoleEffectGarcon =>
+      'Kleiner Bonus auf Attraktivität und Zufriedenheit.';
+
+  @override
+  String get transferTo => 'Verschieben nach …';
+
+  @override
+  String get transferSelectTitle => 'Ziel-Restaurant wählen';
+
+  @override
+  String transferConfirm(String name, String target, int cost) {
+    return '$name nach $target verschieben? Kosten: $cost € – das Ziel-Restaurant zahlt.';
+  }
+
+  @override
+  String transferSuccess(String name, String target) {
+    return '$name wechselt nach $target.';
+  }
+
+  @override
+  String get transferFailed =>
+      'Transfer nicht möglich (Ziel aufgelöst oder Budget zu gering).';
+
+  @override
+  String get transferNoTargets => 'Kein anderes Restaurant verfügbar.';
+
+  @override
+  String get stationSaucier => 'Saucier';
+
+  @override
+  String get stationPoissonnier => 'Poissonnier';
+
+  @override
+  String get stationRotisseur => 'Rôtisseur';
+
+  @override
+  String get stationGrillardin => 'Grillardin';
+
+  @override
+  String get stationFriturier => 'Friturier';
+
+  @override
+  String get stationEntremetier => 'Entremétier';
+
+  @override
+  String get stationPotager => 'Potager';
+
+  @override
+  String get stationLegumier => 'Légumier';
+
+  @override
+  String get stationGardeManger => 'Garde manger';
+
+  @override
+  String get stationCharcutier => 'Charcutier';
+
+  @override
+  String get stationPatissier => 'Pâtissier';
+
+  @override
   String level(int value) {
     return 'Level $value';
   }

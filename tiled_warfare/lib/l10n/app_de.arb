@@ -383,6 +383,169 @@
   "@rankHeadChef": {
     "description": "Rangbezeichnung: Chef de cuisine"
   },
+  "station": "Station",
+  "@station": {
+    "description": "Bezeichnung der Küchenstation (Karrierepfade, V10)"
+  },
+  "stationNone": "Keine Station gewählt",
+  "@stationNone": {
+    "description": "Hinweis, solange keine Station gewählt wurde"
+  },
+  "stationChoose": "Station wählen",
+  "@stationChoose": {
+    "description": "Aktion: Küchenstation wählen"
+  },
+  "stationChooseHint": "Die Station wirkt auf den Charakter selbst und als Aura auf Verbündete im Umkreis.",
+  "@stationChooseHint": {
+    "description": "Erläuterung der Stationswirkung"
+  },
+  "stationSwitchConfirm": "Station wechseln? Das kostet {cost} €.",
+  "@stationSwitchConfirm": {
+    "description": "Bestätigung eines kostenpflichtigen Stations-Wechsels",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "stationNotAllowed": "Diese Station ist hier nicht wählbar (Basis-Station fehlt).",
+  "@stationNotAllowed": {
+    "description": "Meldung bei unzulässiger Stationswahl"
+  },
+  "stationVariantOf": "Variante von {base}",
+  "@stationVariantOf": {
+    "description": "Untertitel einer Varianten-Station",
+    "placeholders": { "base": { "type": "String" } }
+  },
+  "promoteToChefDePartie": "Zum Chef de partie befördern",
+  "@promoteToChefDePartie": {
+    "description": "Aktion: Beförderung zum Chef de partie"
+  },
+  "promoteLevelRequiredFor": "Beförderung erst ab Level {level} möglich!",
+  "@promoteLevelRequiredFor": {
+    "description": "Meldung, wenn das Level für die Beförderung zu niedrig ist",
+    "placeholders": { "level": { "type": "int" } }
+  },
+  "promoteConfirmRank": "{name} zum {rank} befördern? Kosten: {cost} €",
+  "@promoteConfirmRank": {
+    "description": "Generischer Bestätigungsdialog einer Beförderung",
+    "placeholders": { "name": { "type": "String" }, "rank": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "promoteToSousChef": "Zum Sous-chef befördern",
+  "@promoteToSousChef": {
+    "description": "Aktion: Beförderung zum Sous-chef"
+  },
+  "promoteToHeadChef": "Zum Chef de cuisine befördern",
+  "@promoteToHeadChef": {
+    "description": "Aktion: Beförderung zum Chef de cuisine"
+  },
+  "headChefRoleActive": "Aktiv",
+  "@headChefRoleActive": {
+    "description": "Rolle eines zugeteilten Chef de cuisine (V10 § 6)"
+  },
+  "headChefRoleFormal": "Formell",
+  "@headChefRoleFormal": {
+    "description": "Rolle eines nicht zugeteilten Chef de cuisine (V10 § 6)"
+  },
+  "headChefAssign": "Zum aktiven Chef machen",
+  "@headChefAssign": {
+    "description": "Aktion: Chef de cuisine dem Restaurant zuteilen"
+  },
+  "headChefAssignForbidden": "Es ist bereits ein aktiver Chef de cuisine zugeteilt.",
+  "@headChefAssignForbidden": {
+    "description": "Unikat-Invariante: nur ein aktiver Chef pro Restaurant"
+  },
+  "headChefAssigned": "{name} führt das Restaurant jetzt als aktiver Chef de cuisine.",
+  "@headChefAssigned": {
+    "description": "Bestätigung der Zuteilung",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "headChefNachrueck": "{name} rückt als aktiver Chef de cuisine nach.",
+  "@headChefNachrueck": {
+    "description": "Meldung beim Nachrücken eines formellen Chefs",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "weeklyWage": "Wochenlohn: {amount} €",
+  "@weeklyWage": {
+    "description": "Wochenlohn eines Charakters (V10, Phase 7)",
+    "placeholders": { "amount": { "type": "int" } }
+  },
+  "supportRoles": "Hilfs- und Service-Rollen",
+  "@supportRoles": {
+    "description": "Abschnitt für Hilfs-/Service-Rollen (V10, Phase 6)"
+  },
+  "supportRoleCommunard": "Communard (Staff cook)",
+  "@supportRoleCommunard": { "description": "Rolle: Communard" },
+  "supportRoleEffectCommunard": "Verbessert den Wochen-Refill der Kollegen.",
+  "@supportRoleEffectCommunard": { "description": "Wirkung: Communard" },
+  "supportRoleTournant": "Tournant (Roundsman)",
+  "@supportRoleTournant": { "description": "Rolle: Tournant" },
+  "supportRoleEffectTournant": "Senkt den Erschöpfungs-Malus der Nulltage.",
+  "@supportRoleEffectTournant": { "description": "Wirkung: Tournant" },
+  "supportRoleAboyeur": "Aboyeur (Expediter)",
+  "@supportRoleAboyeur": { "description": "Rolle: Aboyeur" },
+  "supportRoleEffectAboyeur": "Verbessert den Bestellfluss (Einnahmen).",
+  "@supportRoleEffectAboyeur": { "description": "Wirkung: Aboyeur" },
+  "supportRolePlongeur": "Plongeur (Dishwasher)",
+  "@supportRolePlongeur": { "description": "Rolle: Plongeur" },
+  "supportRoleEffectPlongeur": "Senkt die laufenden Betriebskosten.",
+  "@supportRoleEffectPlongeur": { "description": "Wirkung: Plongeur" },
+  "supportRoleCommis": "Commis de débarrasseur (Busser)",
+  "@supportRoleCommis": { "description": "Rolle: Commis" },
+  "supportRoleEffectCommis": "Leicht positiver Attraktivitäts-Effekt.",
+  "@supportRoleEffectCommis": { "description": "Wirkung: Commis" },
+  "supportRoleBoucher": "Boucher (Butcher)",
+  "@supportRoleBoucher": { "description": "Rolle: Boucher" },
+  "supportRoleEffectBoucher": "Erhöht die Beute nach Gefechten.",
+  "@supportRoleEffectBoucher": { "description": "Wirkung: Boucher" },
+  "supportRoleGarcon": "Garçon de cuisine (Kitchen boy)",
+  "@supportRoleGarcon": { "description": "Rolle: Garçon de cuisine" },
+  "supportRoleEffectGarcon": "Kleiner Bonus auf Attraktivität und Zufriedenheit.",
+  "@supportRoleEffectGarcon": { "description": "Wirkung: Garçon de cuisine" },
+  "transferTo": "Verschieben nach …",
+  "@transferTo": {
+    "description": "Aktion: Personal in ein eigenes Restaurant verschieben (V10)"
+  },
+  "transferSelectTitle": "Ziel-Restaurant wählen",
+  "@transferSelectTitle": {
+    "description": "Titel der Zielauswahl beim Personal-Transfer"
+  },
+  "transferConfirm": "{name} nach {target} verschieben? Kosten: {cost} € – das Ziel-Restaurant zahlt.",
+  "@transferConfirm": {
+    "description": "Bestätigung des Personal-Transfers",
+    "placeholders": { "name": { "type": "String" }, "target": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "transferSuccess": "{name} wechselt nach {target}.",
+  "@transferSuccess": {
+    "description": "Erfolgsmeldung des Personal-Transfers",
+    "placeholders": { "name": { "type": "String" }, "target": { "type": "String" } }
+  },
+  "transferFailed": "Transfer nicht möglich (Ziel aufgelöst oder Budget zu gering).",
+  "@transferFailed": {
+    "description": "Fehlermeldung des Personal-Transfers"
+  },
+  "transferNoTargets": "Kein anderes Restaurant verfügbar.",
+  "@transferNoTargets": {
+    "description": "Hinweis, wenn es kein Ziel-Restaurant gibt"
+  },
+  "stationSaucier": "Saucier",
+  "@stationSaucier": { "description": "Stationsname (FR): Saucier" },
+  "stationPoissonnier": "Poissonnier",
+  "@stationPoissonnier": { "description": "Stationsname (FR): Poissonnier" },
+  "stationRotisseur": "Rôtisseur",
+  "@stationRotisseur": { "description": "Stationsname (FR): Rôtisseur" },
+  "stationGrillardin": "Grillardin",
+  "@stationGrillardin": { "description": "Stationsname (FR): Grillardin" },
+  "stationFriturier": "Friturier",
+  "@stationFriturier": { "description": "Stationsname (FR): Friturier" },
+  "stationEntremetier": "Entremétier",
+  "@stationEntremetier": { "description": "Stationsname (FR): Entremétier" },
+  "stationPotager": "Potager",
+  "@stationPotager": { "description": "Stationsname (FR): Potager" },
+  "stationLegumier": "Légumier",
+  "@stationLegumier": { "description": "Stationsname (FR): Légumier" },
+  "stationGardeManger": "Garde manger",
+  "@stationGardeManger": { "description": "Stationsname (FR): Garde manger" },
+  "stationCharcutier": "Charcutier",
+  "@stationCharcutier": { "description": "Stationsname (FR): Charcutier" },
+  "stationPatissier": "Pâtissier",
+  "@stationPatissier": { "description": "Stationsname (FR): Pâtissier" },
   "level": "Level {value}",
   "@level": {
     "description": "Level-Anzeige",
