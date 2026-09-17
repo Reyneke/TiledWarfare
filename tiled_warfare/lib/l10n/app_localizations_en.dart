@@ -393,8 +393,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get supportRolePlongeur => 'Plongeur (dishwasher)';
 
   @override
-  String get supportRoleEffectPlongeur =>
-      'Lowers the running operating costs.';
+  String get supportRoleEffectPlongeur => 'Lowers the running operating costs.';
 
   @override
   String get supportRoleCommis => 'Commis de débarrasseur (busser)';
@@ -415,6 +414,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get supportRoleEffectGarcon =>
       'Small bonus to attractiveness and satisfaction.';
+
+  @override
+  String get managementRoles => 'Administration & marketing';
+
+  @override
+  String get managementRoleSocialMediaManager => 'Social media manager';
+
+  @override
+  String get managementRoleEffectSocialMediaManager =>
+      'Increases passive income.';
 
   @override
   String get transferTo => 'Move to …';

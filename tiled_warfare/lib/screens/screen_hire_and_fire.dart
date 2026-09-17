@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/l10n/management_role_labels.dart';
 import 'package:tiled_warfare/l10n/support_role_labels.dart';
+import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/personality.dart';
-import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
-import 'package:tiled_warfare/services/support_role_service.dart';
+import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 
 class ScreenHireAndFire extends StatefulWidget {
@@ -62,10 +64,19 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     await _saveWithFeedback();
   }
 
-  /// Entlässt eine Hilfs-/Service-Rolle (V10, Phase 6).
-  Future<void> _fireSupportRole(SupportRoleData entry) async {
+  /// Stellt eine Verwaltungs-/Marketing-Rolle ein (Option C, `11a`).
+  Future<void> _hireManagementRole(ManagementRole role) async {
     setState(() {
-      _profile.fireSupportRole(entry);
+      _profile.hireManagementRole(role);
+    });
+    await _saveWithFeedback();
+  }
+
+  /// Entlässt einen Nicht-Kampf-Personal-Eintrag beliebiger Kategorie
+  /// (Option C, `11a`).
+  Future<void> _fireStaffEntry(StaffEntryData entry) async {
+    setState(() {
+      _profile.fireStaffEntry(entry);
     });
     await _saveWithFeedback();
   }
@@ -74,7 +85,8 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   int get _totalWeeklyLoad {
     final medicCosts = _profile.hiredMedics
         .fold<int>(0, (sum, medic) => sum + medic.costPerWeek);
-    final supportCosts = SupportRoleService.weeklyWages(_profile.supportStaff);
+    final supportCosts =
+        StaffRoleService.nonCombatWeeklyWages(_profile.staffEntries);
     final staffCosts = _profile.personal.fold<int>(0, (sum, character) {
       final traits =
           PersonalityTraits.forProfile(character.personalityId, character.id);
@@ -166,6 +178,18 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
             child: _buildAvailableRoles(context),
           ),
           const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              l10n.managementRoles,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          SizedBox(
+            height: 180,
+            child: _buildAvailableManagementRoles(context),
+          ),
+          const Divider(),
           if (_profile.hiredMedicsCount > 0 ||
               _profile.supportStaffCount > 0 ||
               _profile.personalCount > 0)
@@ -228,17 +252,20 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     );
   }
 
-  /// Liste der angestellten Hilfs-/Service-Rollen (V10, Phase 6).
+  /// Liste des angestellten Nicht-Kampf-Personals (Hilfs-/Service-Rollen und
+  /// Verwaltung & Marketing; Option C, `11a`).
   Widget _buildHiredSupportList(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       scrollDirection: Axis.horizontal,
-      itemCount: _profile.supportStaffCount,
+      itemCount: _profile.staffEntries.length,
       itemBuilder: (context, index) {
-        final entry = _profile.supportStaff[index];
-        final label = supportRoleLabelFor(l10n, entry.role) ?? entry.role;
+        final entry = _profile.staffEntries[index];
+        final label = entry.kind == RoleKind.management
+            ? (managementRoleLabelFor(l10n, entry.role) ?? entry.role)
+            : (supportRoleLabelFor(l10n, entry.role) ?? entry.role);
         return SizedBox(
           width: 220,
           child: Card(
@@ -263,9 +290,64 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () => _fireSupportRole(entry),
+                      onPressed: () => _fireStaffEntry(entry),
                       icon: const Icon(Icons.person_remove, size: 18),
                       label: Text(l10n.fire),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Auswahlkarten aller Verwaltungs-/Marketing-Rollen (Option C, `11a`).
+  Widget _buildAvailableManagementRoles(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      scrollDirection: Axis.horizontal,
+      itemCount: kAllManagementRoles.length,
+      itemBuilder: (context, index) {
+        final role = kAllManagementRoles[index];
+        final wage = EconomyBalance.managementRoleWagePerWeek[role] ?? 0;
+        return SizedBox(
+          width: 220,
+          child: Card(
+            margin: const EdgeInsets.all(4),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    managementRoleLabel(l10n, role),
+                    style: theme.textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    managementRoleEffectLabel(l10n, role),
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Spacer(),
+                  Text(
+                    l10n.costPerWeek(wage),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => _hireManagementRole(role),
+                      icon: const Icon(Icons.person_add, size: 18),
+                      label: Text(l10n.hire),
                     ),
                   ),
                 ],

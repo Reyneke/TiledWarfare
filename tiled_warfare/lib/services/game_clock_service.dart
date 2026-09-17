@@ -10,6 +10,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/services/support_role_service.dart';
 
@@ -477,9 +478,11 @@ class GameClockService {
       satisfaction: satisfactionOf(restaurant),
       capacity: capacityOf(restaurant),
     );
-    // V10 (Phase 6): Der Aboyeur verbessert den Bestellfluss (Einnahmen).
+    // V10 (Phase 6)/Option C (`11a`): Aboyeur und Social Media Manager
+    // verbessern den Bestellfluss (Einnahmen); beide Zuschläge stapeln additiv.
     final incomeBonusPercent =
-        SupportRoleService.incomePercent(restaurant.supportStaff);
+        SupportRoleService.incomePercent(restaurant.supportStaff) +
+            StaffRoleService.managementIncomePercent(restaurant.staffEntries);
     if (incomeBonusPercent != 0) {
       incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100).round();
     }
@@ -490,12 +493,14 @@ class GameClockService {
       restaurant.medics.map((m) => m.costPerWeek),
       1,
     );
-    // V10 (Phase 7): Wochenlöhne des gesamten Brigade-Personals inkl. der
-    // angestellten Hilfs-/Service-Rollen (Phase 6).
+    // V10 (Phase 7)/Option C (`11a`): Wochenlöhne des gesamten Brigade-Personals
+    // inkl. des Nicht-Kampf-Personals (Hilfs-/Service-Rollen + Verwaltung &
+    // Marketing). Quelle ist der generalisierte `staffEntries`-Bestand; die
+    // Arztkosten werden separat über `billWeeklyMedicCosts` gebucht.
     final wagePerWeek = EconomyService.billWeeklyStaffWages(
       [
         ...restaurant.staff.map(_staffWagePerWeekOf),
-        SupportRoleService.weeklyWages(restaurant.supportStaff),
+        StaffRoleService.nonCombatWeeklyWages(restaurant.staffEntries),
       ],
       1,
     );

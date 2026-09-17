@@ -711,87 +711,213 @@ abstract class AppLocalizations {
   String weeklyWage(int amount);
 
   /// Abschnitt für Hilfs-/Service-Rollen (V10, Phase 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Hilfs- und Service-Rollen'**
   String get supportRoles;
 
   /// Rolle: Communard
+  ///
+  /// In de, this message translates to:
+  /// **'Communard (Staff cook)'**
   String get supportRoleCommunard;
+
   /// Wirkung: Communard
+  ///
+  /// In de, this message translates to:
+  /// **'Verbessert den Wochen-Refill der Kollegen.'**
   String get supportRoleEffectCommunard;
 
   /// Rolle: Tournant
+  ///
+  /// In de, this message translates to:
+  /// **'Tournant (Roundsman)'**
   String get supportRoleTournant;
+
   /// Wirkung: Tournant
+  ///
+  /// In de, this message translates to:
+  /// **'Senkt den Erschöpfungs-Malus der Nulltage.'**
   String get supportRoleEffectTournant;
 
   /// Rolle: Aboyeur
+  ///
+  /// In de, this message translates to:
+  /// **'Aboyeur (Expediter)'**
   String get supportRoleAboyeur;
+
   /// Wirkung: Aboyeur
+  ///
+  /// In de, this message translates to:
+  /// **'Verbessert den Bestellfluss (Einnahmen).'**
   String get supportRoleEffectAboyeur;
 
   /// Rolle: Plongeur
+  ///
+  /// In de, this message translates to:
+  /// **'Plongeur (Dishwasher)'**
   String get supportRolePlongeur;
+
   /// Wirkung: Plongeur
+  ///
+  /// In de, this message translates to:
+  /// **'Senkt die laufenden Betriebskosten.'**
   String get supportRoleEffectPlongeur;
 
-  /// Rolle: Commis de débarrasseur
+  /// Rolle: Commis
+  ///
+  /// In de, this message translates to:
+  /// **'Commis de débarrasseur (Busser)'**
   String get supportRoleCommis;
-  /// Wirkung: Commis de débarrasseur
+
+  /// Wirkung: Commis
+  ///
+  /// In de, this message translates to:
+  /// **'Leicht positiver Attraktivitäts-Effekt.'**
   String get supportRoleEffectCommis;
 
   /// Rolle: Boucher
+  ///
+  /// In de, this message translates to:
+  /// **'Boucher (Butcher)'**
   String get supportRoleBoucher;
+
   /// Wirkung: Boucher
+  ///
+  /// In de, this message translates to:
+  /// **'Erhöht die Beute nach Gefechten.'**
   String get supportRoleEffectBoucher;
 
   /// Rolle: Garçon de cuisine
+  ///
+  /// In de, this message translates to:
+  /// **'Garçon de cuisine (Kitchen boy)'**
   String get supportRoleGarcon;
+
   /// Wirkung: Garçon de cuisine
+  ///
+  /// In de, this message translates to:
+  /// **'Kleiner Bonus auf Attraktivität und Zufriedenheit.'**
   String get supportRoleEffectGarcon;
 
+  /// Abschnitt für Verwaltungs-/Marketing-Rollen (Option C)
+  ///
+  /// In de, this message translates to:
+  /// **'Verwaltung & Marketing'**
+  String get managementRoles;
+
+  /// Rolle: Social Media Manager
+  ///
+  /// In de, this message translates to:
+  /// **'Social Media Manager'**
+  String get managementRoleSocialMediaManager;
+
+  /// Wirkung: Social Media Manager
+  ///
+  /// In de, this message translates to:
+  /// **'Erhöht das passive Einkommen.'**
+  String get managementRoleEffectSocialMediaManager;
+
   /// Aktion: Personal in ein eigenes Restaurant verschieben (V10)
+  ///
+  /// In de, this message translates to:
+  /// **'Verschieben nach …'**
   String get transferTo;
+
   /// Titel der Zielauswahl beim Personal-Transfer
+  ///
+  /// In de, this message translates to:
+  /// **'Ziel-Restaurant wählen'**
   String get transferSelectTitle;
+
   /// Bestätigung des Personal-Transfers
+  ///
+  /// In de, this message translates to:
+  /// **'{name} nach {target} verschieben? Kosten: {cost} € – das Ziel-Restaurant zahlt.'**
   String transferConfirm(String name, String target, int cost);
+
   /// Erfolgsmeldung des Personal-Transfers
+  ///
+  /// In de, this message translates to:
+  /// **'{name} wechselt nach {target}.'**
   String transferSuccess(String name, String target);
+
   /// Fehlermeldung des Personal-Transfers
+  ///
+  /// In de, this message translates to:
+  /// **'Transfer nicht möglich (Ziel aufgelöst oder Budget zu gering).'**
   String get transferFailed;
+
   /// Hinweis, wenn es kein Ziel-Restaurant gibt
+  ///
+  /// In de, this message translates to:
+  /// **'Kein anderes Restaurant verfügbar.'**
   String get transferNoTargets;
 
   /// Stationsname (FR): Saucier
+  ///
+  /// In de, this message translates to:
+  /// **'Saucier'**
   String get stationSaucier;
 
   /// Stationsname (FR): Poissonnier
+  ///
+  /// In de, this message translates to:
+  /// **'Poissonnier'**
   String get stationPoissonnier;
 
   /// Stationsname (FR): Rôtisseur
+  ///
+  /// In de, this message translates to:
+  /// **'Rôtisseur'**
   String get stationRotisseur;
 
   /// Stationsname (FR): Grillardin
+  ///
+  /// In de, this message translates to:
+  /// **'Grillardin'**
   String get stationGrillardin;
 
   /// Stationsname (FR): Friturier
+  ///
+  /// In de, this message translates to:
+  /// **'Friturier'**
   String get stationFriturier;
 
   /// Stationsname (FR): Entremétier
+  ///
+  /// In de, this message translates to:
+  /// **'Entremétier'**
   String get stationEntremetier;
 
   /// Stationsname (FR): Potager
+  ///
+  /// In de, this message translates to:
+  /// **'Potager'**
   String get stationPotager;
 
   /// Stationsname (FR): Légumier
+  ///
+  /// In de, this message translates to:
+  /// **'Légumier'**
   String get stationLegumier;
 
   /// Stationsname (FR): Garde manger
+  ///
+  /// In de, this message translates to:
+  /// **'Garde manger'**
   String get stationGardeManger;
 
   /// Stationsname (FR): Charcutier
+  ///
+  /// In de, this message translates to:
+  /// **'Charcutier'**
   String get stationCharcutier;
 
   /// Stationsname (FR): Pâtissier
+  ///
+  /// In de, this message translates to:
+  /// **'Pâtissier'**
   String get stationPatissier;
 
   /// Level-Anzeige

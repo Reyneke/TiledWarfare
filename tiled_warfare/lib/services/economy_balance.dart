@@ -1,3 +1,4 @@
+import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/stations.dart';
@@ -206,6 +207,20 @@ class EconomyBalance {
     SupportRole.boucher: 100,
     SupportRole.garcon: 60,
   };
+
+  /// Wochenlohn je **Verwaltungs-/Marketing-Rolle** (Kategorie `management`).
+  ///
+  /// Grundlage der generalisierten Nicht-Kampf-Personal-Taxonomie (Option C,
+  /// `11a`). Die **Wirkung** ist dort noch offen (Entscheidung E3), daher
+  /// existiert hier bislang bewusst nur der Lohn – kein Effekt-Const.
+  static const Map<ManagementRole, int> managementRoleWagePerWeek = {
+    ManagementRole.socialMediaManager: 180,
+  };
+
+  /// Einkommens-Zuschlag des **Social Media Manager** auf das passive Einkommen
+  /// (Prozent, binär – Entscheidung E3 in `11a`). Stapelt **additiv** mit dem
+  /// Aboyeur-Zuschlag (`aboyeurIncomePercent`).
+  static const int socialMediaManagerIncomePercent = 10;
 
   /// Refill-Bonus der Rolle `Communard` auf die Kollegen (Prozent).
   /// Stapelt sich additiv mit dem Pâtissier-Bonus (V10 § 2).

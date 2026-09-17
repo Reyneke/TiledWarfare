@@ -498,6 +498,18 @@
   "@supportRoleGarcon": { "description": "Rolle: Garçon de cuisine" },
   "supportRoleEffectGarcon": "Kleiner Bonus auf Attraktivität und Zufriedenheit.",
   "@supportRoleEffectGarcon": { "description": "Wirkung: Garçon de cuisine" },
+  "managementRoles": "Verwaltung & Marketing",
+  "@managementRoles": {
+    "description": "Abschnitt für Verwaltungs-/Marketing-Rollen (Option C)"
+  },
+  "managementRoleSocialMediaManager": "Social Media Manager",
+  "@managementRoleSocialMediaManager": {
+    "description": "Rolle: Social Media Manager"
+  },
+  "managementRoleEffectSocialMediaManager": "Erhöht das passive Einkommen.",
+  "@managementRoleEffectSocialMediaManager": {
+    "description": "Wirkung: Social Media Manager"
+  },
   "transferTo": "Verschieben nach …",
   "@transferTo": {
     "description": "Aktion: Personal in ein eigenes Restaurant verschieben (V10)"

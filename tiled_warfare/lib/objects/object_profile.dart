@@ -2,10 +2,12 @@ import 'dart:math';
 
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
+import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
@@ -173,6 +175,15 @@ class ObjectProfile {
   /// Gibt die Anzahl der angestellten Hilfs-/Service-Rollen zurück.
   int get supportStaffCount => _supportStaff.length;
 
+  /// Generalisiertes Nicht-Kampf-Personal aller Kategorien (Option C, `11a`).
+  ///
+  /// Spiegelt `RestaurantData.staffEntries`; Küchen-Rollen sind über
+  /// [_supportStaff] zusätzlich domänenspezifisch verfügbar.
+  final List<StaffEntryData> _staffEntries = [];
+
+  /// Gibt das gesamte angestellte Nicht-Kampf-Personal zurück.
+  List<StaffEntryData> get staffEntries => List.unmodifiable(_staffEntries);
+
   /// Stellt eine Hilfs-/Service-Rolle ein (Karrierepfade, V10, Phase 6).
   ///
   /// Der Wochenlohn stammt aus `EconomyBalance.supportRoleWagePerWeek` und wird
@@ -189,12 +200,51 @@ class ObjectProfile {
       hiredAt: hiredAt,
     );
     _supportStaff.add(entry);
+    _staffEntries.add(StaffEntryData(
+      id: entry.id,
+      name: entry.name,
+      kind: RoleKind.support,
+      role: entry.role,
+      costPerWeek: entry.costPerWeek,
+      hiredAt: entry.hiredAt,
+    ));
     return entry;
   }
 
   /// Entlässt eine Hilfs-/Service-Rolle (keine Rückerstattung).
   void fireSupportRole(SupportRoleData entry) {
     _supportStaff.remove(entry);
+    _staffEntries.removeWhere((e) => e.id == entry.id);
+  }
+
+  /// Gibt die angestellten Verwaltungs-/Marketing-Rollen zurück (Option C).
+  List<StaffEntryData> get managementStaff => List.unmodifiable(
+        _staffEntries.where((e) => e.kind == RoleKind.management),
+      );
+
+  /// Stellt eine Verwaltungs-/Marketing-Rolle ein (Option C, `11a`).
+  ///
+  /// Der Wochenlohn stammt aus `EconomyBalance.managementRoleWagePerWeek` und
+  /// wird erst zum nächsten Wochen-Tick abgebucht (kein anteiliger Einzug).
+  StaffEntryData hireManagementRole(ManagementRole role, {DateTime? now}) {
+    final hiredAt = now ?? DateTime.now();
+    final roleName = RandomNames(activeCuisine.zone).fullName();
+    final entry = StaffEntryData(
+      id: CRC32.compute('$roleName${hiredAt.toIso8601String()}'),
+      name: roleName,
+      kind: RoleKind.management,
+      role: role.name,
+      costPerWeek: EconomyBalance.managementRoleWagePerWeek[role] ?? 0,
+      hiredAt: hiredAt,
+    );
+    _staffEntries.add(entry);
+    return entry;
+  }
+
+  /// Entlässt einen Nicht-Kampf-Personal-Eintrag beliebiger Kategorie (Option C).
+  void fireStaffEntry(StaffEntryData entry) {
+    _supportStaff.removeWhere((e) => e.id == entry.id);
+    _staffEntries.removeWhere((e) => e.id == entry.id);
   }
 
   /// Stellt einen Teamarzt ein.
@@ -844,6 +894,7 @@ class ObjectProfile {
     _personal.clear();
     _hiredMedics.clear();
     _supportStaff.clear();
+    _staffEntries.clear();
     _pendingTargetEdits.clear();
     _player = ObjectPlayer();
   }
@@ -879,6 +930,7 @@ class ObjectProfile {
       _personal.clear();
       _hiredMedics.clear();
       _supportStaff.clear();
+      _staffEntries.clear();
       return;
     }
 
@@ -919,6 +971,19 @@ class ObjectProfile {
       if (SupportRole.values.any((r) => r.name == sd.role)) {
         _supportStaff.add(sd);
       }
+    }
+
+    // Generalisiertes Nicht-Kampf-Personal (Option C): Kategorie-erhaltend
+    // übernehmen – unbekannte Rollen werden tolerant übersprungen (V6).
+    _staffEntries.clear();
+    for (final entry in restaurant.staffEntries) {
+      final known = switch (entry.kind) {
+        RoleKind.support => SupportRole.values.any((r) => r.name == entry.role),
+        RoleKind.management =>
+          ManagementRole.values.any((r) => r.name == entry.role),
+        RoleKind.medic => false,
+      };
+      if (known) _staffEntries.add(entry);
     }
   }
 
@@ -983,6 +1048,7 @@ class ObjectProfile {
       staff: _personal.map(_apprenticeToStaffData).toList(),
       medics: _hiredMedics.map(_medicToMedicData).toList(),
       supportStaff: List.of(_supportStaff),
+      staffEntries: List.of(_staffEntries),
       upgrades: Map.of(activeUpgrades),
       // V3/V8: den (ggf. durch den Catch-up fortgeschriebenen) Zeitanker
       // persistieren, damit verpasste Zeit nicht erneut abgerechnet wird.
@@ -1034,6 +1100,7 @@ class ObjectProfile {
         staff: _personal.map(_apprenticeToStaffData).toList(),
         medics: _hiredMedics.map(_medicToMedicData).toList(),
         supportStaff: List.of(_supportStaff),
+        staffEntries: List.of(_staffEntries),
         upgrades: Map.of(activeUpgrades),
         lastSeenAt: lastSeenAt,
         weekAnchorAt: weekAnchorAt,

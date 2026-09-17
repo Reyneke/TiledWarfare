@@ -1,6 +1,7 @@
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/utils/json_utils.dart';
 
@@ -14,10 +15,11 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 ///
 /// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = Restaurant-Ebene,
 /// Version 3 = Personal-Identität/Attribute (V9), Version 4 = Karriere-Rang &
-/// Station (Karrierepfade, V10), Version 5 = Hilfs-/Service-Rollen (V10).
+/// Station (Karrierepfade, V10), Version 5 = Hilfs-/Service-Rollen (V10),
+/// Version 6 = generalisiertes Nicht-Kampf-Personal (`StaffEntryData`, Option C).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 5;
+const int kProfileSchemaVersion = 6;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -495,7 +497,17 @@ class RestaurantData {
   List<MedicData> medics;
 
   /// Angestellte Hilfs-/Service-Rollen dieses Spielstands (serialized, V10).
+  ///
+  /// Bleibt für **Abwärtskompatibilität** erhalten und wird weiter geschrieben;
+  /// die Perspektive ist [staffEntries] (Option C, `11a`).
   List<SupportRoleData> supportStaff;
+
+  /// Angestelltes **Nicht-Kampf-Personal** aller Kategorien (Option C, `11a`).
+  ///
+  /// Generalisierter Eintragstyp mit Kategorie (`RoleKind`). Alt-Spielstände
+  /// ohne dieses Feld werden beim Laden aus [supportStaff] migriert
+  /// (`kind = support`), solange [staffEntries] leer ist.
+  List<StaffEntryData> staffEntries;
 
   /// Zeitanker des Echtzeit-Systems (V8/§ 6): bis hierhin sind alle **vollen
   /// Echtzeittage** abgerechnet (Tages-Schritt). Wird nur um abgerechnete Tage
@@ -534,6 +546,7 @@ class RestaurantData {
     List<StaffData>? staff,
     List<MedicData>? medics,
     List<SupportRoleData>? supportStaff,
+    List<StaffEntryData>? staffEntries,
     this.lastSeenAt,
     this.weekAnchorAt,
     this.isDissolved = false,
@@ -543,7 +556,29 @@ class RestaurantData {
   })  : staff = staff ?? [],
         medics = medics ?? [],
         supportStaff = supportStaff ?? [],
+        staffEntries = _resolveStaffEntries(staffEntries, supportStaff),
         upgrades = upgrades ?? {};
+
+  /// Vereinheitlicht [staffEntries] und die Alt-Bestände aus [supportStaff]
+  /// (Option C, `11a`): Ein nicht-leeres [staffEntries] hat Vorrang; andernfalls
+  /// werden die Küchen-Rollen als `kind = support` importiert.
+  static List<StaffEntryData> _resolveStaffEntries(
+    List<StaffEntryData>? staffEntries,
+    List<SupportRoleData>? supportStaff,
+  ) {
+    if (staffEntries != null && staffEntries.isNotEmpty) return staffEntries;
+    return <StaffEntryData>[
+      for (final entry in supportStaff ?? const <SupportRoleData>[])
+        StaffEntryData(
+          id: entry.id,
+          name: entry.name,
+          kind: RoleKind.support,
+          role: entry.role,
+          costPerWeek: entry.costPerWeek,
+          hiredAt: entry.hiredAt,
+        ),
+    ];
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -557,6 +592,7 @@ class RestaurantData {
         'staff': staff.map((s) => s.toJson()).toList(),
         'medics': medics.map((m) => m.toJson()).toList(),
         'supportStaff': supportStaff.map((s) => s.toJson()).toList(),
+        'staffEntries': staffEntries.map((s) => s.toJson()).toList(),
         if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
         if (weekAnchorAt != null)
           'weekAnchorAt': weekAnchorAt!.toIso8601String(),
@@ -582,6 +618,9 @@ class RestaurantData {
         medics: _mapList(json['medics'], MedicData.fromJson),
         supportStaff:
             _mapList(json['supportStaff'], SupportRoleData.fromJson),
+        staffEntries: json['staffEntries'] == null
+            ? null
+            : _mapList(json['staffEntries'], StaffEntryData.fromJson),
         lastSeenAt: readDateTime(json['lastSeenAt']),
         weekAnchorAt: readDateTime(json['weekAnchorAt']),
         isDissolved: readBool(json['isDissolved']) ?? false,
@@ -628,6 +667,7 @@ class RestaurantData {
         staff: staff ?? this.staff,
         medics: medics,
         supportStaff: supportStaff,
+        staffEntries: staffEntries,
         lastSeenAt: lastSeenAt,
         weekAnchorAt: weekAnchorAt,
         isDissolved: isDissolved,

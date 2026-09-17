@@ -498,6 +498,18 @@
   "@supportRoleGarcon": { "description": "Role: Garçon de cuisine" },
   "supportRoleEffectGarcon": "Small bonus to attractiveness and satisfaction.",
   "@supportRoleEffectGarcon": { "description": "Effect: Garçon de cuisine" },
+  "managementRoles": "Administration & marketing",
+  "@managementRoles": {
+    "description": "Section for administration/marketing roles (Option C)"
+  },
+  "managementRoleSocialMediaManager": "Social media manager",
+  "@managementRoleSocialMediaManager": {
+    "description": "Role: social media manager"
+  },
+  "managementRoleEffectSocialMediaManager": "Increases passive income.",
+  "@managementRoleEffectSocialMediaManager": {
+    "description": "Effect: social media manager"
+  },
   "transferTo": "Move to …",
   "@transferTo": {
     "description": "Action: move staff to one of your own restaurants (V10)"
