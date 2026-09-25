@@ -331,7 +331,7 @@ effektiver W100-Zielwert = clamp( Zielwert − malusPercent(t), 0, 100 )
 - **Regelwerk:** `team_rules.md` ergänzt – **erledigt** (neuer Abschnitt 2.6, Vererbungs-Regel in 2.3, Querverweise in 4.2/4.3 und 7).
 - **Teamdynamik:** Affinitäten/Konflikte zwischen Persönlichkeiten (Attraktivität, Zufriedenheit) – bewusst ein späterer Schritt.
 - **Weitere Klassen:** Sous Chef/Patissier erhalten eigene Klassen-Profile – **bestätigt**, mit der Leitlinie: **alle Gefechtsklassen erben von der Grundklasse `ObjectApprentice`** (kein Parallelmodell, keine eigene Attribut-/Persönlichkeitsstruktur).
-- **`shadiness`:** Wirkung (illegale Mittel) noch zu entwerfen – bis dahin nur Datenmodell; keine Umsetzungsphase verdrahtet sie.
+- **`shadiness`:** Wirkung (illegale Mittel) noch zu entwerfen – bis dahin nur Datenmodell; keine Umsetzungsphase verdrahtet sie. Der erste Anwendungsfall (Sabotage: passiv Bemerken / aktiv Ausführen) ist in `13_Gegner_Restaurants.md` → „Sabotage“ entworfen.
 - **Nomenklatur:** `vitality`/`morale` statt `health`/`mental_health` – **bestätigt** (Kollision mit `woundValue`/`teamHealthOf` vermieden).
 - **Erschöpfungs-Malus (Höhe + Kumulation):** je Nulltag `resourceZeroMalusPerDay = 5` pp, beide auf 0 `resourceZeroMalusPerDayBoth = 10` pp; **kein Cap** (Reset im Wochen-Refill) – alles in `EconomyBalance` einstellbar (V7). Die früheren Werte `vitalityZeroCombatMalusPercent`/`moraleZeroEconomyMalusPercent` entfallen.
 

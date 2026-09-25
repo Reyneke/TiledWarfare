@@ -137,7 +137,9 @@ Gefecht, seine Aura ist damit gegenstandslos.
 - **Aura-Auswertung:** Eine Einheit ist betroffen, wenn `HexGrid.distance(...)` zur Aura-Quelle
   ≤ `Aura-Radius` ist. Default sind **Verbündeten-Buffs**; **Debuff-Auren sind möglich** und wirken derzeit
   gegen **beide** Gegner-Kategorien (*Minion* **und** *Bossmonster*), nicht nach Monstertyp
-  (s. „Entscheidungen“).
+  (s. „Entscheidungen“). Wen eine Aura trifft, folgt zusätzlich der **Stance** (Buffs → Verbündete,
+  Debuffs/Schaden → Feinde; neutrale Fraktionen bleiben außen vor) – siehe `13_Gegner_Restaurants.md`
+  → „Gefechtsteilnahme“ → „Auren & Stance“.
 - Der `Demi-chef` (Rang 3, Unterrang) ist als **Vorstufe der Station** nutzbar: Ein Demi-chef arbeitet an
   einer Station, ohne deren vollen Bonus zu erhalten.
 
@@ -223,7 +225,9 @@ sind anstellbar und kosten **wöchentlich** Lohn (s. „Entscheidungen“).
   (siehe § 5).
 - **Aura-Ziel:** Verbündeten-Buffs sind der Default; **Debuff-Auren sind möglich** und wirken **derzeit gegen
   beide** Gegner-Kategorien (*Minion* **und** *Bossmonster*) – nicht nach Monstertyp. Eine getrennte
-  Zuordnung (Station → Kategorie) ist ein möglicher späterer Ausbau, aber **kein** jetziges Ziel.
+  Zuordnung (Station → Kategorie) ist ein möglicher späterer Ausbau, aber **kein** jetziges Ziel. Mit der
+  **Stance** (`13_Gegner_Restaurants.md` → „Gefechtsteilnahme“ → „Auren & Stance“) richtet sich das Aura-Ziel
+  zusätzlich nach Fraktion: Buffs → Verbündete, Debuffs/Schaden → Feinde.
 - **Gegner-Kategorien:** bestätigt – nur *Minion* (z. B. Dough Zombie) und *Bossmonster* (z. B. Dough
   Dumpster) existieren.
 - **Nachrück-Auslöser:** „ausfällt“ = **Tod, Entlassung oder Transfer** in ein anderes Restaurant
