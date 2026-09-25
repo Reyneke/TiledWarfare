@@ -510,6 +510,50 @@
   "@managementRoleEffectSocialMediaManager": {
     "description": "Wirkung: Social Media Manager"
   },
+  "managementFeaturePrCampaign": "PR-Kampagne",
+  "@managementFeaturePrCampaign": {
+    "description": "Feature: PR-Kampagne (Social Media Manager)"
+  },
+  "managementFeaturePrCampaignEffect": "Aktive Fertigkeit: befristeter XP-Boost für ein Teammitglied.",
+  "@managementFeaturePrCampaignEffect": {
+    "description": "Wirkung: PR-Kampagne"
+  },
+  "managementFeatureActivate": "Feature aktivieren",
+  "@managementFeatureActivate": {
+    "description": "Button: aktives Feature starten"
+  },
+  "managementFeatureSelectTarget": "Kampagnen-Ziel wählen",
+  "@managementFeatureSelectTarget": {
+    "description": "Dialogtitel: Ziel des Features wählen"
+  },
+  "managementFeatureCost": "Aktivierung: {cost} €",
+  "@managementFeatureCost": {
+    "description": "Einmalkosten der Feature-Aktivierung",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "managementFeatureCompetence": "Kompetenz {level}",
+  "@managementFeatureCompetence": {
+    "description": "Kompetenz-Stufe des Feature-Trägers",
+    "placeholders": { "level": { "type": "int" } }
+  },
+  "managementFeatureActive": "Aktiv bis {time}",
+  "@managementFeatureActive": {
+    "description": "Laufzeit der aktiven Feature-Phase",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureAftermath": "Nachwirkung bis {time}",
+  "@managementFeatureAftermath": {
+    "description": "Laufzeit der Nachteilphase",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureNoTargets": "Kein einsatzfähiges Ziel verfügbar.",
+  "@managementFeatureNoTargets": {
+    "description": "Hinweis: kein geeignetes Kampagnen-Ziel"
+  },
+  "managementFeatureActivationFailed": "Aktivierung nicht möglich.",
+  "@managementFeatureActivationFailed": {
+    "description": "Fehlermeldung: Feature konnte nicht aktiviert werden"
+  },
   "transferTo": "Verschieben nach …",
   "@transferTo": {
     "description": "Aktion: Personal in ein eigenes Restaurant verschieben (V10)"

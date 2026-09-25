@@ -431,6 +431,46 @@ class AppLocalizationsDe extends AppLocalizations {
       'Erhöht das passive Einkommen.';
 
   @override
+  String get managementFeaturePrCampaign => 'PR-Kampagne';
+
+  @override
+  String get managementFeaturePrCampaignEffect =>
+      'Aktive Fertigkeit: befristeter XP-Boost für ein Teammitglied.';
+
+  @override
+  String get managementFeatureActivate => 'Feature aktivieren';
+
+  @override
+  String get managementFeatureSelectTarget => 'Kampagnen-Ziel wählen';
+
+  @override
+  String managementFeatureCost(int cost) {
+    return 'Aktivierung: $cost €';
+  }
+
+  @override
+  String managementFeatureCompetence(int level) {
+    return 'Kompetenz $level';
+  }
+
+  @override
+  String managementFeatureActive(String time) {
+    return 'Aktiv bis $time';
+  }
+
+  @override
+  String managementFeatureAftermath(String time) {
+    return 'Nachwirkung bis $time';
+  }
+
+  @override
+  String get managementFeatureNoTargets =>
+      'Kein einsatzfähiges Ziel verfügbar.';
+
+  @override
+  String get managementFeatureActivationFailed => 'Aktivierung nicht möglich.';
+
+  @override
   String get transferTo => 'Verschieben nach …';
 
   @override

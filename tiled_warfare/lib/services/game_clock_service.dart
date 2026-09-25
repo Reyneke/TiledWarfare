@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:tiled_warfare/models/match_record.dart';
+import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
@@ -9,6 +10,7 @@ import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
@@ -532,6 +534,9 @@ class GameClockService {
       cursor = cursor.add(day);
       // V9 (Phase 3): Je Echtzeit-Tag sinken Vitalität/Moral des Personals.
       _applyDailyResourceSink(restaurant, cursor);
+      // `11a`: Ein aktives Feature schüttet je Tagestick XP an sein Ziel aus
+      // (wie nach einem Gefechtssieg) – anker-basiert und damit idempotent.
+      _applyFeatureDailyXp(restaurant, cursor);
 
       if (!isBlockEnd) continue;
 
@@ -563,11 +568,16 @@ class GameClockService {
       weekAnchor = weekAnchor.add(week);
       // V9 (Phase 3): Am Block-Ende werden Vitalität/Moral auf den Basiswert
       // aufgefüllt (deterministisch aus Persönlichkeit + Charakter-ID).
-      _refillStaffResources(restaurant);
+      // `11a`: In der Nachteilphase eines Features nur mit halbem Delta.
+      _refillStaffResources(restaurant, cursor);
     }
 
     // V9 § 6 (Phase 4): ein Proben-Paar je Staffel und Charakter.
     _probeResources(restaurant, now, random ?? Random());
+
+    // `11a`: Abgelaufene Features (aktive Phase **und** Nachteilphase beendet)
+    // werden zurückgesetzt, damit der Träger neu aktivieren kann.
+    ManagementFeatureService.clearFinished(restaurant.staffEntries, cursor);
 
     restaurant.budget = budget;
     restaurant.lastSeenAt = cursor;
@@ -596,17 +606,22 @@ class GameClockService {
   /// Senkt Vitalität/Moral um den Tages-Sink und pflegt die Null-Anker
   /// (V9 § 6; die Anker sind die Basis des Erschöpfungs-Malus).
   static void _applyDailyResourceSink(RestaurantData restaurant, DateTime now) {
+    // `11a`: In der Nachteilphase eines Features sinkt die Ressource des
+    // Kampagnen-Ziels doppelt (`featureAftermathSinkMultiplier`).
+    final multipliers = ManagementFeatureService.aftermathSinkMultipliers(
+        restaurant.staffEntries, now);
     for (final s in restaurant.staff) {
+      final multiplier = multipliers[s.id] ?? 1;
       if (s.vitalityCurrent != null) {
-        final sink = StressService.sink(
-            s.vitalityCurrent!, EconomyBalance.resourceSinkPerDay);
+        final sink = StressService.sink(s.vitalityCurrent!,
+            EconomyBalance.resourceSinkPerDay * multiplier);
         s.vitalityCurrent = sink.value;
         s.vitalityZeroSinceAt = StressService.updateZeroAnchor(
             s.vitalityZeroSinceAt, atZero: sink.atZero, now: now);
       }
       if (s.moraleCurrent != null) {
         final sink = StressService.sink(
-            s.moraleCurrent!, EconomyBalance.resourceSinkPerDay);
+            s.moraleCurrent!, EconomyBalance.resourceSinkPerDay * multiplier);
         s.moraleCurrent = sink.value;
         s.moraleZeroSinceAt = StressService.updateZeroAnchor(
             s.moraleZeroSinceAt, atZero: sink.atZero, now: now);
@@ -620,7 +635,7 @@ class GameClockService {
   /// Zusätzlich wirkt die Support-Station `Pâtissier` (V10 § 2): Ist sie im
   /// Restaurant vertreten, erhalten die **übrigen** Charaktere einen Bonus auf
   /// den Refill (`EconomyBalance.patissierRefillBonusPercent`).
-  static void _refillStaffResources(RestaurantData restaurant) {
+  static void _refillStaffResources(RestaurantData restaurant, DateTime now) {
     final hasPatissier = restaurant.staff.any(
       (s) => s.station == kStationPatissier,
     );
@@ -635,12 +650,77 @@ class GameClockService {
       // Der Pâtissier ist Support und profitiert nicht von seiner eigenen Wirkung.
       final ownBonus =
           bonusPercent > 0 && s.station != kStationPatissier ? bonusPercent : 0;
-      s.vitalityCurrent = _withRefillBonus(base.vitality, ownBonus);
-      s.moraleCurrent = _withRefillBonus(base.morale, ownBonus);
+      // `11a`: In der Nachteilphase regeneriert das Kampagnen-Ziel nur halb.
+      final fraction = ManagementFeatureService.refillFractionFor(
+        restaurant.staffEntries,
+        s.id,
+        now,
+      );
+      s.vitalityCurrent = _refilledValue(
+        _withRefillBonus(base.vitality, ownBonus),
+        s.vitalityCurrent,
+        fraction,
+      );
+      s.moraleCurrent = _refilledValue(
+        _withRefillBonus(base.morale, ownBonus),
+        s.moraleCurrent,
+        fraction,
+      );
       // Der Refill löscht die Null-Anker – der Malus fällt auf 0 zurück (§ 6).
       s.vitalityZeroSinceAt = null;
       s.moraleZeroSinceAt = null;
     }
+  }
+
+  /// Füllt [current] auf [base] auf; bei [fraction] `< 1` nur um diesen Anteil
+  /// des Deltas (Nachteilphase eines Features, `11a`).
+  static int _refilledValue(int base, int? current, double fraction) {
+    if (fraction >= 1.0 || current == null || base <= current) return base;
+    final refilled = current + ((base - current) * fraction).round();
+    return refilled.clamp(
+      EconomyBalance.resourceMin,
+      EconomyBalance.resourceMax,
+    );
+  }
+
+  /// Schüttet je abgerechnetem Tagestick XP an das Kampagnen-Ziel eines aktiven
+  /// Features aus (`11a`).
+  ///
+  /// Der Betrag entspricht einem Gefechtssieg (`EconomyService.xpForBattle`) und
+  /// wird um den Kompetenz-Zuschlag des Trägers erhöht. Die Aufstiegslogik läuft
+  /// zentral über [`EconomyService.grantXp`].
+  static void _applyFeatureDailyXp(RestaurantData restaurant, DateTime now) {
+    for (final feature in kAllManagementFeatures) {
+      final entry =
+          ManagementFeatureService.activeEntry(restaurant.staffEntries, feature, now);
+      final targetId = entry?.featureTargetId;
+      if (entry == null || targetId == null) continue;
+      final target = _staffById(restaurant, targetId);
+      if (target == null) continue;
+      final boost =
+          ManagementFeatureService.boostPercentFor(
+              ManagementFeatureService.competenceOf(entry));
+      final xp = EconomyService.boostedXp(
+        ManagementFeatureService.dailyXpFor(target.levelValue),
+        boost,
+      );
+      if (xp <= 0) continue;
+      final grant = EconomyService.grantXp(
+        level: target.levelValue,
+        currentXp: target.currentXPValue,
+        xp: xp,
+      );
+      target.levelValue = grant.level;
+      target.currentXPValue = grant.currentXp;
+    }
+  }
+
+  /// Charakter aus [restaurant] mit der stabilen [staffId] (oder `null`).
+  static StaffData? _staffById(RestaurantData restaurant, int staffId) {
+    for (final s in restaurant.staff) {
+      if (s.id == staffId) return s;
+    }
+    return null;
   }
 
   /// Wendet den Pâtissier-Refill-Bonus an und deckelt auf die Ressourcen-Domäne.

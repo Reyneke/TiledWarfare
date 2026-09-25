@@ -211,8 +211,7 @@ class EconomyBalance {
   /// Wochenlohn je **Verwaltungs-/Marketing-Rolle** (Kategorie `management`).
   ///
   /// Grundlage der generalisierten Nicht-Kampf-Personal-Taxonomie (Option C,
-  /// `11a`). Die **Wirkung** ist dort noch offen (Entscheidung E3), daher
-  /// existiert hier bislang bewusst nur der Lohn – kein Effekt-Const.
+  /// `11a`).
   static const Map<ManagementRole, int> managementRoleWagePerWeek = {
     ManagementRole.socialMediaManager: 180,
   };
@@ -221,6 +220,33 @@ class EconomyBalance {
   /// (Prozent, binär – Entscheidung E3 in `11a`). Stapelt **additiv** mit dem
   /// Aboyeur-Zuschlag (`aboyeurIncomePercent`).
   static const int socialMediaManagerIncomePercent = 10;
+
+  // ── Features: aktive Sonderfertigkeiten (11a) ──────────────────────────
+
+  /// Obere/untere Grenze der **Kompetenz** eines Feature-Trägers (Stufen).
+  ///
+  /// Die Kompetenz wird deterministisch aus der Personal-ID abgeleitet
+  /// (`ManagementFeatureService.competenceOf`) – kein Zufall, kein Pool.
+  static const int featureCompetenceMin = 1;
+  static const int featureCompetenceMax = 4;
+
+  /// XP-Zuschlag je Kompetenz-Stufe während der aktiven Feature-Phase (Prozent).
+  static const int featureCompetenceBoostPercentPerStep = 15;
+
+  /// Einmalkosten der Feature-Aktivierung je Level des Ziels (in Euro).
+  static const int featureCostPerLevel = 1000;
+
+  /// Dauer der **aktiven** Feature-Phase (1 Woche).
+  static const Duration featureActiveDuration = weeklyTick;
+
+  /// Dauer der **Nachteilphase** nach dem Ende der aktiven Phase (1 Woche).
+  static const Duration featureAftermathDuration = weeklyTick;
+
+  /// Faktor auf den Tages-Sink (`resourceSinkPerDay`) in der Nachteilphase.
+  static const int featureAftermathSinkMultiplier = 2;
+
+  /// Anteil des Refill-Deltas, der in der Nachteilphase noch aufgefüllt wird.
+  static const double featureAftermathRefillFraction = 0.5;
 
   /// Refill-Bonus der Rolle `Communard` auf die Kollegen (Prozent).
   /// Stapelt sich additiv mit dem Pâtissier-Bonus (V10 § 2).

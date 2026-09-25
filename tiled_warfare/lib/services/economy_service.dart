@@ -99,6 +99,32 @@ class EconomyService {
   static int levelUpThreshold(int level) =>
       level * EconomyBalance.levelUpXpPerLevel;
 
+  /// Wendet [xp] auf Level/XP an und führt Levelaufstiege nach (§ 3.1).
+  ///
+  /// Einzige Quelle der Aufstiegslogik (V7/„eine Quelle der Wahrheit“): sowohl
+  /// `ObjectApprentice.earnXP` als auch die XP-Gutschriften des Catch-ups
+  /// (Features, `11a`) laufen hierüber.
+  static XpGrant grantXp({
+    required int level,
+    required int currentXp,
+    required int xp,
+  }) {
+    var newLevel = level;
+    var remaining = currentXp + xp;
+    var gained = 0;
+    while (remaining >= levelUpThreshold(newLevel)) {
+      remaining -= levelUpThreshold(newLevel);
+      newLevel++;
+      gained++;
+    }
+    return XpGrant(level: newLevel, currentXp: remaining, levelsGained: gained);
+  }
+
+  /// Prozentualer XP-Zuschlag: `xp × (100 + percent) / 100`, kaufmännisch
+  /// gerundet (Feature-Boost, `11a`).
+  static int boostedXp(int xp, int percent) =>
+      percent == 0 ? xp : (xp * (100 + percent) / 100).round();
+
   // ── Karrierepfade (V10) ───────────────────────────────────────────────
 
   /// Aufstiegs-Level für den Ziel-Rang [rank] (Karrierepfade, V10).
@@ -272,4 +298,22 @@ class EconomyService {
     final invested = upgradeCost(type, level);
     return (invested * EconomyBalance.upgradeSellRefundRate).round();
   }
+}
+
+/// Ergebnis einer XP-Gutschrift (V7/L1; Levelaufstiege werden mitgeführt).
+class XpGrant {
+  /// Neues Level nach der Gutschrift.
+  final int level;
+
+  /// Verbleibende XP oberhalb der letzten Schwelle.
+  final int currentXp;
+
+  /// Anzahl der Levelaufstiege durch diese Gutschrift.
+  final int levelsGained;
+
+  const XpGrant({
+    required this.level,
+    required this.currentXp,
+    required this.levelsGained,
+  });
 }

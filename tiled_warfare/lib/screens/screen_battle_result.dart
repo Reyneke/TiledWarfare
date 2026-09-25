@@ -60,9 +60,16 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
     int totalXpGained = 0;
 
     for (final unit in allUnits) {
-      final xpGained = EconomyService.xpForBattle(
-        won: widget.playerWon,
-        level: unit.levelValue,
+      // `11a`: Ein aktives Feature (PR-Kampagne) erhöht auch die Gefechts-XP
+      // des Kampagnen-Ziels (Kompetenz-Zuschlag des Trägers).
+      final boostPercent =
+          _profile.managementFeatureXpBoostPercentFor(unit.id);
+      final xpGained = EconomyService.boostedXp(
+        EconomyService.xpForBattle(
+          won: widget.playerWon,
+          level: unit.levelValue,
+        ),
+        boostPercent,
       );
       final oldLevel = unit.levelValue;
 

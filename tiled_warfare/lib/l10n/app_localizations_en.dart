@@ -426,6 +426,45 @@ class AppLocalizationsEn extends AppLocalizations {
       'Increases passive income.';
 
   @override
+  String get managementFeaturePrCampaign => 'PR campaign';
+
+  @override
+  String get managementFeaturePrCampaignEffect =>
+      'Active ability: temporary XP boost for one team member.';
+
+  @override
+  String get managementFeatureActivate => 'Activate feature';
+
+  @override
+  String get managementFeatureSelectTarget => 'Choose campaign target';
+
+  @override
+  String managementFeatureCost(int cost) {
+    return 'Activation: $cost €';
+  }
+
+  @override
+  String managementFeatureCompetence(int level) {
+    return 'Competence $level';
+  }
+
+  @override
+  String managementFeatureActive(String time) {
+    return 'Active until $time';
+  }
+
+  @override
+  String managementFeatureAftermath(String time) {
+    return 'Aftermath until $time';
+  }
+
+  @override
+  String get managementFeatureNoTargets => 'No available target.';
+
+  @override
+  String get managementFeatureActivationFailed => 'Activation not possible.';
+
+  @override
   String get transferTo => 'Move to …';
 
   @override

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
+import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
@@ -20,6 +21,7 @@ import 'package:tiled_warfare/objects/player_objects/object_sous_chef.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
@@ -245,6 +247,82 @@ class ObjectProfile {
   void fireStaffEntry(StaffEntryData entry) {
     _supportStaff.removeWhere((e) => e.id == entry.id);
     _staffEntries.removeWhere((e) => e.id == entry.id);
+  }
+
+  // ── Features: aktive Sonderfertigkeiten (11a) ─────────────────────────
+
+  /// Träger-Eintrag eines Features (angestellte Management-Rolle, die es
+  /// liefert) – oder `null`.
+  StaffEntryData? managementFeatureOwner(ManagementFeature feature) =>
+      ManagementFeatureService.ownerOf(_staffEntries, feature);
+
+  /// `true`, wenn [feature] gerade **aktiv** ist (XP-Boost-Phase).
+  bool managementFeatureIsActive(ManagementFeature feature, {DateTime? now}) =>
+      ManagementFeatureService.isActive(
+          _staffEntries, feature, now ?? DateTime.now());
+
+  /// `true`, wenn [feature] gerade in der **Nachteilphase** läuft.
+  bool managementFeatureIsInAftermath(ManagementFeature feature,
+          {DateTime? now}) =>
+      ManagementFeatureService.aftermathEntry(
+          _staffEntries, feature, now ?? DateTime.now()) !=
+      null;
+
+  /// Das Kampagnen-Ziel von [feature] (oder `null`).
+  ObjectApprentice? managementFeatureTarget(ManagementFeature feature) {
+    final targetId = ManagementFeatureService.ownerOf(_staffEntries, feature)
+        ?.featureTargetId;
+    if (targetId == null) return null;
+    for (final character in _personal) {
+      if (character.id == targetId) return character;
+    }
+    return null;
+  }
+
+  /// Kompetenz-Stufe des Trägers von [feature] (0, wenn kein Träger angestellt).
+  int managementFeatureCompetence(ManagementFeature feature) {
+    final owner = managementFeatureOwner(feature);
+    return owner == null ? 0 : ManagementFeatureService.competenceOf(owner);
+  }
+
+  /// Prozentualer XP-Zuschlag, den [feature] dem Charakter [characterId] gibt.
+  int managementFeatureXpBoostPercentFor(int characterId, {DateTime? now}) =>
+      ManagementFeatureService.xpBoostPercentFor(
+          _staffEntries, characterId, now ?? DateTime.now());
+
+  /// Einmalkosten der Feature-Aktivierung für [target] (Level × 1000 €).
+  int managementFeatureCostFor(ObjectApprentice target) =>
+      ManagementFeatureService.featureCostFor(target.levelValue);
+
+  /// Aktiviert [feature] für [target] (Option C, `11a`).
+  ///
+  /// Voraussetzungen: Der Feature-Träger ist angestellt und hat **kein**
+  /// laufendes Feature, [target] gehört zum Team und ist einsatzfähig, und das
+  /// Budget erlaubt die Einmalkosten (`Level × 1000 €`, bis zur Negativgrenze).
+  /// Die Kosten werden **sofort** abgebucht (bewusste Ausnahme zum Anheuern der
+  /// Rollen, die keinen Ankaufspreis haben). Gibt `true` zurück, wenn aktiviert
+  /// wurde.
+  bool activateManagementFeature(
+    ManagementFeature feature,
+    ObjectApprentice target, {
+    DateTime? now,
+  }) {
+    final owner = managementFeatureOwner(feature);
+    if (owner == null) return false;
+    if (owner.activeFeature != null) return false;
+    if (!_personal.contains(target)) return false;
+    if (target.status == CharacterStatus.dying ||
+        target.status == CharacterStatus.dead ||
+        target.status == CharacterStatus.overkilled) {
+      return false;
+    }
+    final cost = managementFeatureCostFor(target);
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
+    budget -= cost;
+    owner.activeFeature = feature.name;
+    owner.featureTargetId = target.id;
+    owner.featureActivatedAt = now ?? DateTime.now();
+    return true;
   }
 
   /// Stellt einen Teamarzt ein.
@@ -1198,6 +1276,11 @@ class ObjectProfile {
       character.vitalityCurrent =
           sd.vitalityCurrent ?? character.vitalityCurrent;
       character.moraleCurrent = sd.moraleCurrent ?? character.moraleCurrent;
+      // `11a`: Ein aktives Feature schüttet im Catch-up XP aus – Level und
+      // Rest-XP müssen wie die Ressourcen zurückgeschrieben werden, sonst
+      // gingen sie beim nächsten Speichern verloren (Quelle bleibt der Anker).
+      character.levelValue = sd.levelValue;
+      character.currentXPValue = sd.currentXPValue;
       character.lastResourceRefillAt = sd.lastResourceRefillAt;
       character.personalityOverrideId = sd.personalityOverrideId;
       character.personalityOverrideUntil = sd.personalityOverrideUntil;

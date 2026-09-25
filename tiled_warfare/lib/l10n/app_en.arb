@@ -510,6 +510,50 @@
   "@managementRoleEffectSocialMediaManager": {
     "description": "Effect: social media manager"
   },
+  "managementFeaturePrCampaign": "PR campaign",
+  "@managementFeaturePrCampaign": {
+    "description": "Feature: PR campaign (social media manager)"
+  },
+  "managementFeaturePrCampaignEffect": "Active ability: temporary XP boost for one team member.",
+  "@managementFeaturePrCampaignEffect": {
+    "description": "Effect: PR campaign"
+  },
+  "managementFeatureActivate": "Activate feature",
+  "@managementFeatureActivate": {
+    "description": "Button: start an active feature"
+  },
+  "managementFeatureSelectTarget": "Choose campaign target",
+  "@managementFeatureSelectTarget": {
+    "description": "Dialog title: choose the feature target"
+  },
+  "managementFeatureCost": "Activation: {cost} €",
+  "@managementFeatureCost": {
+    "description": "One-time activation cost of a feature",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "managementFeatureCompetence": "Competence {level}",
+  "@managementFeatureCompetence": {
+    "description": "Competence level of the feature owner",
+    "placeholders": { "level": { "type": "int" } }
+  },
+  "managementFeatureActive": "Active until {time}",
+  "@managementFeatureActive": {
+    "description": "Runtime of the active feature phase",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureAftermath": "Aftermath until {time}",
+  "@managementFeatureAftermath": {
+    "description": "Runtime of the aftermath phase",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureNoTargets": "No available target.",
+  "@managementFeatureNoTargets": {
+    "description": "Hint: no suitable campaign target"
+  },
+  "managementFeatureActivationFailed": "Activation not possible.",
+  "@managementFeatureActivationFailed": {
+    "description": "Error: feature could not be activated"
+  },
   "transferTo": "Move to …",
   "@transferTo": {
     "description": "Action: move staff to one of your own restaurants (V10)"

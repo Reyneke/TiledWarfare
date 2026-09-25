@@ -16,10 +16,11 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 1 = Alt-Bestände ohne `version`-Feld, Version 2 = Restaurant-Ebene,
 /// Version 3 = Personal-Identität/Attribute (V9), Version 4 = Karriere-Rang &
 /// Station (Karrierepfade, V10), Version 5 = Hilfs-/Service-Rollen (V10),
-/// Version 6 = generalisiertes Nicht-Kampf-Personal (`StaffEntryData`, Option C).
+/// Version 6 = generalisiertes Nicht-Kampf-Personal (`StaffEntryData`, Option C),
+/// Version 7 = aktive Features des Nicht-Kampf-Personals (`11a`).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 6;
+const int kProfileSchemaVersion = 7;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///

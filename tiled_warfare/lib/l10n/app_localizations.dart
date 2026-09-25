@@ -818,6 +818,66 @@ abstract class AppLocalizations {
   /// **'Erhöht das passive Einkommen.'**
   String get managementRoleEffectSocialMediaManager;
 
+  /// Feature: PR-Kampagne (Social Media Manager)
+  ///
+  /// In de, this message translates to:
+  /// **'PR-Kampagne'**
+  String get managementFeaturePrCampaign;
+
+  /// Wirkung: PR-Kampagne
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: befristeter XP-Boost für ein Teammitglied.'**
+  String get managementFeaturePrCampaignEffect;
+
+  /// Button: aktives Feature starten
+  ///
+  /// In de, this message translates to:
+  /// **'Feature aktivieren'**
+  String get managementFeatureActivate;
+
+  /// Dialogtitel: Ziel des Features wählen
+  ///
+  /// In de, this message translates to:
+  /// **'Kampagnen-Ziel wählen'**
+  String get managementFeatureSelectTarget;
+
+  /// Einmalkosten der Feature-Aktivierung
+  ///
+  /// In de, this message translates to:
+  /// **'Aktivierung: {cost} €'**
+  String managementFeatureCost(int cost);
+
+  /// Kompetenz-Stufe des Feature-Trägers
+  ///
+  /// In de, this message translates to:
+  /// **'Kompetenz {level}'**
+  String managementFeatureCompetence(int level);
+
+  /// Laufzeit der aktiven Feature-Phase
+  ///
+  /// In de, this message translates to:
+  /// **'Aktiv bis {time}'**
+  String managementFeatureActive(String time);
+
+  /// Laufzeit der Nachteilphase
+  ///
+  /// In de, this message translates to:
+  /// **'Nachwirkung bis {time}'**
+  String managementFeatureAftermath(String time);
+
+  /// Hinweis: kein geeignetes Kampagnen-Ziel
+  ///
+  /// In de, this message translates to:
+  /// **'Kein einsatzfähiges Ziel verfügbar.'**
+  String get managementFeatureNoTargets;
+
+  /// Fehlermeldung: Feature konnte nicht aktiviert werden
+  ///
+  /// In de, this message translates to:
+  /// **'Aktivierung nicht möglich.'**
+  String get managementFeatureActivationFailed;
+
   /// Aktion: Personal in ein eigenes Restaurant verschieben (V10)
   ///
   /// In de, this message translates to:

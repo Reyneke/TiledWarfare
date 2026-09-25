@@ -54,6 +54,16 @@ class StaffEntryData {
   /// Zeitpunkt der Anstellung (optional, für Sortierung/Anzeige).
   final DateTime? hiredAt;
 
+  /// Name des **aktiven Features** (`ManagementFeature.name`) – `null`, wenn
+  /// keines läuft (Option C, `11a`; Features sind aktiv und zeitlich befristet).
+  String? activeFeature;
+
+  /// Charakter-ID des Kampagnen-Ziels (nur während eines aktiven Features).
+  int? featureTargetId;
+
+  /// Startzeitpunkt des aktiven Features (Anker des Fensters).
+  DateTime? featureActivatedAt;
+
   StaffEntryData({
     required this.id,
     required this.name,
@@ -61,6 +71,9 @@ class StaffEntryData {
     required this.role,
     required this.costPerWeek,
     this.hiredAt,
+    this.activeFeature,
+    this.featureTargetId,
+    this.featureActivatedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -70,6 +83,10 @@ class StaffEntryData {
         'role': role,
         'costPerWeek': costPerWeek,
         if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
+        if (activeFeature != null) 'activeFeature': activeFeature,
+        if (featureTargetId != null) 'featureTargetId': featureTargetId,
+        if (featureActivatedAt != null)
+          'featureActivatedAt': featureActivatedAt!.toIso8601String(),
       };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -80,5 +97,8 @@ class StaffEntryData {
         role: readString(json['role']) ?? '',
         costPerWeek: readInt(json['costPerWeek']) ?? 0,
         hiredAt: readDateTime(json['hiredAt']),
+        activeFeature: readString(json['activeFeature']),
+        featureTargetId: readInt(json['featureTargetId']),
+        featureActivatedAt: readDateTime(json['featureActivatedAt']),
       );
 }

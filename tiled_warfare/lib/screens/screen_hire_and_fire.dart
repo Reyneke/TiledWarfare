@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:tiled_warfare/l10n/management_feature_labels.dart';
 import 'package:tiled_warfare/l10n/management_role_labels.dart';
 import 'package:tiled_warfare/l10n/support_role_labels.dart';
+import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/personality.dart';
@@ -8,8 +10,10 @@ import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
+import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
 
@@ -79,6 +83,86 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       _profile.fireStaffEntry(entry);
     });
     await _saveWithFeedback();
+  }
+
+  /// Startet ein aktives Feature (`11a`): Ziel wählen → aktivieren → speichern.
+  ///
+  /// Die Einmalkosten (Level des Ziels × 1000 €) bucht `ObjectProfile`
+  /// unmittelbar beim Aktivieren ab; die Wirkung läuft danach über die
+  /// Zeitanker des Catch-ups.
+  Future<void> _startFeature(ManagementFeature feature) async {
+    final l10n = AppLocalizations.of(context)!;
+    final candidates = _profile.personal
+        .where((c) =>
+            c.status != CharacterStatus.dying &&
+            c.status != CharacterStatus.dead &&
+            c.status != CharacterStatus.overkilled)
+        .toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementFeatureNoTargets)),
+      );
+      return;
+    }
+
+    final target = await showDialog<ObjectApprentice>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.managementFeatureSelectTarget),
+        children: [
+          for (final c in candidates)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(c),
+              child: Text(
+                '${c.name} · Lv ${c.levelValue} · '
+                '${l10n.managementFeatureCost(_profile.managementFeatureCostFor(c))}',
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+
+    if (target == null || !mounted) return;
+    final ok = _profile.activateManagementFeature(feature, target);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementFeatureActivationFailed)),
+      );
+      return;
+    }
+    setState(() {});
+    await _saveWithFeedback();
+  }
+
+  /// Kurztext des Feature-Status eines Personal-Eintrags (aktiv/Nachwirkung).
+  String? _featureStatusText(
+    AppLocalizations l10n,
+    StaffEntryData entry,
+    ManagementFeature feature,
+  ) {
+    if (entry.activeFeature != feature.name) return null;
+    final now = DateTime.now();
+    if (_profile.managementFeatureIsActive(feature, now: now)) {
+      return l10n.managementFeatureActive(
+          _formatUntil(ManagementFeatureService.activeEndOf(entry)));
+    }
+    if (_profile.managementFeatureIsInAftermath(feature, now: now)) {
+      return l10n.managementFeatureAftermath(
+          _formatUntil(ManagementFeatureService.aftermathEndOf(entry)));
+    }
+    return null;
+  }
+
+  /// Kompakte Zeitangabe (Tag.Monat Stunde:Minute) für Countdowns.
+  String _formatUntil(DateTime? until) {
+    if (until == null) return '—';
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(until.day)}.${two(until.month)} '
+        '${two(until.hour)}:${two(until.minute)}';
   }
 
   /// Gesamte Wochenlast: Arztkosten + Support-Löhne + Personal-Löhne (V10).
@@ -161,7 +245,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
               ),
             ),
             SizedBox(
-              height: 120,
+              height: 220,
               child: _buildHiredSupportList(context),
             ),
             const Divider(),
@@ -263,9 +347,15 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       itemCount: _profile.staffEntries.length,
       itemBuilder: (context, index) {
         final entry = _profile.staffEntries[index];
+        final role = entry.kind == RoleKind.management
+            ? managementRoleFromName(entry.role)
+            : null;
         final label = entry.kind == RoleKind.management
             ? (managementRoleLabelFor(l10n, entry.role) ?? entry.role)
             : (supportRoleLabelFor(l10n, entry.role) ?? entry.role);
+        final feature = role == null ? null : managementFeatureOf(role);
+        final featureStatus =
+            feature == null ? null : _featureStatusText(l10n, entry, feature);
         return SizedBox(
           width: 220,
           child: Card(
@@ -286,6 +376,39 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                     style: theme.textTheme.bodySmall,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (feature != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      managementFeatureLabel(l10n, feature),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      managementFeatureEffectLabel(l10n, feature),
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (featureStatus != null)
+                      Text(
+                        featureStatus,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    else
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => _startFeature(feature),
+                          icon: const Icon(Icons.campaign, size: 16),
+                          label: Text(l10n.managementFeatureActivate),
+                        ),
+                      ),
+                  ],
                   const Spacer(),
                   SizedBox(
                     width: double.infinity,

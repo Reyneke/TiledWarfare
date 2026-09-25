@@ -9,6 +9,7 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/management_feature_service.dart';
 
 /// Balance-Sanity-Tests (V7): schreiben die gewünschten Eigenschaften der
 /// Wirtschaftsschleife fest, damit Tuning-Änderungen sie nicht unbemerkt
@@ -367,6 +368,41 @@ void main() {
         EconomyBalance.tournantExhaustionReliefPercent,
         lessThanOrEqualTo(100),
       );
+    });
+
+    test('Feature-Balance (11a) ist konsistent', () {
+      // Kosten, Fenster und Nachteile sind gesetzt und plausibel.
+      expect(EconomyBalance.featureCostPerLevel, greaterThan(0));
+      expect(
+        EconomyBalance.featureActiveDuration,
+        EconomyBalance.weeklyTick,
+        reason: 'Die aktive Phase dauert genau eine Woche',
+      );
+      expect(
+        EconomyBalance.featureAftermathDuration,
+        EconomyBalance.weeklyTick,
+        reason: 'Die Nachteilphase dauert genau eine Woche',
+      );
+      expect(
+        EconomyBalance.featureCompetenceMin,
+        lessThan(EconomyBalance.featureCompetenceMax),
+      );
+      expect(
+        EconomyBalance.featureCompetenceBoostPercentPerStep,
+        greaterThan(0),
+      );
+      expect(EconomyBalance.featureAftermathSinkMultiplier, greaterThan(1));
+      expect(
+        EconomyBalance.featureAftermathRefillFraction,
+        inExclusiveRange(0.0, 1.0),
+      );
+      // Die Kompetenz-Spanne deckt die Domäne vollständig ab.
+      for (var competence = EconomyBalance.featureCompetenceMin;
+          competence <= EconomyBalance.featureCompetenceMax;
+          competence++) {
+        expect(ManagementFeatureService.boostPercentFor(competence),
+            greaterThan(0));
+      }
     });
   });
 }

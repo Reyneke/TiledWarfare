@@ -36,8 +36,8 @@ void main() {
     expect(legacy.hiredAt, isNull);
   });
 
-  test('kProfileSchemaVersion ist 6 (Option C: Nicht-Kampf-Personal)', () {
-    expect(kProfileSchemaVersion, 6);
+  test('kProfileSchemaVersion ist 7 (Option C + Features)', () {
+    expect(kProfileSchemaVersion, 7);
   });
 
   test('RestaurantData persistiert supportStaff auch über copyWith', () {

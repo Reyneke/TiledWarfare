@@ -270,16 +270,17 @@ class ObjectApprentice extends ObjectToken {
   /// bei Level 1), steigt der Charakter entsprechend oft auf.
   ///
   /// Gibt `true` zurück, wenn ein oder mehrere Levelaufstiege stattfanden.
+  ///
+  /// Die Aufstiegslogik liegt zentral in `EconomyService.grantXp` (V7) – auch
+  /// die XP-Gutschriften des Catch-ups (Features, `11a`) nutzen sie.
   bool earnXP(int xp) {
-    currentXPValue += xp;
-    bool leveledUp = false;
-    // Nach jedem Levelaufstieg wird die neue Schwelle berechnet, damit
-    // überschüssige XP korrekt auf die Folgelevel angerechnet werden.
-    while (currentXPValue >= EconomyService.levelUpThreshold(levelValue)) {
-      currentXPValue -= EconomyService.levelUpThreshold(levelValue);
-      levelValue++;
-      leveledUp = true;
-    }
-    return leveledUp;
+    final grant = EconomyService.grantXp(
+      level: levelValue,
+      currentXp: currentXPValue,
+      xp: xp,
+    );
+    levelValue = grant.level;
+    currentXPValue = grant.currentXp;
+    return grant.levelsGained > 0;
   }
 }
