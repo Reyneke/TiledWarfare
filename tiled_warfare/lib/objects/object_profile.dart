@@ -8,6 +8,7 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/rival_restaurant.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
@@ -23,6 +24,8 @@ import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
+import 'package:tiled_warfare/services/rival_service.dart';
+import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
 
@@ -114,6 +117,12 @@ class ObjectProfile {
 
   /// Ausbaustufen der Restaurant-Erweiterungen (§ 10); fehlender Key = Stufe 0.
   Map<UpgradeType, int> activeUpgrades = {};
+
+  /// Ziel der letzten **erfolgreichen** Sabotage (Rivalen-ID, `11a` E14).
+  int? sabotageTargetId;
+
+  /// Ende des Sabotage-Wirkungsfensters (Einkommens-Bonus, `11a` E14).
+  DateTime? sabotageAppliedUntil;
 
   /// Full profile data from the last load - basis for the merge in
   /// [toProfileData] (all other savegames stay untouched while saving).
@@ -250,6 +259,74 @@ class ObjectProfile {
   }
 
   // ── Features: aktive Sonderfertigkeiten (11a) ─────────────────────────
+
+  /// Rivalen des aktiven Stadtteils (deterministisch, Minimal-Modul Kapitel 13).
+  List<RivalRestaurant> get rivals => RivalService.rosterOf(activeDistrict);
+
+  /// `true`, wenn die Chefsekretärin angestellt ist (Trägerin der Sabotage).
+  bool get hasChefSecretary => StaffRoleService.hasManagementRole(
+      _staffEntries, ManagementRole.chefSecretary);
+
+  /// Erfolgswahrscheinlichkeit einer Sabotage (Prozent) – `0` ohne Trägerin.
+  int get sabotageSuccessPercent {
+    final owner = managementFeatureOwner(ManagementFeature.sabotage);
+    return owner == null
+        ? 0
+        : ManagementFeatureService.sabotageSuccessPercentFor(owner);
+  }
+
+  /// `true`, wenn die Sabotage gegen [rival] gelingen würde (UI-Vorschau).
+  ///
+  /// Nutzt **denselben** deterministischen Wurf wie die spätere Auflösung im
+  /// Tick (`ManagementFeatureService.sabotageSucceeds`).
+  bool sabotageWouldSucceed(RivalRestaurant rival) {
+    final owner = managementFeatureOwner(ManagementFeature.sabotage);
+    return owner != null && ManagementFeatureService.sabotageSucceeds(
+        owner, rival.id);
+  }
+
+  /// Startet die Sabotage gegen [rival] (Chefsekretärin, `11a` E14).
+  ///
+  /// Voraussetzungen wie [activateManagementFeature]; die Einmalkosten
+  /// (`EconomyBalance.sabotageCost`) werden **sofort** abgebucht. Die Auflösung
+  /// erfolgt im nächsten Wochen-Tick (`RivalService.resolveSabotage`).
+  bool activateSabotage(RivalRestaurant rival, {DateTime? now}) {
+    final owner = managementFeatureOwner(ManagementFeature.sabotage);
+    if (owner == null || owner.activeFeature != null) return false;
+    final cost = EconomyBalance.sabotageCost;
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
+    budget -= cost;
+    owner.activeFeature = ManagementFeature.sabotage.name;
+    owner.featureTargetId = rival.id;
+    owner.featureActivatedAt = now ?? DateTime.now();
+    owner.featureResolvedAt = null;
+    return true;
+  }
+
+  /// Aktiviert ein Feature **ohne Ziel** (Winkelzug, Kreative Buchführung).
+  ///
+  /// Kosten: `ManagementFeatureService.fixedCostOf(feature)` – sofort abgebucht.
+  /// Gibt `false` zurück, wenn kein Träger angestellt ist, dort bereits ein
+  /// Feature läuft oder das Feature nicht ziel-los ist.
+  bool activateUntargetedFeature(ManagementFeature feature, {DateTime? now}) {
+    final cost = ManagementFeatureService.fixedCostOf(feature);
+    if (cost == null) return false;
+    final owner = managementFeatureOwner(feature);
+    if (owner == null || owner.activeFeature != null) return false;
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
+    budget -= cost;
+    owner.activeFeature = feature.name;
+    owner.featureTargetId = null;
+    owner.featureActivatedAt = now ?? DateTime.now();
+    owner.featureResolvedAt = null;
+    return true;
+  }
+
+  /// Der aktuell sabotierte Rivale (oder `null`, wenn kein Fenster läuft).
+  RivalRestaurant? get sabotagedRival {
+    if (sabotageAppliedUntil == null) return null;
+    return RivalService.byId(rivals, sabotageTargetId);
+  }
 
   /// Träger-Eintrag eines Features (angestellte Management-Rolle, die es
   /// liefert) – oder `null`.
@@ -969,6 +1046,8 @@ class ObjectProfile {
     activeCuisine = Cuisine.italian;
     rebrandingPenaltyUntil = null;
     activeUpgrades = {};
+    sabotageTargetId = null;
+    sabotageAppliedUntil = null;
     _personal.clear();
     _hiredMedics.clear();
     _supportStaff.clear();
@@ -1005,6 +1084,8 @@ class ObjectProfile {
       activeCuisine = Cuisine.italian;
       rebrandingPenaltyUntil = null;
       activeUpgrades = {};
+      sabotageTargetId = null;
+      sabotageAppliedUntil = null;
       _personal.clear();
       _hiredMedics.clear();
       _supportStaff.clear();
@@ -1023,6 +1104,8 @@ class ObjectProfile {
     activeCuisine = restaurant.cuisine;
     rebrandingPenaltyUntil = restaurant.rebrandingPenaltyUntil;
     activeUpgrades = Map.of(restaurant.upgrades);
+    sabotageTargetId = restaurant.sabotageTargetId;
+    sabotageAppliedUntil = restaurant.sabotageAppliedUntil;
 
     // Restore team.
     _personal.clear();
@@ -1128,6 +1211,8 @@ class ObjectProfile {
       supportStaff: List.of(_supportStaff),
       staffEntries: List.of(_staffEntries),
       upgrades: Map.of(activeUpgrades),
+      sabotageTargetId: sabotageTargetId,
+      sabotageAppliedUntil: sabotageAppliedUntil,
       // V3/V8: den (ggf. durch den Catch-up fortgeschriebenen) Zeitanker
       // persistieren, damit verpasste Zeit nicht erneut abgerechnet wird.
       lastSeenAt: lastSeenAt ??
@@ -1180,6 +1265,8 @@ class ObjectProfile {
         supportStaff: List.of(_supportStaff),
         staffEntries: List.of(_staffEntries),
         upgrades: Map.of(activeUpgrades),
+        sabotageTargetId: sabotageTargetId,
+        sabotageAppliedUntil: sabotageAppliedUntil,
         lastSeenAt: lastSeenAt,
         weekAnchorAt: weekAnchorAt,
         lastMatchResult: lastMatchResult,
@@ -1190,17 +1277,32 @@ class ObjectProfile {
   /// Aktuelle Ausbaustufe einer Erweiterung (0 = nicht gebaut).
   int upgradeLevel(UpgradeType type) => activeUpgrades[type] ?? 0;
 
+  /// Kaufpreis der **nächsten** Stufe von [type] (nach Kostenfaktor).
+  ///
+  /// Der Abzug der Chefsekretärin (`11a` E12) wirkt auf den Anschaffungspreis,
+  /// nicht auf den Unterhalt; die UI zeigt denselben Wert an
+  /// (`ScreenRestaurant._buildUpgradeTile`).
+  int upgradePurchaseCost(UpgradeType type) {
+    final level = upgradeLevel(type);
+    final gross = EconomyService.upgradeCost(type, level + 1) -
+        EconomyService.upgradeCost(type, level);
+    return StaffRoleService.reduceByPercent(
+      gross,
+      StaffRoleService.chefSecretaryUpgradeCostReductionPercent(_staffEntries),
+    );
+  }
+
   /// Baut [type] eine Stufe aus (kostet `Ankauf-Basis × neue Stufe`).
   ///
-  /// Gibt `false` zurück, wenn die Maximalstufe erreicht ist oder das Budget
-  /// die Negativgrenze überschreiten würde.
+  /// Der Anschaffungspreis wird um den Abzug der Chefsekretärin gemindert
+  /// (`11a` E12). Gibt `false` zurück, wenn die Maximalstufe erreicht ist oder
+  /// das Budget die Negativgrenze überschreiten würde.
   bool buyUpgrade(UpgradeType type) {
     final spec = EconomyBalance.upgrades[type];
     if (spec == null) return false;
     final current = upgradeLevel(type);
     if (current >= spec.maxLevel) return false;
-    final cost = EconomyService.upgradeCost(type, current + 1) -
-        EconomyService.upgradeCost(type, current);
+    final cost = upgradePurchaseCost(type);
     if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
     budget -= cost;
     activeUpgrades[type] = current + 1;
@@ -1243,6 +1345,9 @@ class ObjectProfile {
     budget = snapshot.budget;
     lastSeenAt = snapshot.lastSeenAt;
     weekAnchorAt = snapshot.weekAnchorAt;
+    // `11a` E14: Ergebnis einer im Tick aufgelösten Sabotage übernehmen.
+    sabotageTargetId = snapshot.sabotageTargetId;
+    sabotageAppliedUntil = snapshot.sabotageAppliedUntil;
     // V3: geheilten Status/Spritzen-Zustand in die In-Memory-Charaktere
     // zurückschreiben (beide Listen sind 1:1 über die Konvertierung geordnet).
     _syncStaffFromSnapshot(snapshot);

@@ -125,6 +125,11 @@ analog zum bestehenden `rebrandingPenaltyUntil`-Fenster (z. B. Saison-Terrasse, 
   (offene Frage aus § 8). Wird `moneyValue` später umgedeutet, wirken Kapazitäts-Erweiterungen anders.
 - **Abstimmung mit `11a`:** Neue Erweiterungen, die Rollenwirkungen überschneiden (z. B. Weinkeller ↔
   Caviste), vermeiden bzw. bewusst als Ergänzung definieren.
+- **Anschaffungspreis-Rabatt (V11):** Die **Chefsekretärin** (`11a` E12) mindert den **Anschaffungspreis** von
+  Erweiterungen um 5 % (`chefSecretaryUpgradeCostReductionPercent`) – die UI zeigt den geminderten Preis
+  (`ObjectProfile.upgradePurchaseCost`), der **Unterhalt bleibt unberührt**. Der Buchhalter („alle laufenden
+  Kosten“) mindert dagegen den **Unterhalt** im Wochen-Tick. Balance-Erwartungen der Tabelle oben gelten daher
+  relativ (ohne Rollen).
 
 ## Checkliste für eine neue Erweiterung (Doku ↔ Code)
 

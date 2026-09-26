@@ -114,6 +114,56 @@ liegenden Regeln sind für alle gleich.
 - Keine versteckten Boni; der Spieler bleibt **gefordert, aber nicht frustriert**.
 - Dynamik über das **symmetrische Mini-PP-Modell** je Rivale (Entscheidungen → 1).
 
+## Minimal-Modul (V11): Sabotage-Auflösung & Strafen
+
+> **Status:** Umgesetzt (V11). Dieses Teilstück ist der kleinste spielbare Ausschnitt dieses Kapitels: der
+> **Rivalen-Roster**, die **Spieler-Sabotage** (Feature der Chefsekretärin, `11a` E14) und die daraus
+> entstehenden **Strafen** (Rechtsanwalt, `11a` E15). Power Projection/Rangliste, Rivalen-Simulation,
+> Gefechtsteilnahme und die Rivalen-Sabotage gegen den Spieler bleiben offen.
+
+**Modelle & Balance (V7: keine Literale im Fluss):** `RivalRestaurant` (`lib/models/rival_restaurant.dart`) mit
+`id`/`name`/`district`/`personalityId`/`basePrestige`, abgeleitet aus dem Stadtteil. Konfiguration in
+`EconomyBalance`: `rivalCountPrestigeS/A/B/C`, `rivalCountS/A/B/C/D`, `rivalCountMin/Max`, `rivalNameZone`
+sowie `sabotage*` (Kosten, Vorlauf-/Wirkungs-/Nachlauf-Fenster, Erfolgswerte, Einkommens-Bonus,
+Prestige-Malus, Strafe).
+
+**Roster (deterministisch):** `RivalService.countFor(district)` leitet die Anzahl aus dem Prestige-Tier ab
+(TriBeCa 8 … Harlem 3); `RivalService.rosterOf(district)` erzeugt je Rivale eine stabile ID
+(`CRC32('rival:<district>:<index>')`), eine deterministische `personalityId` und das Stadtteil-Prestige.
+**Kein Zufall im Catch-up** (V8-Idempotenz); nur die Namen stammen aus dem Namensgenerator und werden je
+Stadtteil zwischengespeichert.
+
+**Spieler-Sabotage (Feature, `11a` E14):**
+
+| Phase | Dauer | Wirkung |
+|---|---|---|
+| Vorlauf | `sabotageActiveDuration` (1 Woche) | Angriff läuft; Erfolgswurf deterministisch (`ManagementFeatureService.sabotageRollFor`), Chance 40 % + 10 %/Kompetenz |
+| Auflösung | im Wochen-Tick | `RivalService.resolveSabotage`: Erfolg ⇒ Wirkungsfenster; Misserfolg ⇒ Strafe (gemindert) |
+| Wirkung | `sabotageEffectDuration` (1 Woche) | Rivale −25 % Prestige (`sabotageRivalPrestigePenaltyPercent`); Spieler +15 % Einkommen (`sabotageIncomeBonusPercent`, tagesgenau) |
+| Nachlauf | `sabotageAftermathDuration` (1 Woche) | „Abtauchen“ – keine erneute Sabotage |
+
+**Strafen:** Strafe = `sabotageCaughtFine` (3000 €), gemindert um
+`StaffRoleService.penaltyReductionPercent` (Rechtsanwalt-Passiv + aktiver „Winkelzug“). Sie wird im
+Wochenbudget gebucht und als `penaltyCosts` in `WeekSettlement`/`WeeklyTickResult` ausgewiesen; die Auflösung
+selbst ist budgetneutral (eine Quelle der Wahrheit im Tick).
+
+**Persistenz (Schema v8):** Nur das **Wirkungsfenster** wird gespeichert
+(`RestaurantData.sabotageTargetId`/`sabotageAppliedUntil`), der Roster bleibt abgeleitet (wie in
+„Handlungen (Prototyp)“ Schritt 5 vorgesehen). Die Idempotenz der Auflösung liegt am Träger-Eintrag
+(`StaffEntryData.featureResolvedAt`).
+
+**Idempotenz & Determinismus (V8):** identischer Snapshot ⇒ identische Roster und identisches
+Auflösungsergebnis; ein zweiter Catch-up mit demselben `now` bucht weder Strafe noch Wirkung erneut
+(`test/rival_service_test.dart`, `test/sabotage_tick_test.dart`).
+
+**UI:** Der Sabotage-Dialog wählt einen Rivalen des Stadtteils (mit deterministisch angezeigter Erfolgschance);
+`ScreenHireAndFire` zeigt zusätzlich eine kompakte Rivalen-Liste mit Sabotage-Status.
+
+**Noch offen:** Rivalen-PP/Rangliste, Rivalen-Aktionen im Tick, Gefechtsteilnahme/Stance, Rivalen-Sabotage
+gegen den Spieler (dort greift `shadiness` als **passive** Erkennung, siehe „Sabotage“ oben) sowie ein
+`ScreenRestaurant`-Ranking-Badge. Im **umgesetzten** Modul wird `shadiness` bewusst noch **nicht**
+ausgewertet – die Erfolgschance der Spieler-Sabotage skaliert mit der Kompetenz der Chefsekretärin.
+
 ## Sabotage
 
 Mit der Einführung der **Rivalen** soll die Möglichkeit gegeben werden, diese zu sabotieren – und umgekehrt.

@@ -12,6 +12,7 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/services/support_role_service.dart';
@@ -42,6 +43,9 @@ class WeekSettlement {
   /// Abgebuchte Negativzinsen des Blocks.
   final int negativeInterest;
 
+  /// Abgebuchte **Strafen** des Blocks (`11a` E14: aufgedeckte Sabotage).
+  final int penaltyCosts;
+
   /// Budget nach der Abrechnung des Blocks.
   final int budgetAfter;
 
@@ -54,6 +58,7 @@ class WeekSettlement {
     this.staffCosts = 0,
     required this.upgradeUpkeep,
     required this.negativeInterest,
+    this.penaltyCosts = 0,
     required this.budgetAfter,
   });
 }
@@ -78,6 +83,9 @@ class WeeklyTickResult {
   /// Abgebuchte Negativzinsen insgesamt.
   final int negativeInterest;
 
+  /// Abgebuchte **Strafen** insgesamt (`11a` E14: aufgedeckte Sabotage).
+  final int penaltyCosts;
+
   /// Budget nach der Abrechnung.
   final int budgetAfter;
 
@@ -100,6 +108,7 @@ class WeeklyTickResult {
     this.staffCosts = 0,
     required this.upgradeUpkeep,
     required this.negativeInterest,
+    this.penaltyCosts = 0,
     required this.budgetAfter,
     required this.bankrupt,
     this.settlements = const [],
@@ -516,12 +525,39 @@ class GameClockService {
           (upkeepPerWeek * (100 - upkeepReductionPercent) / 100).round();
     }
 
+    // `11a` E12: passive Kosten-Minderung der Verwaltungsrollen.
+    // Chefsekretärin (−5 %) und Buchhalter (−5 %) mindern die Löhne; „alle
+    // laufenden Kosten“ des Buchhalters decken zusätzlich Arztkosten und
+    // Erweiterungs-Unterhalt ab. Beide Werte sind binär (Anwesenheit), die
+    // Rundung erfolgt kaufmännisch (`StaffRoleService.reduceByPercent`).
+    final staffCostReductionPercent = StaffRoleService
+            .chefSecretaryStaffCostReductionPercent(restaurant.staffEntries) +
+        StaffRoleService.accountantOngoingCostReductionPercent(
+            restaurant.staffEntries);
+    final ongoingCostReductionPercent =
+        StaffRoleService.accountantOngoingCostReductionPercent(
+            restaurant.staffEntries);
+    final reducedMedicPerWeek = StaffRoleService.reduceByPercent(
+        medicPerWeek, ongoingCostReductionPercent);
+    final reducedWagePerWeek =
+        StaffRoleService.reduceByPercent(wagePerWeek, staffCostReductionPercent);
+    final reducedUpkeepPerWeek = StaffRoleService.reduceByPercent(
+        upkeepPerWeek, ongoingCostReductionPercent);
+
     var budget = restaurant.budget;
     var totalIncome = 0;
     var totalMedic = 0;
     var totalWage = 0;
     var totalUpkeep = 0;
     var totalInterest = 0;
+    var totalPenalty = 0;
+    // `11a` E16: Tage im laufenden Block, an denen die Kreative Buchführung
+    // alle laufenden Kosten negiert (tagesanteilig am Blockende).
+    var negatedCostDays = 0;
+    // `11a` E14: im laufenden Block aufgelaufene Strafen (Sabotage).
+    var penaltyForBlock = 0;
+    // `11a` E14: zusätzliche Tageserträge aus einem Sabotage-Fenster.
+    var sabotageBonusForBlock = 0;
     final settlements = <WeekSettlement>[];
     var cursor = lastSeen;
 
@@ -537,35 +573,66 @@ class GameClockService {
       // `11a`: Ein aktives Feature schüttet je Tagestick XP an sein Ziel aus
       // (wie nach einem Gefechtssieg) – anker-basiert und damit idempotent.
       _applyFeatureDailyXp(restaurant, cursor);
+      // `11a` E16: Kreative Buchführung negiert tagesanteilig die Kosten.
+      if (_creativeAccountingActive(restaurant, cursor)) negatedCostDays++;
+      // `11a` E14: Tagesgenauer Einkommens-Bonus eines Sabotage-Fensters
+      // (der Rivale verliert Kunden – die wechseln zum Spieler über).
+      final sabotagePercent =
+          RivalService.sabotageIncomeBonusPercent(restaurant, cursor);
+      if (sabotagePercent > 0) {
+        final bonus = (dailyIncome * sabotagePercent / 100).round();
+        budget += bonus;
+        totalIncome += bonus;
+        sabotageBonusForBlock += bonus;
+      }
+      // `11a` E14: fällige Sabotagen werden taggenau aufgelöst (idempotent über
+      // `featureResolvedAt`) – Erfolg ⇒ Wirkungsfenster, Misserfolg ⇒ Strafe.
+      // Die Strafe wird hier im lokalen Wochenbudget gebucht (die Auflösung
+      // selbst fasst `restaurant.budget` nicht an).
+      final penalty = _resolveDueSabotage(restaurant, cursor);
+      if (penalty > 0) {
+        budget -= penalty;
+        penaltyForBlock += penalty;
+      }
 
       if (!isBlockEnd) continue;
 
       // Blockende: wöchentliche Kosten und Zinsen (§ 8/§ 10) – die Zinsen
       // werden auf den jeweiligen Saldo am Blockende angewandt.
-      budget -= medicPerWeek;
-      totalMedic += medicPerWeek;
-      budget -= wagePerWeek;
-      totalWage += wagePerWeek;
-      budget -= upkeepPerWeek;
-      totalUpkeep += upkeepPerWeek;
+      final blockMedic = _negateCostDays(reducedMedicPerWeek, negatedCostDays);
+      final blockWage = _negateCostDays(reducedWagePerWeek, negatedCostDays);
+      final blockUpkeep =
+          _negateCostDays(reducedUpkeepPerWeek, negatedCostDays);
+      budget -= blockMedic;
+      totalMedic += blockMedic;
+      budget -= blockWage;
+      totalWage += blockWage;
+      budget -= blockUpkeep;
+      totalUpkeep += blockUpkeep;
       final beforeInterest = budget;
       budget = EconomyService.applyNegativeInterest(budget);
       final interest = beforeInterest - budget;
       totalInterest += interest;
+      totalPenalty += penaltyForBlock;
 
       settlements.add(WeekSettlement(
         weekIndex: settlements.length,
         periodStart: weekAnchor,
         periodEnd: weekAnchor.add(week),
-        income: incomePerDay * 6 + incomeLastDayOfBlock,
-        medicCosts: medicPerWeek,
-        staffCosts: wagePerWeek,
-        upgradeUpkeep: upkeepPerWeek,
+        income:
+            incomePerDay * 6 + incomeLastDayOfBlock + sabotageBonusForBlock,
+        medicCosts: blockMedic,
+        staffCosts: blockWage,
+        upgradeUpkeep: blockUpkeep,
         negativeInterest: interest,
+        penaltyCosts: penaltyForBlock,
         budgetAfter: budget,
       ));
       // Wochenraster exakt eine Woche weiterziehen (kein Drift).
       weekAnchor = weekAnchor.add(week);
+      negatedCostDays = 0;
+      penaltyForBlock = 0;
+      sabotageBonusForBlock = 0;
       // V9 (Phase 3): Am Block-Ende werden Vitalität/Moral auf den Basiswert
       // aufgefüllt (deterministisch aus Persönlichkeit + Charakter-ID).
       // `11a`: In der Nachteilphase eines Features nur mit halbem Delta.
@@ -593,12 +660,45 @@ class GameClockService {
       staffCosts: totalWage,
       upgradeUpkeep: totalUpkeep,
       negativeInterest: totalInterest,
+      penaltyCosts: totalPenalty,
       budgetAfter: budget,
       bankrupt: EconomyService.isBankrupt(budget),
       settlements: settlements,
       leftoverDays: leftoverDays,
       leftoverIncome: incomePerDay * leftoverDays,
     );
+  }
+
+  /// `true`, wenn die **Kreative Buchführung** zum Zeitpunkt [now] läuft
+  /// (negiert die laufenden Kosten des Tages, `11a` E16).
+  static bool _creativeAccountingActive(
+    RestaurantData restaurant,
+    DateTime now,
+  ) =>
+      ManagementFeatureService.activeEntry(
+        restaurant.staffEntries,
+        ManagementFeature.creativeAccounting,
+        now,
+      ) !=
+      null;
+
+  /// Mindert [amount] um den Tagesanteil der negierten Kostentage eines Blocks
+  /// (`negatedDays` von 7) – kaufmännisch gerundet (`11a` E16).
+  static int _negateCostDays(int amount, int negatedDays) {
+    if (negatedDays <= 0) return amount;
+    if (negatedDays >= 7) return 0;
+    return amount - (amount * negatedDays / 7).round();
+  }
+
+  /// Löst alle fälligen Sabotagen des Restaurants zum Zeitpunkt [now] auf und
+  /// gibt die dabei aufgelaufenen Strafen zurück (`11a` E14).
+  static int _resolveDueSabotage(RestaurantData restaurant, DateTime now) {
+    var penalties = 0;
+    for (final entry in restaurant.staffEntries) {
+      final outcome = RivalService.resolveSabotage(restaurant, entry, now);
+      if (outcome != null) penalties += outcome.fine;
+    }
+    return penalties;
   }
 
   // ── Eingangswerte aus dem Restaurant-Zustand (§ 8) ────────────────────

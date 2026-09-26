@@ -471,6 +471,79 @@ class AppLocalizationsDe extends AppLocalizations {
   String get managementFeatureActivationFailed => 'Aktivierung nicht möglich.';
 
   @override
+  String get managementRoleChefSecretary => 'Chefsekretärin';
+
+  @override
+  String get managementRoleEffectChefSecretary =>
+      'Senkt Mitarbeiter- und Erweiterungs-Anschaffungskosten.';
+
+  @override
+  String get managementRoleLawyer => 'Rechtsanwalt';
+
+  @override
+  String get managementRoleEffectLawyer => 'Senkt erlittene Strafen.';
+
+  @override
+  String get managementRoleAccountant => 'Buchhalter';
+
+  @override
+  String get managementRoleEffectAccountant => 'Senkt alle laufenden Kosten.';
+
+  @override
+  String get managementFeatureSabotage => 'Sabotage';
+
+  @override
+  String get managementFeatureSabotageEffect =>
+      'Aktive Fertigkeit: externe Kräfte sabotieren ein Rivalen-Restaurant.';
+
+  @override
+  String get managementFeatureLegalTrick => 'Winkelzug';
+
+  @override
+  String get managementFeatureLegalTrickEffect =>
+      'Aktive Fertigkeit: mildert eine eintreffende Strafe.';
+
+  @override
+  String get managementFeatureCreativeAccounting => 'Kreative Buchführung';
+
+  @override
+  String get managementFeatureCreativeAccountingEffect =>
+      'Aktive Fertigkeit: negiert befristet alle laufenden Kosten; danach Burnout.';
+
+  @override
+  String get managementSabotageSelectTarget => 'Ziel der Sabotage wählen';
+
+  @override
+  String managementSabotageSuccessChance(int percent) {
+    return 'Erfolgschance $percent %';
+  }
+
+  @override
+  String get managementSabotageNoRivals =>
+      'Kein Rivale im Stadtteil verfügbar.';
+
+  @override
+  String managementSabotagePending(String time) {
+    return 'Sabotage läuft bis $time';
+  }
+
+  @override
+  String managementSabotageEffect(String time) {
+    return 'Sabotage wirkt bis $time';
+  }
+
+  @override
+  String get rivalsSection => 'Konkurrenz im Stadtteil';
+
+  @override
+  String rivalCount(int count) {
+    return '$count Rivalen';
+  }
+
+  @override
+  String get rivalSabotaged => 'sabotiert';
+
+  @override
   String get transferTo => 'Verschieben nach …';
 
   @override

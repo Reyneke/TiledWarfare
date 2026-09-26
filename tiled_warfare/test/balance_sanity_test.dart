@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tiled_warfare/models/management_feature.dart';
+import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
@@ -402,6 +404,83 @@ void main() {
           competence++) {
         expect(ManagementFeatureService.boostPercentFor(competence),
             greaterThan(0));
+      }
+    });
+
+    test('Verwaltungsrollen (11a E12) sind vollständig balanciert', () {
+      for (final role in kAllManagementRoles) {
+        expect(
+          EconomyBalance.managementRoleWagePerWeek[role],
+          isNotNull,
+          reason: 'Fehlender Wochenlohn für $role',
+        );
+        expect(
+          EconomyBalance.managementRoleWagePerWeek[role]!,
+          greaterThan(0),
+        );
+      }
+      expect(EconomyBalance.chefSecretaryStaffCostReductionPercent,
+          inExclusiveRange(0, 100));
+      expect(EconomyBalance.chefSecretaryUpgradeCostReductionPercent,
+          inExclusiveRange(0, 100));
+      expect(
+          EconomyBalance.lawyerPenaltyReductionPercent, inExclusiveRange(0, 100));
+      expect(EconomyBalance.accountantOngoingCostReductionPercent,
+          inExclusiveRange(0, 100));
+      // Ein Kompetenz-4-Winkelzug allein erreicht die Negation.
+      expect(
+        EconomyBalance.featureCompetenceMax *
+            EconomyBalance.legalTrickPenaltyReductionPercentPerStep,
+        greaterThanOrEqualTo(100),
+      );
+    });
+
+    test('Features der Verwaltungsrollen (11a E14–E16) sind konsistent', () {
+      for (final feature in kAllManagementFeatures) {
+        final cost = ManagementFeatureService.fixedCostOf(feature);
+        if (cost != null) expect(cost, greaterThan(0));
+      }
+      // Sabotage: Vorlauf-, Wirkungs- und Nachlauf-Fenster + Strafe.
+      expect(EconomyBalance.sabotageActiveDuration, greaterThan(Duration.zero));
+      expect(EconomyBalance.sabotageEffectDuration, greaterThan(Duration.zero));
+      expect(
+          EconomyBalance.sabotageAftermathDuration, greaterThan(Duration.zero));
+      expect(EconomyBalance.sabotageCost, greaterThan(0));
+      expect(EconomyBalance.sabotageCaughtFine, greaterThan(0));
+      // Die Erfolgschance bleibt auch mit maximaler Kompetenz ein Wurf.
+      expect(
+        EconomyBalance.sabotageBaseSuccessPercent +
+            EconomyBalance.featureCompetenceMax *
+                EconomyBalance.sabotageSuccessPercentPerStep,
+        inExclusiveRange(0, 100),
+      );
+      // Kreative Buchführung: mindestens ein Tagestick Negation.
+      expect(EconomyBalance.creativeAccountingPerCompetence,
+          greaterThanOrEqualTo(EconomyBalance.dailyTick));
+      expect(
+        EconomyBalance.creativeAccountingAftermathPerCompetence,
+        greaterThan(Duration.zero),
+      );
+    });
+
+    test('Rivalen-Anzahl (Kapitel 13) ist geordnet und gedeckelt', () {
+      expect(EconomyBalance.rivalCountPrestigeS,
+          greaterThan(EconomyBalance.rivalCountPrestigeA));
+      expect(EconomyBalance.rivalCountPrestigeA,
+          greaterThan(EconomyBalance.rivalCountPrestigeB));
+      expect(EconomyBalance.rivalCountPrestigeB,
+          greaterThan(EconomyBalance.rivalCountPrestigeC));
+      expect(EconomyBalance.rivalCountMin, lessThan(EconomyBalance.rivalCountMax));
+      for (final count in [
+        EconomyBalance.rivalCountS,
+        EconomyBalance.rivalCountA,
+        EconomyBalance.rivalCountB,
+        EconomyBalance.rivalCountC,
+        EconomyBalance.rivalCountD,
+      ]) {
+        expect(count,
+            inInclusiveRange(
+                EconomyBalance.rivalCountMin, EconomyBalance.rivalCountMax));
       }
     });
   });

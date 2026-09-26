@@ -465,6 +465,79 @@ class AppLocalizationsEn extends AppLocalizations {
   String get managementFeatureActivationFailed => 'Activation not possible.';
 
   @override
+  String get managementRoleChefSecretary => 'Head secretary';
+
+  @override
+  String get managementRoleEffectChefSecretary =>
+      'Lowers staff costs and upgrade purchase costs.';
+
+  @override
+  String get managementRoleLawyer => 'Lawyer';
+
+  @override
+  String get managementRoleEffectLawyer => 'Lowers incurred penalties.';
+
+  @override
+  String get managementRoleAccountant => 'Accountant';
+
+  @override
+  String get managementRoleEffectAccountant => 'Lowers all ongoing costs.';
+
+  @override
+  String get managementFeatureSabotage => 'Sabotage';
+
+  @override
+  String get managementFeatureSabotageEffect =>
+      'Active ability: outside forces sabotage a rival restaurant.';
+
+  @override
+  String get managementFeatureLegalTrick => 'Legal trick';
+
+  @override
+  String get managementFeatureLegalTrickEffect =>
+      'Active ability: softens an incoming penalty.';
+
+  @override
+  String get managementFeatureCreativeAccounting => 'Creative accounting';
+
+  @override
+  String get managementFeatureCreativeAccountingEffect =>
+      'Active ability: negates all ongoing costs for a while; then burnout.';
+
+  @override
+  String get managementSabotageSelectTarget => 'Choose sabotage target';
+
+  @override
+  String managementSabotageSuccessChance(int percent) {
+    return 'Success chance $percent %';
+  }
+
+  @override
+  String get managementSabotageNoRivals =>
+      'No rival available in this district.';
+
+  @override
+  String managementSabotagePending(String time) {
+    return 'Sabotage runs until $time';
+  }
+
+  @override
+  String managementSabotageEffect(String time) {
+    return 'Sabotage effective until $time';
+  }
+
+  @override
+  String get rivalsSection => 'District competition';
+
+  @override
+  String rivalCount(int count) {
+    return '$count rivals';
+  }
+
+  @override
+  String get rivalSabotaged => 'sabotaged';
+
+  @override
   String get transferTo => 'Move to …';
 
   @override

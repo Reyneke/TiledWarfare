@@ -1,3 +1,4 @@
+import 'package:random_name_generator/random_name_generator.dart';
 import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
@@ -214,12 +215,38 @@ class EconomyBalance {
   /// `11a`).
   static const Map<ManagementRole, int> managementRoleWagePerWeek = {
     ManagementRole.socialMediaManager: 180,
+    ManagementRole.chefSecretary: 220,
+    ManagementRole.lawyer: 260,
+    ManagementRole.accountant: 200,
   };
 
   /// Einkommens-Zuschlag des **Social Media Manager** auf das passive Einkommen
   /// (Prozent, binär – Entscheidung E3 in `11a`). Stapelt **additiv** mit dem
   /// Aboyeur-Zuschlag (`aboyeurIncomePercent`).
   static const int socialMediaManagerIncomePercent = 10;
+
+  // ── Verwaltungsrollen: passive Effekte (`11a` E12) ────────────────────
+  //
+  // Alle drei Effekte sind **binär** (Anwesenheit der Rolle) und werden
+  // kaufmännisch gerundet – wie die übrigen Prozent-Effekte der Rollen.
+
+  /// Chefsekretärin: Abzug auf die laufenden **Mitarbeiterkosten** (Prozent).
+  static const int chefSecretaryStaffCostReductionPercent = 5;
+
+  /// Chefsekretärin: Abzug auf die **Anschaffungskosten von Erweiterungen**
+  /// (Prozent) – wirkt im Kauf (`ObjectProfile.buyUpgrade`), nicht im Unterhalt.
+  static const int chefSecretaryUpgradeCostReductionPercent = 5;
+
+  /// Rechtsanwalt: Abzug auf **erlittene Strafen** (Prozent).
+  ///
+  /// Stapelt **additiv** mit dem aktiven Feature „Winkelzug“ (E15) und wird bei
+  /// vollständiger Negation auf 100 % gedeckelt
+  /// (`StaffRoleService.penaltyReductionPercent`).
+  static const int lawyerPenaltyReductionPercent = 25;
+
+  /// Buchhalter: Abzug auf **alle laufenden Kosten** – Löhne, Arztkosten und
+  /// Erweiterungs-Unterhalt (Prozent).
+  static const int accountantOngoingCostReductionPercent = 5;
 
   // ── Features: aktive Sonderfertigkeiten (11a) ──────────────────────────
 
@@ -247,6 +274,64 @@ class EconomyBalance {
 
   /// Anteil des Refill-Deltas, der in der Nachteilphase noch aufgefüllt wird.
   static const double featureAftermathRefillFraction = 0.5;
+
+  // ── Feature „Sabotage“ (Chefsekretärin, `11a` E14 / Kapitel 13) ────────
+
+  /// Einmalkosten der Sabotage (externe Kräfte, die nicht zurückverfolgt werden).
+  static const int sabotageCost = 2500;
+
+  /// Planungs-/Vorlaufzeit: Nach dieser Dauer wird die Sabotage aufgelöst.
+  static const Duration sabotageActiveDuration = weeklyTick;
+
+  /// Nachteilphase („Abtauchen“) nach der Auflösung – keine neue Sabotage.
+  static const Duration sabotageAftermathDuration = weeklyTick;
+
+  /// Grund-Erfolgswahrscheinlichkeit (Prozent) vor dem Kompetenz-Zuschlag.
+  static const int sabotageBaseSuccessPercent = 40;
+
+  /// Erfolgs-Zuschlag je Kompetenz-Stufe des Trägers (Prozent).
+  static const int sabotageSuccessPercentPerStep = 10;
+
+  /// Dauer der Sabotage-Wirkung nach einem Erfolg (Fenster).
+  static const Duration sabotageEffectDuration = weeklyTick;
+
+  /// Einkommens-Zuschlag des Spielers, solange die Sabotage wirkt (Prozent) –
+  /// die Kunden des getroffenen Rivalen wechseln über.
+  static const int sabotageIncomeBonusPercent = 15;
+
+  /// Prestige-Malus des getroffenen Rivalen, solange die Sabotage wirkt (Prozent).
+  static const int sabotageRivalPrestigePenaltyPercent = 25;
+
+  /// Strafe, wenn die Sabotage auffliegt (Euro). Wird um die
+  /// Strafen-Minderung des Rechtsanwalts reduziert
+  /// (`StaffRoleService.penaltyReductionPercent`).
+  static const int sabotageCaughtFine = 3000;
+
+  // ── Feature „Winkelzug“ (Rechtsanwalt, `11a` E15) ─────────────────────
+
+  /// Einmalkosten des Winkelzugs („hohe laufende Kosten“ als Sofortbuchung).
+  static const int legalTrickCost = 1500;
+
+  /// Aktives Fenster des Winkelzugs – eintreffende Strafen werden gemildert.
+  static const Duration legalTrickActiveDuration = weeklyTick;
+
+  /// Nachteilphase des Winkelzugs (Aktenberge) – keine erneute Aktivierung.
+  static const Duration legalTrickAftermathDuration = Duration(days: 3);
+
+  /// Strafen-Minderung je Kompetenz-Stufe des Trägers (Prozent).
+  static const int legalTrickPenaltyReductionPercentPerStep = 25;
+
+  // ── Feature „Kreative Buchführung“ (Buchhalter, `11a` E16) ────────────
+
+  /// Einmalkosten der Aktivierung.
+  static const int creativeAccountingCost = 1000;
+
+  /// Dauer der Kosten-Negation je Kompetenz-Stufe (mindestens ein Tagestick).
+  static const Duration creativeAccountingPerCompetence = dailyTick;
+
+  /// Burnout-Dauer je Kompetenz-Stufe (= Nachteilphase, keine erneute
+  /// Aktivierung; der Anteil der Kosten-Negation entspricht der aktiven Phase).
+  static const Duration creativeAccountingAftermathPerCompetence = dailyTick;
 
   /// Refill-Bonus der Rolle `Communard` auf die Kollegen (Prozent).
   /// Stapelt sich additiv mit dem Pâtissier-Bonus (V10 § 2).
@@ -496,6 +581,31 @@ class EconomyBalance {
   /// Liefert das Prestige eines Stadtteils (Default 1.0, falls unbekannt/null).
   static double districtPrestigeFor(String? district) =>
       (district != null ? districtPrestige[district] : null) ?? 1.0;
+
+  // ── Rivalen (Kapitel 13, Minimal-Modul V11) ───────────────────────────
+  //
+  // Die Rivalen-Anzahl folgt dem Prestige-Tier des Stadtteils
+  // (`12_Power_Projection.md` → „Ranking“, `13_Gegner_Restaurants.md`).
+
+  /// Prestige-Schwellen der Tiers S/A/B/C (Tier D unterhalb von C).
+  static const double rivalCountPrestigeS = 2.00;
+  static const double rivalCountPrestigeA = 1.60;
+  static const double rivalCountPrestigeB = 1.30;
+  static const double rivalCountPrestigeC = 1.00;
+
+  /// Rivalen-Anzahl je Tier (S/A/B/C/D).
+  static const int rivalCountS = 8;
+  static const int rivalCountA = 6;
+  static const int rivalCountB = 5;
+  static const int rivalCountC = 4;
+  static const int rivalCountD = 3;
+
+  /// Untere/obere Grenze der abgeleiteten Rivalen-Anzahl.
+  static const int rivalCountMin = 3;
+  static const int rivalCountMax = 8;
+
+  /// Namens-Zone der Rivalen (Manhattan-Nachbarschaften → US-Namensstamm).
+  static Zone get rivalNameZone => Zone.us;
 
   // ── Zinsen ────────────────────────────────────────────────────────────
 

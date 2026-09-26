@@ -878,6 +878,126 @@ abstract class AppLocalizations {
   /// **'Aktivierung nicht möglich.'**
   String get managementFeatureActivationFailed;
 
+  /// Rolle: Chefsekretärin (11a E12)
+  ///
+  /// In de, this message translates to:
+  /// **'Chefsekretärin'**
+  String get managementRoleChefSecretary;
+
+  /// Wirkung: Chefsekretärin
+  ///
+  /// In de, this message translates to:
+  /// **'Senkt Mitarbeiter- und Erweiterungs-Anschaffungskosten.'**
+  String get managementRoleEffectChefSecretary;
+
+  /// Rolle: Rechtsanwalt (11a E12)
+  ///
+  /// In de, this message translates to:
+  /// **'Rechtsanwalt'**
+  String get managementRoleLawyer;
+
+  /// Wirkung: Rechtsanwalt
+  ///
+  /// In de, this message translates to:
+  /// **'Senkt erlittene Strafen.'**
+  String get managementRoleEffectLawyer;
+
+  /// Rolle: Buchhalter (11a E12)
+  ///
+  /// In de, this message translates to:
+  /// **'Buchhalter'**
+  String get managementRoleAccountant;
+
+  /// Wirkung: Buchhalter
+  ///
+  /// In de, this message translates to:
+  /// **'Senkt alle laufenden Kosten.'**
+  String get managementRoleEffectAccountant;
+
+  /// Feature: Sabotage (Chefsekretärin, 11a E14)
+  ///
+  /// In de, this message translates to:
+  /// **'Sabotage'**
+  String get managementFeatureSabotage;
+
+  /// Wirkung: Sabotage
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: externe Kräfte sabotieren ein Rivalen-Restaurant.'**
+  String get managementFeatureSabotageEffect;
+
+  /// Feature: Winkelzug (Rechtsanwalt, 11a E15)
+  ///
+  /// In de, this message translates to:
+  /// **'Winkelzug'**
+  String get managementFeatureLegalTrick;
+
+  /// Wirkung: Winkelzug
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: mildert eine eintreffende Strafe.'**
+  String get managementFeatureLegalTrickEffect;
+
+  /// Feature: Kreative Buchführung (Buchhalter, 11a E16)
+  ///
+  /// In de, this message translates to:
+  /// **'Kreative Buchführung'**
+  String get managementFeatureCreativeAccounting;
+
+  /// Wirkung: Kreative Buchführung
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: negiert befristet alle laufenden Kosten; danach Burnout.'**
+  String get managementFeatureCreativeAccountingEffect;
+
+  /// Dialogtitel: Rivale für die Sabotage wählen
+  ///
+  /// In de, this message translates to:
+  /// **'Ziel der Sabotage wählen'**
+  String get managementSabotageSelectTarget;
+
+  /// Erfolgswahrscheinlichkeit einer Sabotage
+  ///
+  /// In de, this message translates to:
+  /// **'Erfolgschance {percent} %'**
+  String managementSabotageSuccessChance(int percent);
+
+  /// Hinweis: keine Rivalen im Stadtteil
+  ///
+  /// In de, this message translates to:
+  /// **'Kein Rivale im Stadtteil verfügbar.'**
+  String get managementSabotageNoRivals;
+
+  /// Laufende Sabotage (Auflösung im Wochentick)
+  ///
+  /// In de, this message translates to:
+  /// **'Sabotage läuft bis {time}'**
+  String managementSabotagePending(String time);
+
+  /// Wirkungsfenster einer erfolgreichen Sabotage
+  ///
+  /// In de, this message translates to:
+  /// **'Sabotage wirkt bis {time}'**
+  String managementSabotageEffect(String time);
+
+  /// Abschnitt: Rivalen-Restaurants (Kapitel 13)
+  ///
+  /// In de, this message translates to:
+  /// **'Konkurrenz im Stadtteil'**
+  String get rivalsSection;
+
+  /// Anzahl der Rivalen im Stadtteil
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Rivalen'**
+  String rivalCount(int count);
+
+  /// Status: Rivale ist sabotiert
+  ///
+  /// In de, this message translates to:
+  /// **'sabotiert'**
+  String get rivalSabotaged;
+
   /// Aktion: Personal in ein eigenes Restaurant verschieben (V10)
   ///
   /// In de, this message translates to:

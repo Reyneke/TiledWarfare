@@ -1125,10 +1125,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     final spec = EconomyBalance.upgrades[type]!;
     final level = _profile.upgradeLevel(type);
     final maxed = level >= spec.maxLevel;
-    final nextCost = maxed
-        ? 0
-        : EconomyService.upgradeCost(type, level + 1) -
-            EconomyService.upgradeCost(type, level);
+    final nextCost = maxed ? 0 : _profile.upgradePurchaseCost(type);
     final upkeep = EconomyService.upgradeUpkeepPerWeek(type, level);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),

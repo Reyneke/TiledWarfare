@@ -554,6 +554,76 @@
   "@managementFeatureActivationFailed": {
     "description": "Error: feature could not be activated"
   },
+  "managementRoleChefSecretary": "Head secretary",
+  "@managementRoleChefSecretary": {
+    "description": "Role: head secretary (11a E12)"
+  },
+  "managementRoleEffectChefSecretary": "Lowers staff costs and upgrade purchase costs.",
+  "@managementRoleEffectChefSecretary": {
+    "description": "Effect: head secretary"
+  },
+  "managementRoleLawyer": "Lawyer",
+  "@managementRoleLawyer": { "description": "Role: lawyer (11a E12)" },
+  "managementRoleEffectLawyer": "Lowers incurred penalties.",
+  "@managementRoleEffectLawyer": { "description": "Effect: lawyer" },
+  "managementRoleAccountant": "Accountant",
+  "@managementRoleAccountant": { "description": "Role: accountant (11a E12)" },
+  "managementRoleEffectAccountant": "Lowers all ongoing costs.",
+  "@managementRoleEffectAccountant": { "description": "Effect: accountant" },
+  "managementFeatureSabotage": "Sabotage",
+  "@managementFeatureSabotage": {
+    "description": "Feature: sabotage (head secretary, 11a E14)"
+  },
+  "managementFeatureSabotageEffect": "Active ability: outside forces sabotage a rival restaurant.",
+  "@managementFeatureSabotageEffect": { "description": "Effect: sabotage" },
+  "managementFeatureLegalTrick": "Legal trick",
+  "@managementFeatureLegalTrick": {
+    "description": "Feature: legal trick (lawyer, 11a E15)"
+  },
+  "managementFeatureLegalTrickEffect": "Active ability: softens an incoming penalty.",
+  "@managementFeatureLegalTrickEffect": { "description": "Effect: legal trick" },
+  "managementFeatureCreativeAccounting": "Creative accounting",
+  "@managementFeatureCreativeAccounting": {
+    "description": "Feature: creative accounting (accountant, 11a E16)"
+  },
+  "managementFeatureCreativeAccountingEffect": "Active ability: negates all ongoing costs for a while; then burnout.",
+  "@managementFeatureCreativeAccountingEffect": {
+    "description": "Effect: creative accounting"
+  },
+  "managementSabotageSelectTarget": "Choose sabotage target",
+  "@managementSabotageSelectTarget": {
+    "description": "Dialog title: choose the rival to sabotage"
+  },
+  "managementSabotageSuccessChance": "Success chance {percent} %",
+  "@managementSabotageSuccessChance": {
+    "description": "Success probability of a sabotage",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "managementSabotageNoRivals": "No rival available in this district.",
+  "@managementSabotageNoRivals": {
+    "description": "Hint: no rivals in the district"
+  },
+  "managementSabotagePending": "Sabotage runs until {time}",
+  "@managementSabotagePending": {
+    "description": "Running sabotage (resolved in the weekly tick)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementSabotageEffect": "Sabotage effective until {time}",
+  "@managementSabotageEffect": {
+    "description": "Effect window of a successful sabotage",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "rivalsSection": "District competition",
+  "@rivalsSection": {
+    "description": "Section: rival restaurants (chapter 13)"
+  },
+  "rivalCount": "{count} rivals",
+  "@rivalCount": {
+    "description": "Number of rivals in the district",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "rivalSabotaged": "sabotaged",
+  "@rivalSabotaged": { "description": "Status: rival is sabotaged" },
   "transferTo": "Move to …",
   "@transferTo": {
     "description": "Action: move staff to one of your own restaurants (V10)"

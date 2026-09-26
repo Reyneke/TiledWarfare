@@ -554,6 +554,76 @@
   "@managementFeatureActivationFailed": {
     "description": "Fehlermeldung: Feature konnte nicht aktiviert werden"
   },
+  "managementRoleChefSecretary": "Chefsekretärin",
+  "@managementRoleChefSecretary": {
+    "description": "Rolle: Chefsekretärin (11a E12)"
+  },
+  "managementRoleEffectChefSecretary": "Senkt Mitarbeiter- und Erweiterungs-Anschaffungskosten.",
+  "@managementRoleEffectChefSecretary": {
+    "description": "Wirkung: Chefsekretärin"
+  },
+  "managementRoleLawyer": "Rechtsanwalt",
+  "@managementRoleLawyer": { "description": "Rolle: Rechtsanwalt (11a E12)" },
+  "managementRoleEffectLawyer": "Senkt erlittene Strafen.",
+  "@managementRoleEffectLawyer": { "description": "Wirkung: Rechtsanwalt" },
+  "managementRoleAccountant": "Buchhalter",
+  "@managementRoleAccountant": { "description": "Rolle: Buchhalter (11a E12)" },
+  "managementRoleEffectAccountant": "Senkt alle laufenden Kosten.",
+  "@managementRoleEffectAccountant": { "description": "Wirkung: Buchhalter" },
+  "managementFeatureSabotage": "Sabotage",
+  "@managementFeatureSabotage": {
+    "description": "Feature: Sabotage (Chefsekretärin, 11a E14)"
+  },
+  "managementFeatureSabotageEffect": "Aktive Fertigkeit: externe Kräfte sabotieren ein Rivalen-Restaurant.",
+  "@managementFeatureSabotageEffect": { "description": "Wirkung: Sabotage" },
+  "managementFeatureLegalTrick": "Winkelzug",
+  "@managementFeatureLegalTrick": {
+    "description": "Feature: Winkelzug (Rechtsanwalt, 11a E15)"
+  },
+  "managementFeatureLegalTrickEffect": "Aktive Fertigkeit: mildert eine eintreffende Strafe.",
+  "@managementFeatureLegalTrickEffect": { "description": "Wirkung: Winkelzug" },
+  "managementFeatureCreativeAccounting": "Kreative Buchführung",
+  "@managementFeatureCreativeAccounting": {
+    "description": "Feature: Kreative Buchführung (Buchhalter, 11a E16)"
+  },
+  "managementFeatureCreativeAccountingEffect": "Aktive Fertigkeit: negiert befristet alle laufenden Kosten; danach Burnout.",
+  "@managementFeatureCreativeAccountingEffect": {
+    "description": "Wirkung: Kreative Buchführung"
+  },
+  "managementSabotageSelectTarget": "Ziel der Sabotage wählen",
+  "@managementSabotageSelectTarget": {
+    "description": "Dialogtitel: Rivale für die Sabotage wählen"
+  },
+  "managementSabotageSuccessChance": "Erfolgschance {percent} %",
+  "@managementSabotageSuccessChance": {
+    "description": "Erfolgswahrscheinlichkeit einer Sabotage",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "managementSabotageNoRivals": "Kein Rivale im Stadtteil verfügbar.",
+  "@managementSabotageNoRivals": {
+    "description": "Hinweis: keine Rivalen im Stadtteil"
+  },
+  "managementSabotagePending": "Sabotage läuft bis {time}",
+  "@managementSabotagePending": {
+    "description": "Laufende Sabotage (Auflösung im Wochentick)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementSabotageEffect": "Sabotage wirkt bis {time}",
+  "@managementSabotageEffect": {
+    "description": "Wirkungsfenster einer erfolgreichen Sabotage",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "rivalsSection": "Konkurrenz im Stadtteil",
+  "@rivalsSection": {
+    "description": "Abschnitt: Rivalen-Restaurants (Kapitel 13)"
+  },
+  "rivalCount": "{count} Rivalen",
+  "@rivalCount": {
+    "description": "Anzahl der Rivalen im Stadtteil",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "rivalSabotaged": "sabotiert",
+  "@rivalSabotaged": { "description": "Status: Rivale ist sabotiert" },
   "transferTo": "Verschieben nach …",
   "@transferTo": {
     "description": "Aktion: Personal in ein eigenes Restaurant verschieben (V10)"

@@ -17,10 +17,13 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 3 = Personal-Identität/Attribute (V9), Version 4 = Karriere-Rang &
 /// Station (Karrierepfade, V10), Version 5 = Hilfs-/Service-Rollen (V10),
 /// Version 6 = generalisiertes Nicht-Kampf-Personal (`StaffEntryData`, Option C),
-/// Version 7 = aktive Features des Nicht-Kampf-Personals (`11a`).
+/// Version 7 = aktive Features des Nicht-Kampf-Personals (`11a`),
+/// Version 8 = Verwaltungsrollen-Features & Rivalen-Minimal-Modul (`11a` E12–E17,
+/// Kapitel 13): `StaffEntryData.featureResolvedAt` sowie
+/// `RestaurantData.sabotageTargetId`/`sabotageAppliedUntil` (additiv/tolerant).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 7;
+const int kProfileSchemaVersion = 8;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -536,6 +539,17 @@ class RestaurantData {
   /// Ausbaustufen der Restaurant-Erweiterungen (§ 10).
   Map<UpgradeType, int> upgrades;
 
+  /// Ziel der letzten **erfolgreichen** Sabotage (Rivalen-ID, `13`/`11a` E14).
+  ///
+  /// `null`, wenn keine Sabotage wirkt. Der Rivale selbst ist deterministisch
+  /// abgeleitet (`RivalService`), deshalb wird nur das Wirkungsfenster
+  /// persistiert.
+  int? sabotageTargetId;
+
+  /// Ende des Sabotage-Wirkungsfensters (Einkommens-Bonus des Spielers;
+  /// Prestige-Malus des Rivalen im Roster).
+  DateTime? sabotageAppliedUntil;
+
   RestaurantData({
     this.id = -1,
     required this.name,
@@ -554,6 +568,8 @@ class RestaurantData {
     this.dissolvedAt,
     this.lastMatchResult,
     Map<UpgradeType, int>? upgrades,
+    this.sabotageTargetId,
+    this.sabotageAppliedUntil,
   })  : staff = staff ?? [],
         medics = medics ?? [],
         supportStaff = supportStaff ?? [],
@@ -603,6 +619,9 @@ class RestaurantData {
         'upgrades': {
           for (final entry in upgrades.entries) entry.key.name: entry.value,
         },
+        if (sabotageTargetId != null) 'sabotageTargetId': sabotageTargetId,
+        if (sabotageAppliedUntil != null)
+          'sabotageAppliedUntil': sabotageAppliedUntil!.toIso8601String(),
       };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -629,6 +648,8 @@ class RestaurantData {
         lastMatchResult:
             _matchResultFromName(readString(json['lastMatchResult'])),
         upgrades: _upgradesFromJson(json['upgrades']),
+        sabotageTargetId: readInt(json['sabotageTargetId']),
+        sabotageAppliedUntil: readDateTime(json['sabotageAppliedUntil']),
       );
 
   /// Liest die Erweiterungs-Stufen aus dem JSON (unbekannte Typen werden
@@ -675,6 +696,8 @@ class RestaurantData {
         dissolvedAt: dissolvedAt,
         lastMatchResult: lastMatchResult,
         upgrades: upgrades,
+        sabotageTargetId: sabotageTargetId,
+        sabotageAppliedUntil: sabotageAppliedUntil,
       );
 
   @override

@@ -5,6 +5,7 @@ import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/utils/crc32.dart';
 
 /// Auswertung der **aktiven Features** spezieller Nicht-Kampf-Mitarbeiter
 /// (Option C, `11a`).
@@ -49,13 +50,104 @@ class ManagementFeatureService {
   /// Ende der **aktiven** Phase von [entry] (oder `null`).
   static DateTime? activeEndOf(StaffEntryData entry) {
     final start = entry.featureActivatedAt;
-    return start?.add(EconomyBalance.featureActiveDuration);
+    return start?.add(activeDurationOf(entry));
   }
 
   /// Ende der **Nachteilphase** von [entry] (oder `null`).
   static DateTime? aftermathEndOf(StaffEntryData entry) {
     final end = activeEndOf(entry);
-    return end?.add(EconomyBalance.featureAftermathDuration);
+    return end?.add(aftermathDurationOf(entry));
+  }
+
+  /// Dauer der **aktiven** Phase des von [entry] getragenen Features.
+  ///
+  /// Feature-spezifisch (`11a` E14–E16); die PR-Kampagne nutzt unverändert die
+  /// generischen Fenster aus `EconomyBalance`. Die Kompetenz-abhängigen Fenster
+  /// (Kreative Buchführung) leiten sich aus [competenceOf] ab.
+  static Duration activeDurationOf(StaffEntryData entry) {
+    final feature = managementFeatureFromName(entry.activeFeature);
+    switch (feature) {
+      case ManagementFeature.sabotage:
+        return EconomyBalance.sabotageActiveDuration;
+      case ManagementFeature.legalTrick:
+        return EconomyBalance.legalTrickActiveDuration;
+      case ManagementFeature.creativeAccounting:
+        return EconomyBalance.creativeAccountingPerCompetence *
+            competenceOf(entry);
+      case ManagementFeature.prCampaign:
+      case null:
+        return EconomyBalance.featureActiveDuration;
+    }
+  }
+
+  /// Dauer der **Nachteilphase** des von [entry] getragenen Features.
+  static Duration aftermathDurationOf(StaffEntryData entry) {
+    final feature = managementFeatureFromName(entry.activeFeature);
+    switch (feature) {
+      case ManagementFeature.sabotage:
+        return EconomyBalance.sabotageAftermathDuration;
+      case ManagementFeature.legalTrick:
+        return EconomyBalance.legalTrickAftermathDuration;
+      case ManagementFeature.creativeAccounting:
+        return EconomyBalance.creativeAccountingAftermathPerCompetence *
+            competenceOf(entry);
+      case ManagementFeature.prCampaign:
+      case null:
+        return EconomyBalance.featureAftermathDuration;
+    }
+  }
+
+  /// Feste Einmalkosten eines ziel-losen Features (oder `null`, wenn die Kosten
+  /// mit dem Ziel skalieren – PR-Kampagne, E9).
+  static int? fixedCostOf(ManagementFeature feature) => switch (feature) {
+        ManagementFeature.sabotage => EconomyBalance.sabotageCost,
+        ManagementFeature.legalTrick => EconomyBalance.legalTrickCost,
+        ManagementFeature.creativeAccounting =>
+          EconomyBalance.creativeAccountingCost,
+        ManagementFeature.prCampaign => null,
+      };
+
+  /// Erfolgswahrscheinlichkeit einer Sabotage (Prozent) für den Träger [entry]:
+  /// Grundwert plus Kompetenz-Zuschlag (E14).
+  static int sabotageSuccessPercentFor(StaffEntryData entry) =>
+      EconomyBalance.sabotageBaseSuccessPercent +
+      competenceOf(entry) * EconomyBalance.sabotageSuccessPercentPerStep;
+
+  /// Deterministischer Wurf (0–99) einer Sabotage auf den Rivalen [rivalId].
+  ///
+  /// Abgeleitet aus Träger-ID, Anker der Aktivierung und Rivalen-ID – **kein**
+  /// Zufall im Catch-up (V8-Idempotenz).
+  static int sabotageRollFor(StaffEntryData entry, int rivalId) {
+    final anchor = entry.featureActivatedAt?.toIso8601String() ?? '';
+    return CRC32.compute('sabotage:${entry.id}:$rivalId:$anchor').abs() % 100;
+  }
+
+  /// `true`, wenn die Sabotage von [entry] gegen [rivalId] gelingt.
+  static bool sabotageSucceeds(StaffEntryData entry, int rivalId) =>
+      sabotageRollFor(entry, rivalId) < sabotageSuccessPercentFor(entry);
+
+  /// Strafen-Minderung eines aktiven **Winkelzugs** (Prozent): Kompetenz ×
+  /// `legalTrickPenaltyReductionPercentPerStep` (E15).
+  static int legalTrickReductionPercentFor(StaffEntryData entry) =>
+      competenceOf(entry) *
+      EconomyBalance.legalTrickPenaltyReductionPercentPerStep;
+
+  /// `true`, wenn der Träger [entry] sein Feature zum Zeitpunkt [now] **aktiv**
+  /// trägt (Fenster `[start, start + activeDuration]`, inklusiv).
+  static bool isActiveFor(StaffEntryData entry, DateTime now) {
+    if (entry.activeFeature == null) return false;
+    final start = entry.featureActivatedAt;
+    final end = activeEndOf(entry);
+    if (start == null || end == null) return false;
+    return !now.isBefore(start) && !now.isAfter(end);
+  }
+
+  /// `true`, wenn ein **tick-aufgelöstes** Feature (Sabotage, E14) fällig ist:
+  /// Die aktive Phase ist vorbei, aber die Auflösung wurde noch nicht gebucht.
+  static bool isResolutionDue(StaffEntryData entry, DateTime now) {
+    if (entry.featureResolvedAt != null) return false;
+    final end = activeEndOf(entry);
+    return end != null && !now.isBefore(end);
   }
 
   /// Träger-Eintrag eines Features: der Management-Eintrag, dessen Rolle das
@@ -131,6 +223,7 @@ class ManagementFeatureService {
       entry.activeFeature = null;
       entry.featureTargetId = null;
       entry.featureActivatedAt = null;
+      entry.featureResolvedAt = null;
     }
   }
 

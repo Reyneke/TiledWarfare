@@ -12,6 +12,26 @@ enum ManagementRole {
   /// Die konkrete Wirkung ist in `11a` noch offen (Entscheidung **E3**);
   /// die Balance liefert deshalb bislang nur den Wochenlohn.
   socialMediaManager,
+
+  /// Chefsekretärin – senkt laufende Mitarbeiter- und
+  /// Erweiterungs-Anschaffungskosten (binär, `11a` E12).
+  ///
+  /// Trägt das Feature **Sabotage** („Charmantes Lächeln, rasiermesserscharfe
+  /// Nägel“, E14): externe Kräfte führen einen Angriff auf ein Rivalen-Restaurant
+  /// aus (`13_Gegner_Restaurants.md`).
+  chefSecretary,
+
+  /// Rechtsanwalt – senkt erlittene Strafen (binär, `11a` E12).
+  ///
+  /// Trägt das Feature **Winkelzug** (E15): mildert eine während des Fensters
+  /// eintreffende Strafe – bei hoher Kompetenz bis zur Negation.
+  lawyer,
+
+  /// Buchhalter – senkt alle laufenden Kosten (binär, `11a` E12).
+  ///
+  /// Trägt das Feature **Kreative Buchführung** (E16): negiert befristet alle
+  /// laufenden Kosten und fällt danach (Burnout) aus.
+  accountant,
 }
 
 /// Alle Verwaltungs-/Marketing-Rollen in Anzeige-Reihenfolge.
@@ -34,4 +54,7 @@ ManagementRole? managementRoleFromName(String? roleKey) {
 /// `ManagementFeatureService`/`EconomyBalance`.
 ManagementFeature? managementFeatureOf(ManagementRole role) => switch (role) {
       ManagementRole.socialMediaManager => ManagementFeature.prCampaign,
+      ManagementRole.chefSecretary => ManagementFeature.sabotage,
+      ManagementRole.lawyer => ManagementFeature.legalTrick,
+      ManagementRole.accountant => ManagementFeature.creativeAccounting,
     };

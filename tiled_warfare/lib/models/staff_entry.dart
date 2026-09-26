@@ -64,6 +64,15 @@ class StaffEntryData {
   /// Startzeitpunkt des aktiven Features (Anker des Fensters).
   DateTime? featureActivatedAt;
 
+  /// Zeitpunkt, zu dem ein **tick-aufgelöstes** Feature (Sabotage, `11a` E14)
+  /// abgerechnet wurde – `null`, solange die Auflösung aussteht.
+  ///
+  /// Idempotenz-Marker (V8): Ist er gesetzt, wird dieselbe Aktivierung nicht
+  /// erneut aufgelöst (auch wenn der Catch-up mehrfach mit demselben `now`
+  /// läuft). Er wird zusammen mit den übrigen Feature-Feldern zurückgesetzt
+  /// (`ManagementFeatureService.clearFinished`).
+  DateTime? featureResolvedAt;
+
   StaffEntryData({
     required this.id,
     required this.name,
@@ -74,6 +83,7 @@ class StaffEntryData {
     this.activeFeature,
     this.featureTargetId,
     this.featureActivatedAt,
+    this.featureResolvedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +97,8 @@ class StaffEntryData {
         if (featureTargetId != null) 'featureTargetId': featureTargetId,
         if (featureActivatedAt != null)
           'featureActivatedAt': featureActivatedAt!.toIso8601String(),
+        if (featureResolvedAt != null)
+          'featureResolvedAt': featureResolvedAt!.toIso8601String(),
       };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -100,5 +112,6 @@ class StaffEntryData {
         activeFeature: readString(json['activeFeature']),
         featureTargetId: readInt(json['featureTargetId']),
         featureActivatedAt: readDateTime(json['featureActivatedAt']),
+        featureResolvedAt: readDateTime(json['featureResolvedAt']),
       );
 }

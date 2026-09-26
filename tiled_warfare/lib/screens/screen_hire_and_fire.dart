@@ -6,6 +6,7 @@ import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/personality.dart';
+import 'package:tiled_warfare/models/rival_restaurant.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
@@ -87,10 +88,86 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
 
   /// Startet ein aktives Feature (`11a`): Ziel wählen → aktivieren → speichern.
   ///
-  /// Die Einmalkosten (Level des Ziels × 1000 €) bucht `ObjectProfile`
-  /// unmittelbar beim Aktivieren ab; die Wirkung läuft danach über die
-  /// Zeitanker des Catch-ups.
+  /// Die Einmalkosten bucht `ObjectProfile` unmittelbar beim Aktivieren ab; die
+  /// Wirkung läuft danach über die Zeitanker des Catch-ups. Nicht jedes Feature
+  /// hat ein Ziel: „Winkelzug“ und „Kreative Buchführung“ wirken ziel-los
+  /// (E15/E16), die Sabotage zielt auf ein Rivalen-Restaurant (E14).
   Future<void> _startFeature(ManagementFeature feature) async {
+    switch (feature) {
+      case ManagementFeature.prCampaign:
+        await _startPrCampaign(feature);
+      case ManagementFeature.sabotage:
+        await _startSabotage();
+      case ManagementFeature.legalTrick:
+      case ManagementFeature.creativeAccounting:
+        await _startUntargetedFeature(feature);
+    }
+  }
+
+  /// Aktiviert ein ziel-loses Feature (Winkelzug, Kreative Buchführung).
+  Future<void> _startUntargetedFeature(ManagementFeature feature) async {
+    final l10n = AppLocalizations.of(context)!;
+    final ok = _profile.activateUntargetedFeature(feature);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementFeatureActivationFailed)),
+      );
+      return;
+    }
+    setState(() {});
+    await _saveWithFeedback();
+  }
+
+  /// Startet die Sabotage gegen ein Rivalen-Restaurant der Chefsekretärin
+  /// (`11a` E14 / Kapitel 13).
+  ///
+  /// Die Erfolgschance wird **deterministisch** aus der Personal-ID abgeleitet
+  /// und im Dialog je Rivale angezeigt; die Auflösung erfolgt im nächsten
+  /// Wochen-Tick (`RivalService.resolveSabotage`).
+  Future<void> _startSabotage() async {
+    final l10n = AppLocalizations.of(context)!;
+    final rivals = _profile.rivals;
+    if (rivals.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementSabotageNoRivals)),
+      );
+      return;
+    }
+    final chance = _profile.sabotageSuccessPercent;
+    final target = await showDialog<RivalRestaurant>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.managementSabotageSelectTarget),
+        children: [
+          for (final rival in rivals)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(rival),
+              child: Text(
+                '${rival.name} · '
+                '${l10n.managementSabotageSuccessChance(chance)}',
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+    final ok = _profile.activateSabotage(target);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementFeatureActivationFailed)),
+      );
+      return;
+    }
+    setState(() {});
+    await _saveWithFeedback();
+  }
+
+  /// PR-Kampagne: Ziel wählen → aktivieren → speichern (E7–E11).
+  Future<void> _startPrCampaign(ManagementFeature feature) async {
     final l10n = AppLocalizations.of(context)!;
     final candidates = _profile.personal
         .where((c) =>
@@ -146,6 +223,20 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   ) {
     if (entry.activeFeature != feature.name) return null;
     final now = DateTime.now();
+    // `11a` E14: Die Sabotage hat ein eigenes Vokabular (Auflösung im Wochentick
+    // und Wirkungsfenster statt „Nachwirkung“).
+    if (feature == ManagementFeature.sabotage) {
+      if (_profile.managementFeatureIsActive(feature, now: now)) {
+        return l10n.managementSabotagePending(
+            _formatUntil(ManagementFeatureService.activeEndOf(entry)));
+      }
+      final until = _profile.sabotageAppliedUntil;
+      if (entry.featureResolvedAt != null &&
+          until != null &&
+          now.isBefore(until)) {
+        return l10n.managementSabotageEffect(_formatUntil(until));
+      }
+    }
     if (_profile.managementFeatureIsActive(feature, now: now)) {
       return l10n.managementFeatureActive(
           _formatUntil(ManagementFeatureService.activeEndOf(entry)));
@@ -155,6 +246,25 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
           _formatUntil(ManagementFeatureService.aftermathEndOf(entry)));
     }
     return null;
+  }
+
+  /// Icon je Feature (Aktivierungs-Button der Träger-Karte).
+  IconData _featureIcon(ManagementFeature feature) => switch (feature) {
+        ManagementFeature.prCampaign => Icons.campaign,
+        ManagementFeature.sabotage => Icons.local_fire_department,
+        ManagementFeature.legalTrick => Icons.gavel,
+        ManagementFeature.creativeAccounting => Icons.calculate,
+      };
+
+  /// Beschriftung des Aktivierungs-Buttons; ziel-lose Features zeigen ihre
+  /// Einmalkosten direkt am Button (`11a` E15/E16).
+  String _featureButtonLabel(
+    AppLocalizations l10n,
+    ManagementFeature feature,
+  ) {
+    final cost = ManagementFeatureService.fixedCostOf(feature);
+    if (cost == null) return l10n.managementFeatureActivate;
+    return l10n.managementFeatureCost(cost);
   }
 
   /// Kompakte Zeitangabe (Tag.Monat Stunde:Minute) für Countdowns.
@@ -234,11 +344,11 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
             ),
             const Divider(),
           ],
-          if (_profile.supportStaffCount > 0) ...[
+          if (_profile.staffEntries.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
-                l10n.hiredPersonnel(_profile.supportStaffCount),
+                l10n.hiredPersonnel(_profile.staffEntries.length),
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: theme.colorScheme.primary,
                 ),
@@ -274,8 +384,21 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
             child: _buildAvailableManagementRoles(context),
           ),
           const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              '${l10n.rivalsSection} · '
+              '${l10n.rivalCount(_profile.rivals.length)}',
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          SizedBox(
+            height: 96,
+            child: _buildRivalsSection(context),
+          ),
+          const Divider(),
           if (_profile.hiredMedicsCount > 0 ||
-              _profile.supportStaffCount > 0 ||
+              _profile.staffEntries.isNotEmpty ||
               _profile.personalCount > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -404,8 +527,8 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                         alignment: Alignment.centerLeft,
                         child: TextButton.icon(
                           onPressed: () => _startFeature(feature),
-                          icon: const Icon(Icons.campaign, size: 16),
-                          label: Text(l10n.managementFeatureActivate),
+                          icon: Icon(_featureIcon(feature), size: 16),
+                          label: Text(_featureButtonLabel(l10n, feature)),
                         ),
                       ),
                   ],
@@ -417,6 +540,56 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                       icon: const Icon(Icons.person_remove, size: 18),
                       label: Text(l10n.fire),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Kompakte Rivalen-Liste des Stadtteils (Minimal-Modul Kapitel 13):
+  /// Name, Prestige und Sabotage-Status. Deterministisch aus `RivalService`.
+  Widget _buildRivalsSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final rivals = _profile.rivals;
+    final sabotagedUntil = _profile.sabotageAppliedUntil;
+    final now = DateTime.now();
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      scrollDirection: Axis.horizontal,
+      itemCount: rivals.length,
+      itemBuilder: (context, index) {
+        final rival = rivals[index];
+        final isSabotaged =
+            rival.isSabotagedAt(_profile.sabotageTargetId, sabotagedUntil, now);
+        return SizedBox(
+          width: 200,
+          child: Card(
+            margin: const EdgeInsets.all(4),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rival.name,
+                    style: theme.textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${rival.basePrestige.toStringAsFixed(2)} · '
+                    '${isSabotaged ? l10n.rivalSabotaged : rival.district}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isSabotaged
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

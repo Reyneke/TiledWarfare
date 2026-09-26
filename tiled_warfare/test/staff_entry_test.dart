@@ -115,8 +115,8 @@ void main() {
     }
   });
 
-  test('kProfileSchemaVersion ist 7 (Option C + Features)', () {
-    expect(kProfileSchemaVersion, 7);
+  test('kProfileSchemaVersion ist 8 (Verwaltungsrollen + Rivalen-Modul)', () {
+    expect(kProfileSchemaVersion, 8);
   });
 
   test('managementIncomePercent meldet den Social-Media-Manager-Zuschlag', () {

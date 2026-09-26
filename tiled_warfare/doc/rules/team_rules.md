@@ -39,6 +39,10 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
 - Wiederbelebung durch den Teamarzt (einmalig, pro wiederholtem Rettungswurf)
 - **Laufend (wöchentlich):** Teamarzt-Kosten (`costPerWeek`), Unterhalt der Restauranterweiterungen
 - Negativzinsen bei verschuldetem Budget
+- **Strafen** (V11): aufgedeckte Sabotage gegen Rivalen (`13_Gegner_Restaurants.md` → „Minimal-Modul“); sie
+  werden im Wochentick gebucht und erscheinen als `penaltyCosts` in der Wochenabrechnung. Die
+  **Verwaltungsrollen** (Chefsekretärin/Rechtsanwalt/Buchhalter, `11a` E12) mindern laufende Kosten, Strafen
+  bzw. Erweiterungs-Anschaffungspreise; ihre aktiven Features richten sich nach `11a` E14–E16.
 
 **Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. Restaurant-Wechsel nachgeholt (Catch-up). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
 
