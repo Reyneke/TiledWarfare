@@ -81,23 +81,22 @@ void main() {
       expect(GameClockService.week, EconomyBalance.weeklyTick);
     });
 
-    test('jede Erweiterung hat eine positive Spec mit mindestens einer Stufe',
-        () {
-      for (final type in UpgradeType.values) {
-        final spec = EconomyBalance.upgrades[type];
-        expect(spec, isNotNull, reason: 'Fehlende Spec für $type');
-        expect(spec!.maxLevel, greaterThanOrEqualTo(1));
-        expect(spec.buyBaseCost, greaterThan(0));
-        expect(spec.upkeepBaseCostPerWeek, greaterThan(0));
-      }
-    });
+    test(
+      'jede Erweiterung hat eine positive Spec mit mindestens einer Stufe',
+      () {
+        for (final type in UpgradeType.values) {
+          final spec = EconomyBalance.upgrades[type];
+          expect(spec, isNotNull, reason: 'Fehlende Spec für $type');
+          expect(spec!.maxLevel, greaterThanOrEqualTo(1));
+          expect(spec.buyBaseCost, greaterThan(0));
+          expect(spec.upkeepBaseCostPerWeek, greaterThan(0));
+        }
+      },
+    );
   });
 
   group('Balance-Tuning: Einkommen & Zufriedenheit', () {
-    RestaurantData restaurant({
-      List<StaffData>? staff,
-      MatchResult? result,
-    }) =>
+    RestaurantData restaurant({List<StaffData>? staff, MatchResult? result}) =>
         RestaurantData(
           name: 'Balance',
           district: 'Harlem',
@@ -105,10 +104,7 @@ void main() {
           lastMatchResult: result,
         );
 
-    StaffData staff({
-      String status = 'ready',
-      int moneyValue = 100,
-    }) =>
+    StaffData staff({String status = 'ready', int moneyValue = 100}) =>
         StaffData(
           name: 'Testkoch',
           imagePath: 'assets/images/token/token_cook_basic.png',
@@ -117,20 +113,23 @@ void main() {
           moneyValue: moneyValue,
         );
 
-    int passiveIncome(RestaurantData r) => PassiveIncomeService.passiveIncomePerWeek(
+    int passiveIncome(RestaurantData r) =>
+        PassiveIncomeService.passiveIncomePerWeek(
           attractiveness: GameClockService.attractivenessOf(r),
           satisfaction: GameClockService.satisfactionOf(r),
           capacity: GameClockService.capacityOf(r),
         );
 
-    test('frisches Restaurant erwirtschaftet passiv Geld, aber weniger als ein Sieg',
-        () {
-      final fresh = restaurant(staff: [staff()]);
-      final income = passiveIncome(fresh);
+    test(
+      'frisches Restaurant erwirtschaftet passiv Geld, aber weniger als ein Sieg',
+      () {
+        final fresh = restaurant(staff: [staff()]);
+        final income = passiveIncome(fresh);
 
-      expect(income, greaterThan(0));
-      expect(income, lessThan(EconomyBalance.battleRewardBaseWin));
-    });
+        expect(income, greaterThan(0));
+        expect(income, lessThan(EconomyBalance.battleRewardBaseWin));
+      },
+    );
 
     test('gesundes Team sättigt die Zufriedenheit nicht (Ergebnis wirkt)', () {
       final healthy = restaurant(staff: [staff()]);
@@ -161,25 +160,30 @@ void main() {
       );
     });
 
-    test('Maximal-Einkommen ist gedeckelt und unter üppigen Gefechtserlösen', () {
-      final maxIncome = PassiveIncomeService.passiveIncomePerWeek(
-        attractiveness: EconomyBalance.inputDomainMax,
-        satisfaction: EconomyBalance.inputDomainMax,
-        capacity: EconomyBalance.capacityMax,
-      );
+    test(
+      'Maximal-Einkommen ist gedeckelt und unter üppigen Gefechtserlösen',
+      () {
+        final maxIncome = PassiveIncomeService.passiveIncomePerWeek(
+          attractiveness: EconomyBalance.inputDomainMax,
+          satisfaction: EconomyBalance.inputDomainMax,
+          capacity: EconomyBalance.capacityMax,
+        );
 
-      expect(
-        maxIncome,
-        lessThanOrEqualTo(EconomyBalance.customersDomainMax *
-            EconomyBalance.passiveIncomePerCustomerPerWeek),
-      );
+        expect(
+          maxIncome,
+          lessThanOrEqualTo(
+            EconomyBalance.customersDomainMax *
+                EconomyBalance.passiveIncomePerCustomerPerWeek,
+          ),
+        );
 
-      final richBattle = EconomyService.battleReward(
-        playerWon: true,
-        enemyMoneyValues: const [1000, 1000, 1000],
-      );
-      expect(maxIncome, lessThan(richBattle));
-    });
+        final richBattle = EconomyService.battleReward(
+          playerWon: true,
+          enemyMoneyValues: const [1000, 1000, 1000],
+        );
+        expect(maxIncome, lessThan(richBattle));
+      },
+    );
   });
 
   group('V7-Zentralisierung: Invarianten & Profile', () {
@@ -399,11 +403,15 @@ void main() {
         inExclusiveRange(0.0, 1.0),
       );
       // Die Kompetenz-Spanne deckt die Domäne vollständig ab.
-      for (var competence = EconomyBalance.featureCompetenceMin;
-          competence <= EconomyBalance.featureCompetenceMax;
-          competence++) {
-        expect(ManagementFeatureService.boostPercentFor(competence),
-            greaterThan(0));
+      for (
+        var competence = EconomyBalance.featureCompetenceMin;
+        competence <= EconomyBalance.featureCompetenceMax;
+        competence++
+      ) {
+        expect(
+          ManagementFeatureService.boostPercentFor(competence),
+          greaterThan(0),
+        );
       }
     });
 
@@ -414,19 +422,24 @@ void main() {
           isNotNull,
           reason: 'Fehlender Wochenlohn für $role',
         );
-        expect(
-          EconomyBalance.managementRoleWagePerWeek[role]!,
-          greaterThan(0),
-        );
+        expect(EconomyBalance.managementRoleWagePerWeek[role]!, greaterThan(0));
       }
-      expect(EconomyBalance.chefSecretaryStaffCostReductionPercent,
-          inExclusiveRange(0, 100));
-      expect(EconomyBalance.chefSecretaryUpgradeCostReductionPercent,
-          inExclusiveRange(0, 100));
       expect(
-          EconomyBalance.lawyerPenaltyReductionPercent, inExclusiveRange(0, 100));
-      expect(EconomyBalance.accountantOngoingCostReductionPercent,
-          inExclusiveRange(0, 100));
+        EconomyBalance.chefSecretaryStaffCostReductionPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.chefSecretaryUpgradeCostReductionPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.lawyerPenaltyReductionPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.accountantOngoingCostReductionPercent,
+        inExclusiveRange(0, 100),
+      );
       // Ein Kompetenz-4-Winkelzug allein erreicht die Negation.
       expect(
         EconomyBalance.featureCompetenceMax *
@@ -444,7 +457,9 @@ void main() {
       expect(EconomyBalance.sabotageActiveDuration, greaterThan(Duration.zero));
       expect(EconomyBalance.sabotageEffectDuration, greaterThan(Duration.zero));
       expect(
-          EconomyBalance.sabotageAftermathDuration, greaterThan(Duration.zero));
+        EconomyBalance.sabotageAftermathDuration,
+        greaterThan(Duration.zero),
+      );
       expect(EconomyBalance.sabotageCost, greaterThan(0));
       expect(EconomyBalance.sabotageCaughtFine, greaterThan(0));
       // Die Erfolgschance bleibt auch mit maximaler Kompetenz ein Wurf.
@@ -455,22 +470,171 @@ void main() {
         inExclusiveRange(0, 100),
       );
       // Kreative Buchführung: mindestens ein Tagestick Negation.
-      expect(EconomyBalance.creativeAccountingPerCompetence,
-          greaterThanOrEqualTo(EconomyBalance.dailyTick));
+      expect(
+        EconomyBalance.creativeAccountingPerCompetence,
+        greaterThanOrEqualTo(EconomyBalance.dailyTick),
+      );
       expect(
         EconomyBalance.creativeAccountingAftermathPerCompetence,
         greaterThan(Duration.zero),
       );
     });
 
+    test('Rollen & Features der V12-Erweiterung sind konsistent', () {
+      // Jede der vier V12-Rollen hat Lohn und Feature.
+      for (final role in [
+        ManagementRole.headWaiter,
+        ManagementRole.personnelManager,
+        ManagementRole.storekeeper,
+        ManagementRole.unionChief,
+      ]) {
+        expect(EconomyBalance.managementRoleWagePerWeek[role], isNotNull);
+        expect(EconomyBalance.managementRoleWagePerWeek[role]!, greaterThan(0));
+        expect(managementFeatureOf(role), isNotNull);
+      }
+      // Passive Prozentwerte liegen im offenen Intervall (0, 100).
+      expect(
+        EconomyBalance.headWaiterCapacityPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.personnelManagerCapacityPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.storekeeperCapacityPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.unionChiefWageIncreasePercent,
+        inExclusiveRange(0, 100),
+      );
+      // Der Kompetenz-4-Gewerkschaftschef senkt den Sink nicht vollständig.
+      expect(
+        EconomyBalance.featureCompetenceMax *
+            EconomyBalance.unionChiefSinkReductionPercentPerCompetence,
+        lessThan(100),
+      );
+      // Feature-Fenster und Kosten.
+      expect(EconomyBalance.rushHourCost, greaterThan(0));
+      expect(
+        EconomyBalance.rushHourInputBonusPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(EconomyBalance.rushHourPerCompetence, greaterThan(Duration.zero));
+      expect(EconomyBalance.rushHourExhaustionPerCompetence, greaterThan(0));
+      expect(EconomyBalance.organisationCostPerDay, greaterThan(0));
+      expect(
+        EconomyBalance.organisationSinkReductionPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(EconomyBalance.storageTetrisCostPerCompetence, greaterThan(0));
+      expect(
+        EconomyBalance.storageTetrisCapacityFactorPerCompetence,
+        greaterThan(0),
+      );
+      expect(EconomyBalance.unionWorkersCost, greaterThan(0));
+      expect(EconomyBalance.unionWorkersTeamPerCompetence, greaterThan(0));
+      expect(EconomyBalance.shadinessMaxBonusPercent, greaterThan(0));
+      expect(EconomyBalance.shadinessMaxBonusPercent, lessThan(100));
+      expect(EconomyBalance.shadinessNeutral, greaterThan(0));
+      expect(EconomyBalance.sabotageExhaustionPerMission, greaterThan(0));
+      // Die vier neuen Features sind (mit-)kostentragend oder laufend bezahlt.
+      for (final feature in [
+        ManagementFeature.rushHour,
+        ManagementFeature.unionWorkers,
+      ]) {
+        expect(ManagementFeatureService.fixedCostOf(feature), isNotNull);
+        expect(ManagementFeatureService.fixedCostOf(feature)!, greaterThan(0));
+      }
+      // Lagertetris skaliert mit der Kompetenz, „Organisation ist alles“ wird
+      // je aktivem Tag bezahlt ⇒ beide ohne feste Einmalkosten.
+      expect(
+        ManagementFeatureService.fixedCostOf(ManagementFeature.storageTetris),
+        isNull,
+      );
+      expect(
+        ManagementFeatureService.fixedCostOf(
+          ManagementFeature.organisationIsEverything,
+        ),
+        isNull,
+      );
+    });
+
+    test('Sicherheitschef & Gegenschlag (V13) sind konsistent', () {
+      // Rolle: Lohn und Feature.
+      expect(
+        EconomyBalance.managementRoleWagePerWeek[ManagementRole.securityChief],
+        greaterThan(0),
+      );
+      expect(
+        managementFeatureOf(ManagementRole.securityChief),
+        ManagementFeature.counterSabotage,
+      );
+      // Passive Entdeckung: auch der Kompetenz-4-Chef deckt nicht sicher auf.
+      expect(
+        EconomyBalance.featureCompetenceMax *
+            EconomyBalance.securityChiefDetectionBonusPercentPerCompetence,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.incomingDetectionShadinessToPercent,
+        inExclusiveRange(0, 100),
+      );
+      expect(
+        EconomyBalance.incomingSabotageChanceBasePercent,
+        inExclusiveRange(0, 100),
+      );
+      // Der Gegenschlag ist billiger als die eigene Sabotage, aber nicht gratis.
+      expect(
+        ManagementFeatureService.fixedCostOf(ManagementFeature.counterSabotage),
+        EconomyBalance.counterSabotageCost,
+      );
+      expect(EconomyBalance.counterSabotageCost, greaterThan(0));
+      expect(
+        EconomyBalance.counterSabotageCost,
+        lessThan(EconomyBalance.sabotageCost),
+      );
+      expect(
+        EconomyBalance.counterSabotageActiveDuration,
+        greaterThan(Duration.zero),
+      );
+      expect(
+        EconomyBalance.counterSabotageAftermathDuration,
+        greaterThan(Duration.zero),
+      );
+      expect(EconomyBalance.counterSabotageTeamPerCompetence, greaterThan(0));
+      // Erfolgschance bleibt unter 100 %, die Strafe unter der der Sabotage.
+      expect(
+        EconomyBalance.sabotageBaseSuccessPercent +
+            EconomyBalance.featureCompetenceMax *
+                EconomyBalance.counterSabotageLeaderBonusPercentPerCompetence,
+        lessThan(100),
+      );
+      expect(EconomyBalance.counterSabotageFailureFine, greaterThan(0));
+      expect(
+        EconomyBalance.counterSabotageFailureFine,
+        lessThan(EconomyBalance.sabotageCaughtFine),
+      );
+    });
+
     test('Rivalen-Anzahl (Kapitel 13) ist geordnet und gedeckelt', () {
-      expect(EconomyBalance.rivalCountPrestigeS,
-          greaterThan(EconomyBalance.rivalCountPrestigeA));
-      expect(EconomyBalance.rivalCountPrestigeA,
-          greaterThan(EconomyBalance.rivalCountPrestigeB));
-      expect(EconomyBalance.rivalCountPrestigeB,
-          greaterThan(EconomyBalance.rivalCountPrestigeC));
-      expect(EconomyBalance.rivalCountMin, lessThan(EconomyBalance.rivalCountMax));
+      expect(
+        EconomyBalance.rivalCountPrestigeS,
+        greaterThan(EconomyBalance.rivalCountPrestigeA),
+      );
+      expect(
+        EconomyBalance.rivalCountPrestigeA,
+        greaterThan(EconomyBalance.rivalCountPrestigeB),
+      );
+      expect(
+        EconomyBalance.rivalCountPrestigeB,
+        greaterThan(EconomyBalance.rivalCountPrestigeC),
+      );
+      expect(
+        EconomyBalance.rivalCountMin,
+        lessThan(EconomyBalance.rivalCountMax),
+      );
       for (final count in [
         EconomyBalance.rivalCountS,
         EconomyBalance.rivalCountA,
@@ -478,9 +642,13 @@ void main() {
         EconomyBalance.rivalCountC,
         EconomyBalance.rivalCountD,
       ]) {
-        expect(count,
-            inInclusiveRange(
-                EconomyBalance.rivalCountMin, EconomyBalance.rivalCountMax));
+        expect(
+          count,
+          inInclusiveRange(
+            EconomyBalance.rivalCountMin,
+            EconomyBalance.rivalCountMax,
+          ),
+        );
       }
     });
   });

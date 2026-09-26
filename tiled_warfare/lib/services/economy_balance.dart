@@ -114,10 +114,7 @@ class EconomyBalance {
   /// [stationBonusMaxPercent]). Varianten ersetzen den Bonus ihrer
   /// [StationSpec.baseStation] (kein Stapeln).
   static const Map<String, StationSpec> stationSpecs = {
-    kStationSaucier: StationSpec(
-      attackBonusPercent: 15,
-      auraAttackPercent: 5,
-    ),
+    kStationSaucier: StationSpec(attackBonusPercent: 15, auraAttackPercent: 5),
     kStationPoissonnier: StationSpec(
       attackBonusPercent: 10,
       damageBonusPercent: 5,
@@ -218,6 +215,11 @@ class EconomyBalance {
     ManagementRole.chefSecretary: 220,
     ManagementRole.lawyer: 260,
     ManagementRole.accountant: 200,
+    ManagementRole.headWaiter: 150,
+    ManagementRole.personnelManager: 230,
+    ManagementRole.storekeeper: 170,
+    ManagementRole.unionChief: 250,
+    ManagementRole.securityChief: 240,
   };
 
   /// Einkommens-Zuschlag des **Social Media Manager** auf das passive Einkommen
@@ -332,6 +334,147 @@ class EconomyBalance {
   /// Burnout-Dauer je Kompetenz-Stufe (= Nachteilphase, keine erneute
   /// Aktivierung; der Anteil der Kosten-Negation entspricht der aktiven Phase).
   static const Duration creativeAccountingAftermathPerCompetence = dailyTick;
+
+  // ── Verwaltungsrollen: passive Effekte der V12-Rollen (V12) ────────────
+  //
+  // Alle Werte sind binär (Anwesenheit der Rolle). Absolutwerte wirken auf der
+  // Eingangs-Domäne (`0–inputDomainMax`), Prozentwerte multiplikativ – wie die
+  // übrigen Rollen-Effekte.
+
+  /// Oberkellner: absoluter Attraktivitäts-Zuschlag.
+  static const double headWaiterAttractivenessBonus = 0.05;
+
+  /// Oberkellner: relativer Kapazitäts-Zuschlag (Prozent).
+  static const int headWaiterCapacityPercent = 5;
+
+  /// Personalchef: absoluter Zufriedenheits-Zuschlag.
+  static const double personnelManagerSatisfactionBonus = 0.05;
+
+  /// Personalchef: relativer Kapazitäts-Zuschlag (Prozent).
+  static const int personnelManagerCapacityPercent = 5;
+
+  /// Lagerist: relativer Kapazitäts-Zuschlag (Prozent) – bewusst hoch.
+  static const int storekeeperCapacityPercent = 20;
+
+  /// Gewerkschaftschef: Erhöhung der Mitarbeiterkosten (Prozent).
+  ///
+  /// Wirkt auf die Lohnsumme des **Kampfpersonals** (`catchUp`); die eigene
+  /// Rolle ist davon ausgenommen (sonst würde sich der Effekt selbst erhöhen).
+  static const int unionChiefWageIncreasePercent = 10;
+
+  /// Gewerkschaftschef: Senkung des Tages-Sinks (Vitalität/Moral) je
+  /// Kompetenz-Stufe des Trägers (Prozent).
+  static const int unionChiefSinkReductionPercentPerCompetence = 6;
+
+  // ── Features der V12-Rollen ────────────────────────────────────────────
+
+  /// Einmalkosten der „Rush Hour“ (Euro).
+  static const int rushHourCost = 800;
+
+  /// Zuschlag der „Rush Hour“ auf die drei Eingangswerte (Prozent).
+  static const int rushHourInputBonusPercent = 25;
+
+  /// Dauer der „Rush Hour“ je Kompetenz-Stufe (mindestens ein Tagestick).
+  static const Duration rushHourPerCompetence = dailyTick;
+
+  /// Zusätzlicher Tages-Sink, den die „Rush Hour“ je Kompetenz-Stufe des
+  /// Trägers erzeugt – ranggewichtet auf das Personal verteilt.
+  static const int rushHourExhaustionPerCompetence = 2;
+
+  /// Tageskosten von „Organisation ist alles“ (Euro) – je aktivem Tag.
+  static const int organisationCostPerDay = 150;
+
+  /// Senkung des Tages-Sinks durch „Organisation ist alles“ (Prozent).
+  static const int organisationSinkReductionPercent = 50;
+
+  /// Dauer von „Organisation ist alles“ je Kompetenz-Stufe.
+  static const Duration organisationPerCompetence = Duration(days: 2);
+
+  /// Einmalkosten von „Lagertetris“ je Kompetenz-Stufe (Euro).
+  static const int storageTetrisCostPerCompetence = 500;
+
+  /// Kapazitäts-Faktor von „Lagertetris“ je Kompetenz-Stufe
+  /// (`Kapazität × (1 + Faktor × Kompetenz)`).
+  static const double storageTetrisCapacityFactorPerCompetence = 0.5;
+
+  /// Dauer von „Lagertetris“ (ein Wochentick).
+  static const Duration storageTetrisActiveDuration = weeklyTick;
+
+  /// Einmalkosten von „Alle Räder …“ (Euro).
+  static const int unionWorkersCost = 400;
+
+  /// Dauer von „Alle Räder …“ (ein Wochentick).
+  static const Duration unionWorkersActiveDuration = weeklyTick;
+
+  /// Zusätzliche Teammitglieder der Sabotage je Kompetenz-Stufe des Trägers
+  /// von „Alle Räder …“ (Teamgröße = 1 + Kompetenz; ein Reroll je Mitglied).
+  static const int unionWorkersTeamPerCompetence = 1;
+
+  /// Neutralwert der `shadiness` (Domäne 0–100): darunter ein Malus, darüber
+  /// ein Bonus auf die Sabotage-Erfolgschance.
+  static const int shadinessNeutral = 50;
+
+  /// Maximaler Erfolgs-Bonus/Malus der gemittelten `shadiness` (Prozent bei
+  /// den Extremwerten 100 bzw. 0).
+  static const int shadinessMaxBonusPercent = 15;
+
+  /// Erschöpfung, die ein Sabotage-Auftrag den Beteiligten insgesamt zufügt
+  /// (Vitalität und Moral; auf die Mannschaftsgröße gemittelt).
+  static const int sabotageExhaustionPerMission = 12;
+
+  // ── Sicherheitschef / „Rache ist Blutwurst“ (V13, Kapitel 13) ──────────
+  //
+  // Minimal-Modul „Rivalen-Sabotage gegen den Spieler“: Je Rivalen-Restaurant
+  // und vollem Wochenblock wird **deterministisch** gewürfelt, ob ein
+  // Sabotageversuch eingeht. Entdeckt wird ein Versuch über die gemittelte
+  // `shadiness` des Personals plus den Kompetenz-Bonus des Sicherheitschefs.
+  //
+  // Wird ein Versuch **unentdeckt** bleiben, schöpft der Angreifer Einkommen
+  // ab (`incomingSabotageIncomePenaltyPercent` je Angreifer, gedeckelt auf
+  // `incomingSabotageIncomePenaltyMaxPercent`) – der Angreifer bleibt dabei
+  // **unbekannt**, ein Gegenschlag ist also nicht möglich.
+
+  /// Grund-Wahrscheinlichkeit (Prozent) eines Sabotageversuchs **je Rivalen**
+  /// und vollem Wochenblock.
+  static const int incomingSabotageChanceBasePercent = 20;
+
+  /// Anteil der gemittelten `shadiness` des Personals (0–100), der als
+  /// Entdeckungs-Wahrscheinlichkeit (Prozent) zählt.
+  static const int incomingDetectionShadinessToPercent = 50;
+
+  /// Entdeckungs-Zuschlag (Prozent) je Kompetenz-Stufe des Sicherheitschefs.
+  static const int securityChiefDetectionBonusPercentPerCompetence = 10;
+
+  /// Einkommens-Malus (Prozent) des **Blockeinkommens** je *unentdeckt*
+  /// gebliebenem Sabotageversuch eines Rivalen – der Angreifer schöpft ab.
+  static const int incomingSabotageIncomePenaltyPercent = 10;
+
+  /// Deckel des Einkommens-Malus (Prozent) je Block: mehrere unentdeckte
+  /// Angreifer stapeln sich nur bis zu dieser Grenze.
+  static const int incomingSabotageIncomePenaltyMaxPercent = 30;
+
+  /// Einmalkosten von „Rache ist Blutwurst“ (Euro).
+  static const int counterSabotageCost = 1000;
+
+  /// Dauer des scharfgeschalteten Fensters (ein Wochentick) – darin wird ein
+  /// **entdeckter** Angriff Gegenschlag-fähig.
+  static const Duration counterSabotageActiveDuration = weeklyTick;
+
+  /// Nachteilphase („Abtauchen“) nach dem Fenster – kein neuer Gegenschlag.
+  static const Duration counterSabotageAftermathDuration = weeklyTick;
+
+  /// Erfolgs-Zuschlag (Prozent) des Gegenschlags je Kompetenz-Stufe des
+  /// Sicherheitschefs (Grundwert: `sabotageBaseSuccessPercent`).
+  static const int counterSabotageLeaderBonusPercentPerCompetence = 5;
+
+  /// Rekrutierte Mannschaftsmitglieder je Kompetenz-Stufe des Sicherheitschefs,
+  /// wenn **keine** Chefsekretärin angestellt ist.
+  static const int counterSabotageTeamPerCompetence = 1;
+
+  /// Strafe, wenn der Gegenschlag scheitert (Euro); der Sicherheitschef nimmt
+  /// den Schaden auf sich (`StaffRoleService`-Minderung inkl. ausgelöstem
+  /// Winkelzug).
+  static const int counterSabotageFailureFine = 1500;
 
   /// Refill-Bonus der Rolle `Communard` auf die Kollegen (Prozent).
   /// Stapelt sich additiv mit dem Pâtissier-Bonus (V10 § 2).

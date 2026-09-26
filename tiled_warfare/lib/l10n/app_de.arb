@@ -590,6 +590,74 @@
   "@managementFeatureCreativeAccountingEffect": {
     "description": "Wirkung: Kreative Buchführung"
   },
+  "managementRoleHeadWaiter": "Oberkellner",
+  "@managementRoleHeadWaiter": { "description": "Rolle: Oberkellner (V12)" },
+  "managementRoleEffectHeadWaiter": "Hebt Attraktivität und Kapazität.",
+  "@managementRoleEffectHeadWaiter": { "description": "Wirkung: Oberkellner" },
+  "managementRolePersonnelManager": "Personalchef",
+  "@managementRolePersonnelManager": { "description": "Rolle: Personalchef (V12)" },
+  "managementRoleEffectPersonnelManager": "Hebt Kundenzufriedenheit und Kapazität.",
+  "@managementRoleEffectPersonnelManager": { "description": "Wirkung: Personalchef" },
+  "managementRoleStorekeeper": "Lagerist",
+  "@managementRoleStorekeeper": { "description": "Rolle: Lagerist (V12)" },
+  "managementRoleEffectStorekeeper": "Hebt die Kapazität deutlich.",
+  "@managementRoleEffectStorekeeper": { "description": "Wirkung: Lagerist" },
+  "managementRoleUnionChief": "Gewerkschaftschef",
+  "@managementRoleUnionChief": { "description": "Rolle: Gewerkschaftschef (V12)" },
+  "managementRoleEffectUnionChief": "Erhöht die Mitarbeiterkosten, senkt dafür deren Erschöpfung.",
+  "@managementRoleEffectUnionChief": { "description": "Wirkung: Gewerkschaftschef" },
+  "managementFeatureRushHour": "Rush Hour",
+  "@managementFeatureRushHour": {
+    "description": "Feature: Rush Hour (Oberkellner, V12)"
+  },
+  "managementFeatureRushHourEffect": "Aktive Fertigkeit: hebt befristet alle Eingangswerte; Mali entfallen, dafür Erschöpfung.",
+  "@managementFeatureRushHourEffect": { "description": "Wirkung: Rush Hour" },
+  "managementFeatureOrganisationIsEverything": "Organisation ist alles",
+  "@managementFeatureOrganisationIsEverything": {
+    "description": "Feature: Organisation ist alles (Personalchef, V12)"
+  },
+  "managementFeatureOrganisationIsEverythingEffect": "Aktive Fertigkeit: senkt befristet den Stabilitätsverlust – gegen Geld.",
+  "@managementFeatureOrganisationIsEverythingEffect": {
+    "description": "Wirkung: Organisation ist alles"
+  },
+  "managementFeatureStorageTetris": "Lagertetris",
+  "@managementFeatureStorageTetris": {
+    "description": "Feature: Lagertetris (Lagerist, V12)"
+  },
+  "managementFeatureStorageTetrisEffect": "Aktive Fertigkeit: vervielfacht befristet die Kapazität; alle Mali entfallen.",
+  "@managementFeatureStorageTetrisEffect": { "description": "Wirkung: Lagertetris" },
+  "managementFeatureUnionWorkers": "Alle Räder …",
+  "@managementFeatureUnionWorkers": {
+    "description": "Feature: Alle Räder … (Gewerkschaftschef, V12)"
+  },
+  "managementFeatureUnionWorkersEffect": "Aktive Fertigkeit: Sabotage-Mannschaft mit gemittelter Shadiness und Rerolls.",
+  "@managementFeatureUnionWorkersEffect": { "description": "Wirkung: Alle Räder …" },
+  "managementRoleSecurityChief": "Sicherheitschef",
+  "@managementRoleSecurityChief": { "description": "Rolle: Sicherheitschef (V13)" },
+  "managementRoleEffectSecurityChief": "Entdeckt Sabotageversuche gegen das Restaurant.",
+  "@managementRoleEffectSecurityChief": { "description": "Wirkung: Sicherheitschef" },
+  "managementFeatureCounterSabotage": "Rache ist Blutwurst",
+  "@managementFeatureCounterSabotage": {
+    "description": "Feature: Rache ist Blutwurst (Sicherheitschef, V13)"
+  },
+  "managementFeatureCounterSabotageEffect": "Aktive Fertigkeit: schlägt gegen einen im Fenster entdeckten Angreifer zurück.",
+  "@managementFeatureCounterSabotageEffect": {
+    "description": "Wirkung: Rache ist Blutwurst"
+  },
+  "managementCounterSabotagePending": "Gegenschlag bereit bis {time}",
+  "@managementCounterSabotagePending": {
+    "description": "Scharf geschalteter Gegenschlag (Auflösung im Wochentick)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureSelectTeam": "Schlagmannschaft wählen",
+  "@managementFeatureSelectTeam": {
+    "description": "Dialogtitel: Mannschaft für 'Alle Räder …' wählen"
+  },
+  "managementFeatureDailyCost": "Laufend: {cost} € / Tag",
+  "@managementFeatureDailyCost": {
+    "description": "Laufende Tageskosten eines Features",
+    "placeholders": { "cost": { "type": "int" } }
+  },
   "managementSabotageSelectTarget": "Ziel der Sabotage wählen",
   "@managementSabotageSelectTarget": {
     "description": "Dialogtitel: Rivale für die Sabotage wählen"
@@ -1032,6 +1100,11 @@
   "@catchUpLeftover": {
     "description": "Anteilige Resttage der Tagesabgrenzung (V8/§ 6)",
     "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
+  },
+  "catchUpRivalSabotageLoss": "Rivalen-Sabotage: Einkommen −{loss} €",
+  "@catchUpRivalSabotageLoss": {
+    "description": "Unentdeckte Rivalen-Sabotage schöpft Blockeinkommen ab (V13, Kapitel 13)",
+    "placeholders": { "loss": { "type": "int" } }
   },
   "healingComplete": "Voll einsatzbereit",
   "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" },

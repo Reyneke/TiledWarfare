@@ -36,8 +36,8 @@ void main() {
     expect(legacy.hiredAt, isNull);
   });
 
-  test('kProfileSchemaVersion ist 8 (Verwaltungsrollen + Rivalen-Modul)', () {
-    expect(kProfileSchemaVersion, 8);
+  test('kProfileSchemaVersion ist 9 (V12: Feature-Mannschaft)', () {
+    expect(kProfileSchemaVersion, 9);
   });
 
   test('RestaurantData persistiert supportStaff auch über copyWith', () {
@@ -96,9 +96,17 @@ void main() {
             name: 'R',
             supportStaff: [
               SupportRoleData(
-                  id: 1, name: 'A', role: 'plongeur', costPerWeek: 70),
+                id: 1,
+                name: 'A',
+                role: 'plongeur',
+                costPerWeek: 70,
+              ),
               SupportRoleData(
-                  id: 2, name: 'X', role: 'gibtsnicht', costPerWeek: 1),
+                id: 2,
+                name: 'X',
+                role: 'gibtsnicht',
+                costPerWeek: 1,
+              ),
             ],
           ),
         ],
@@ -123,27 +131,26 @@ void main() {
     RestaurantData restaurant({
       List<SupportRoleData> support = const [],
       Map<UpgradeType, int>? upgrades,
-    }) =>
-        RestaurantData(
-          id: 1,
-          name: 'R',
-          budget: 10000,
-          district: 'Harlem',
-          lastSeenAt: start,
-          weekAnchorAt: start,
-          supportStaff: support,
-          upgrades: upgrades,
-          staff: [
-            StaffData(
-              name: 'Koch',
-              imagePath: 'x.png',
-              type: kRankApprentice,
-              rank: kRankApprentice,
-              id: 4251,
-              personalityId: 2,
-            ),
-          ],
-        );
+    }) => RestaurantData(
+      id: 1,
+      name: 'R',
+      budget: 10000,
+      district: 'Harlem',
+      lastSeenAt: start,
+      weekAnchorAt: start,
+      supportStaff: support,
+      upgrades: upgrades,
+      staff: [
+        StaffData(
+          name: 'Koch',
+          imagePath: 'x.png',
+          type: kRankApprentice,
+          rank: kRankApprentice,
+          id: 4251,
+          personalityId: 2,
+        ),
+      ],
+    );
 
     test('Communard verbessert den Wochen-Refill der Kollegen', () {
       final plain = restaurant();
@@ -167,10 +174,14 @@ void main() {
     test('Aboyeur erhöht das passive Einkommen (und kostet Lohn)', () {
       final plain = restaurant();
       final boosted = restaurant(support: [role(SupportRole.aboyeur)]);
-      final without =
-          GameClockService.catchUp(plain, start.add(const Duration(days: 7)));
-      final withRole =
-          GameClockService.catchUp(boosted, start.add(const Duration(days: 7)));
+      final without = GameClockService.catchUp(
+        plain,
+        start.add(const Duration(days: 7)),
+      );
+      final withRole = GameClockService.catchUp(
+        boosted,
+        start.add(const Duration(days: 7)),
+      );
 
       expect(withRole.passiveIncome, greaterThan(without.passiveIncome));
       expect(withRole.staffCosts, greaterThan(without.staffCosts));
@@ -183,10 +194,14 @@ void main() {
         support: [role(SupportRole.plongeur)],
         upgrades: Map.of(upgrades),
       );
-      final without =
-          GameClockService.catchUp(plain, start.add(const Duration(days: 7)));
-      final withRole =
-          GameClockService.catchUp(boosted, start.add(const Duration(days: 7)));
+      final without = GameClockService.catchUp(
+        plain,
+        start.add(const Duration(days: 7)),
+      );
+      final withRole = GameClockService.catchUp(
+        boosted,
+        start.add(const Duration(days: 7)),
+      );
 
       expect(without.upgradeUpkeep, greaterThan(0));
       expect(withRole.upgradeUpkeep, lessThan(without.upgradeUpkeep));
@@ -223,8 +238,9 @@ void main() {
       );
       expect(SupportRoleService.lootPercent(const []), 0);
       expect(
-        SupportRoleService.exhaustionReliefPercent(
-            [role(SupportRole.tournant)]),
+        SupportRoleService.exhaustionReliefPercent([
+          role(SupportRole.tournant),
+        ]),
         EconomyBalance.tournantExhaustionReliefPercent,
       );
       expect(SupportRoleService.exhaustionReliefPercent(const []), 0);

@@ -188,6 +188,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       parts.add(
           l10n.catchUpLeftover(result.leftoverDays, result.leftoverIncome));
     }
+    // V13: durch unentdeckte Rivalen-Sabotage abgeschöpftes Einkommen (der
+    // Betrag ist in `passiveIncome` bereits abgezogen – hier nur transparent).
+    if (result.rivalSabotageLosses > 0) {
+      parts.add(l10n.catchUpRivalSabotageLoss(result.rivalSabotageLosses));
+    }
     if (parts.isEmpty) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()

@@ -32,6 +32,46 @@ enum ManagementRole {
   /// Trägt das Feature **Kreative Buchführung** (E16): negiert befristet alle
   /// laufenden Kosten und fällt danach (Burnout) aus.
   accountant,
+
+  /// Oberkellner – hebt Attraktivität und Kapazität (V12).
+  ///
+  /// Trägt das Feature **Rush Hour** (V12): befristeter Schub auf alle drei
+  /// Eingangswerte des passiven Einkommens, Mali entfallen – bezahlt mit
+  /// rangverteilter Erschöpfung.
+  headWaiter,
+
+  /// Personalchef – hebt Kundenzufriedenheit und Kapazität (V12).
+  ///
+  /// Trägt das Feature **Organisation ist alles** (V12): befristet stark
+  /// reduzierter Stabilitätsverlust; die Reduktion wird mit Geld bezahlt.
+  personnelManager,
+
+  /// Lagerist – hoher Kapazitäts-Bonus (V12).
+  ///
+  /// Trägt das Feature **Lagertetris** (V12): vervielfacht die Kapazität für
+  /// einen Wochentick; alle Mali fallen weg.
+  storekeeper,
+
+  /// Gewerkschaftschef – hebt die Mitarbeiterkosten, senkt dafür deren
+  /// Erschöpfung (V12).
+  ///
+  /// Trägt das Feature **„Alle Räder …“** (V12): mehr als ein Mitarbeiter auf
+  /// Sabotagemission, gemittelte `shadiness`/Erschöpfung und ein Reroll je
+  /// zusätzlichem Teammitglied.
+  unionChief,
+
+  /// Sicherheitschef – hebt die **Entdeckung** eingehender Sabotageversuche
+  /// (V13).
+  ///
+  /// Passiv: Die Entdeckungswahrscheinlichkeit steigt mit der Kompetenz des
+  /// Trägers (`securityChiefDetectionBonusPercentPerCompetence`), zusätzlich
+  /// zählt die durchschnittliche `shadiness` des Personals
+  /// (`RivalService.incomingDetectionPercent`).
+  ///
+  /// Trägt das Feature **„Rache ist Blutwurst“** (V13): ein befristet
+  /// scharfgeschalteter, **reaktiver** Gegenschlag gegen einen in diesem
+  /// Fenster **entdeckten** Angreifer.
+  securityChief,
 }
 
 /// Alle Verwaltungs-/Marketing-Rollen in Anzeige-Reihenfolge.
@@ -53,8 +93,13 @@ ManagementRole? managementRoleFromName(String? roleKey) {
 /// Die Rollen-Zuordnung ist Teil des Datenmodells, die Wirkung liegt in
 /// `ManagementFeatureService`/`EconomyBalance`.
 ManagementFeature? managementFeatureOf(ManagementRole role) => switch (role) {
-      ManagementRole.socialMediaManager => ManagementFeature.prCampaign,
-      ManagementRole.chefSecretary => ManagementFeature.sabotage,
-      ManagementRole.lawyer => ManagementFeature.legalTrick,
-      ManagementRole.accountant => ManagementFeature.creativeAccounting,
-    };
+  ManagementRole.socialMediaManager => ManagementFeature.prCampaign,
+  ManagementRole.chefSecretary => ManagementFeature.sabotage,
+  ManagementRole.lawyer => ManagementFeature.legalTrick,
+  ManagementRole.accountant => ManagementFeature.creativeAccounting,
+  ManagementRole.headWaiter => ManagementFeature.rushHour,
+  ManagementRole.personnelManager => ManagementFeature.organisationIsEverything,
+  ManagementRole.storekeeper => ManagementFeature.storageTetris,
+  ManagementRole.unionChief => ManagementFeature.unionWorkers,
+  ManagementRole.securityChief => ManagementFeature.counterSabotage,
+};

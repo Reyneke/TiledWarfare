@@ -73,6 +73,14 @@ class StaffEntryData {
   /// (`ManagementFeatureService.clearFinished`).
   DateTime? featureResolvedAt;
 
+  /// Charakter-IDs der **Teammitglieder** eines Features (V12).
+  ///
+  /// Derzeit nur von „Alle Räder …“ (`ManagementFeature.unionWorkers`) genutzt:
+  /// Die Sabotage-Mannschaft besteht aus dem Träger plus bis zu `Kompetenz`
+  /// gewählten Mitarbeitern; ihre `shadiness` und die aus dem Auftrag
+  /// resultierende Erschöpfung werden gemittelt. `null`/leer = keine Mannschaft.
+  List<int>? featureTeamIds;
+
   StaffEntryData({
     required this.id,
     required this.name,
@@ -84,34 +92,52 @@ class StaffEntryData {
     this.featureTargetId,
     this.featureActivatedAt,
     this.featureResolvedAt,
+    this.featureTeamIds,
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'kind': kind.name,
-        'role': role,
-        'costPerWeek': costPerWeek,
-        if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
-        if (activeFeature != null) 'activeFeature': activeFeature,
-        if (featureTargetId != null) 'featureTargetId': featureTargetId,
-        if (featureActivatedAt != null)
-          'featureActivatedAt': featureActivatedAt!.toIso8601String(),
-        if (featureResolvedAt != null)
-          'featureResolvedAt': featureResolvedAt!.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'kind': kind.name,
+    'role': role,
+    'costPerWeek': costPerWeek,
+    if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
+    if (activeFeature != null) 'activeFeature': activeFeature,
+    if (featureTargetId != null) 'featureTargetId': featureTargetId,
+    if (featureActivatedAt != null)
+      'featureActivatedAt': featureActivatedAt!.toIso8601String(),
+    if (featureResolvedAt != null)
+      'featureResolvedAt': featureResolvedAt!.toIso8601String(),
+    if (featureTeamIds != null) 'featureTeamIds': featureTeamIds,
+  };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory StaffEntryData.fromJson(Map<String, dynamic> json) => StaffEntryData(
-        id: readInt(json['id']) ?? -1,
-        name: readString(json['name']) ?? '',
-        kind: roleKindFromName(readString(json['kind'])),
-        role: readString(json['role']) ?? '',
-        costPerWeek: readInt(json['costPerWeek']) ?? 0,
-        hiredAt: readDateTime(json['hiredAt']),
-        activeFeature: readString(json['activeFeature']),
-        featureTargetId: readInt(json['featureTargetId']),
-        featureActivatedAt: readDateTime(json['featureActivatedAt']),
-        featureResolvedAt: readDateTime(json['featureResolvedAt']),
-      );
+    id: readInt(json['id']) ?? -1,
+    name: readString(json['name']) ?? '',
+    kind: roleKindFromName(readString(json['kind'])),
+    role: readString(json['role']) ?? '',
+    costPerWeek: readInt(json['costPerWeek']) ?? 0,
+    hiredAt: readDateTime(json['hiredAt']),
+    activeFeature: readString(json['activeFeature']),
+    featureTargetId: readInt(json['featureTargetId']),
+    featureActivatedAt: readDateTime(json['featureActivatedAt']),
+    featureResolvedAt: readDateTime(json['featureResolvedAt']),
+    featureTeamIds: _readIntList(json['featureTeamIds']),
+  );
+}
+
+/// Liest eine tolerante ID-Liste (unbekannte/ungültige Werte werden verworfen,
+/// V6). `null` bleibt `null` (kein Team), eine leere Liste wird zu `null`.
+List<int>? _readIntList(dynamic value) {
+  if (value is! List) return null;
+  final result = <int>[];
+  for (final entry in value) {
+    if (entry is int) {
+      result.add(entry);
+    } else if (entry is num) {
+      result.add(entry.toInt());
+    }
+  }
+  return result.isEmpty ? null : result;
 }

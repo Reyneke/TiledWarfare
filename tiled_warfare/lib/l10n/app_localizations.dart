@@ -950,6 +950,144 @@ abstract class AppLocalizations {
   /// **'Aktive Fertigkeit: negiert befristet alle laufenden Kosten; danach Burnout.'**
   String get managementFeatureCreativeAccountingEffect;
 
+  /// Rolle: Oberkellner (V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Oberkellner'**
+  String get managementRoleHeadWaiter;
+
+  /// Wirkung: Oberkellner
+  ///
+  /// In de, this message translates to:
+  /// **'Hebt Attraktivität und Kapazität.'**
+  String get managementRoleEffectHeadWaiter;
+
+  /// Rolle: Personalchef (V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Personalchef'**
+  String get managementRolePersonnelManager;
+
+  /// Wirkung: Personalchef
+  ///
+  /// In de, this message translates to:
+  /// **'Hebt Kundenzufriedenheit und Kapazität.'**
+  String get managementRoleEffectPersonnelManager;
+
+  /// Rolle: Lagerist (V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Lagerist'**
+  String get managementRoleStorekeeper;
+
+  /// Wirkung: Lagerist
+  ///
+  /// In de, this message translates to:
+  /// **'Hebt die Kapazität deutlich.'**
+  String get managementRoleEffectStorekeeper;
+
+  /// Rolle: Gewerkschaftschef (V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Gewerkschaftschef'**
+  String get managementRoleUnionChief;
+
+  /// Wirkung: Gewerkschaftschef
+  ///
+  /// In de, this message translates to:
+  /// **'Erhöht die Mitarbeiterkosten, senkt dafür deren Erschöpfung.'**
+  String get managementRoleEffectUnionChief;
+
+  /// Feature: Rush Hour (Oberkellner, V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Rush Hour'**
+  String get managementFeatureRushHour;
+
+  /// Wirkung: Rush Hour
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: hebt befristet alle Eingangswerte; Mali entfallen, dafür Erschöpfung.'**
+  String get managementFeatureRushHourEffect;
+
+  /// Feature: Organisation ist alles (Personalchef, V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Organisation ist alles'**
+  String get managementFeatureOrganisationIsEverything;
+
+  /// Wirkung: Organisation ist alles
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: senkt befristet den Stabilitätsverlust – gegen Geld.'**
+  String get managementFeatureOrganisationIsEverythingEffect;
+
+  /// Feature: Lagertetris (Lagerist, V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Lagertetris'**
+  String get managementFeatureStorageTetris;
+
+  /// Wirkung: Lagertetris
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: vervielfacht befristet die Kapazität; alle Mali entfallen.'**
+  String get managementFeatureStorageTetrisEffect;
+
+  /// Feature: Alle Räder … (Gewerkschaftschef, V12)
+  ///
+  /// In de, this message translates to:
+  /// **'Alle Räder …'**
+  String get managementFeatureUnionWorkers;
+
+  /// Wirkung: Alle Räder …
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: Sabotage-Mannschaft mit gemittelter Shadiness und Rerolls.'**
+  String get managementFeatureUnionWorkersEffect;
+
+  /// Rolle: Sicherheitschef (V13)
+  ///
+  /// In de, this message translates to:
+  /// **'Sicherheitschef'**
+  String get managementRoleSecurityChief;
+
+  /// Wirkung: Sicherheitschef
+  ///
+  /// In de, this message translates to:
+  /// **'Entdeckt Sabotageversuche gegen das Restaurant.'**
+  String get managementRoleEffectSecurityChief;
+
+  /// Feature: Rache ist Blutwurst (Sicherheitschef, V13)
+  ///
+  /// In de, this message translates to:
+  /// **'Rache ist Blutwurst'**
+  String get managementFeatureCounterSabotage;
+
+  /// Wirkung: Rache ist Blutwurst
+  ///
+  /// In de, this message translates to:
+  /// **'Aktive Fertigkeit: schlägt gegen einen im Fenster entdeckten Angreifer zurück.'**
+  String get managementFeatureCounterSabotageEffect;
+
+  /// Scharf geschalteter Gegenschlag (Auflösung im Wochentick)
+  ///
+  /// In de, this message translates to:
+  /// **'Gegenschlag bereit bis {time}'**
+  String managementCounterSabotagePending(String time);
+
+  /// Dialogtitel: Mannschaft für 'Alle Räder …' wählen
+  ///
+  /// In de, this message translates to:
+  /// **'Schlagmannschaft wählen'**
+  String get managementFeatureSelectTeam;
+
+  /// Laufende Tageskosten eines Features
+  ///
+  /// In de, this message translates to:
+  /// **'Laufend: {cost} € / Tag'**
+  String managementFeatureDailyCost(int cost);
+
   /// Dialogtitel: Rivale für die Sabotage wählen
   ///
   /// In de, this message translates to:
@@ -1628,6 +1766,12 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'{days, plural, =1{1 Resttag} other{{days} Resttage}} Einkommen: +{income} €'**
   String catchUpLeftover(int days, int income);
+
+  /// Unentdeckte Rivalen-Sabotage schöpft Blockeinkommen ab (V13, Kapitel 13)
+  ///
+  /// In de, this message translates to:
+  /// **'Rivalen-Sabotage: Einkommen −{loss} €'**
+  String catchUpRivalSabotageLoss(int loss);
 
   /// Charakter ist vollständig geheilt (V3)
   ///

@@ -46,6 +46,10 @@ class WeekSettlement {
   /// Abgebuchte **Strafen** des Blocks (`11a` E14: aufgedeckte Sabotage).
   final int penaltyCosts;
 
+  /// Abgebuchte **laufende Feature-Kosten** des Blocks (V12: „Organisation ist
+  /// alles“ je aktivem Tag).
+  final int featureCosts;
+
   /// Budget nach der Abrechnung des Blocks.
   final int budgetAfter;
 
@@ -59,6 +63,7 @@ class WeekSettlement {
     required this.upgradeUpkeep,
     required this.negativeInterest,
     this.penaltyCosts = 0,
+    this.featureCosts = 0,
     required this.budgetAfter,
   });
 }
@@ -86,6 +91,13 @@ class WeeklyTickResult {
   /// Abgebuchte **Strafen** insgesamt (`11a` E14: aufgedeckte Sabotage).
   final int penaltyCosts;
 
+  /// Abgebuchte **laufende Feature-Kosten** insgesamt (V12).
+  final int featureCosts;
+
+  /// Durch **unentdeckte Rivalen-Sabotage** abgeschöpftes Einkommen insgesamt
+  /// (V13) – bereits in [passiveIncome] enthalten und dort abgezogen.
+  final int rivalSabotageLosses;
+
   /// Budget nach der Abrechnung.
   final int budgetAfter;
 
@@ -109,6 +121,8 @@ class WeeklyTickResult {
     required this.upgradeUpkeep,
     required this.negativeInterest,
     this.penaltyCosts = 0,
+    this.featureCosts = 0,
+    this.rivalSabotageLosses = 0,
     required this.budgetAfter,
     required this.bankrupt,
     this.settlements = const [],
@@ -324,9 +338,12 @@ class GameClockService {
   /// ohne `injuryStartedAt` heilen rückwirkend ab `lastSeenAt` (Fallback `now`).
   /// Charaktere mit aktiver Notfall-Spritze bleiben bis zum Rückfall `ready`.
   static HealingTickResult advanceHealing(
-      RestaurantData restaurant, DateTime now) {
-    final perStage =
-        healTimePerStageFor(quality: bestMedicQuality(restaurant.medics));
+    RestaurantData restaurant,
+    DateTime now,
+  ) {
+    final perStage = healTimePerStageFor(
+      quality: bestMedicQuality(restaurant.medics),
+    );
     final defaultAnchor = restaurant.lastSeenAt ?? now;
     var healed = 0;
 
@@ -368,8 +385,9 @@ class GameClockService {
   /// es gewinnt der schwerere Status gemäß Kettenposition. Idempotent: Nach dem
   /// Rückfall sind die Spritzen-Marker gelöscht.
   static int rollBackEmergencyShots(RestaurantData restaurant, DateTime now) {
-    final perStage =
-        healTimePerStageFor(quality: bestMedicQuality(restaurant.medics));
+    final perStage = healTimePerStageFor(
+      quality: bestMedicQuality(restaurant.medics),
+    );
     var rolledBack = 0;
 
     for (final staff in restaurant.staff) {
@@ -381,8 +399,11 @@ class GameClockService {
 
       final suppressed = _statusFromName(staff.suppressedStatus);
       final anchor = staff.injuryStartedAt ?? shotAt;
-      final healedUnderlying =
-          healedStatus(suppressed, elapsed(anchor, now), perStage);
+      final healedUnderlying = healedStatus(
+        suppressed,
+        elapsed(anchor, now),
+        perStage,
+      );
       final current = _statusFromName(staff.status);
 
       var result = heavierByChain(suppressed, healedUnderlying);
@@ -456,8 +477,11 @@ class GameClockService {
   /// fortgeschrieben; ein zweiter Aufruf mit demselben [now] liefert keine
   /// Fälligkeit. Der Sub-Tag-Rest bleibt erhalten, damit häufige Aufrufe (z. B.
   /// ein periodischer UI-Tick) keinen Tag verlieren.
-  static WeeklyTickResult catchUp(RestaurantData restaurant, DateTime now,
-      {Random? random}) {
+  static WeeklyTickResult catchUp(
+    RestaurantData restaurant,
+    DateTime now, {
+    Random? random,
+  }) {
     // V3: Echtzeit-Heilung und Spritzen-Rückfall werden **immer** nachgeholt –
     // auch wenn seit dem letzten Anker noch kein voller Tag vergangen ist.
     advanceHealing(restaurant, now);
@@ -486,8 +510,8 @@ class GameClockService {
     // Eingangswerte des passiven Einkommens (§ 8) aus dem Endzustand (L5).
     var incomePerWeek = PassiveIncomeService.passiveIncomePerWeek(
       attractiveness: attractivenessOf(restaurant, now: now),
-      satisfaction: satisfactionOf(restaurant),
-      capacity: capacityOf(restaurant),
+      satisfaction: satisfactionOf(restaurant, now: now),
+      capacity: capacityOf(restaurant, now: now),
     );
     // V10 (Phase 6)/Option C (`11a`): Aboyeur und Social Media Manager
     // verbessern den Bestellfluss (Einnahmen); beide Zuschläge stapeln additiv.
@@ -495,7 +519,8 @@ class GameClockService {
         SupportRoleService.incomePercent(restaurant.supportStaff) +
             StaffRoleService.managementIncomePercent(restaurant.staffEntries);
     if (incomeBonusPercent != 0) {
-      incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100).round();
+      incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100)
+          .round();
     }
     // Tagesertrag; der 7. Tag eines Blocks trägt den Rundungsrest.
     final incomePerDay = incomePerWeek ~/ 7;
@@ -508,21 +533,30 @@ class GameClockService {
     // inkl. des Nicht-Kampf-Personals (Hilfs-/Service-Rollen + Verwaltung &
     // Marketing). Quelle ist der generalisierte `staffEntries`-Bestand; die
     // Arztkosten werden separat über `billWeeklyMedicCosts` gebucht.
-    final wagePerWeek = EconomyService.billWeeklyStaffWages(
-      [
-        ...restaurant.staff.map(_staffWagePerWeekOf),
-        StaffRoleService.nonCombatWeeklyWages(restaurant.staffEntries),
-      ],
-      1,
+    // V12: Der Gewerkschaftschef erhöht die Löhne des Kampfpersonals.
+    final brigadeWages = restaurant.staff.map(_staffWagePerWeekOf).toList();
+    final unionChiefPercent = StaffRoleService.unionChiefWageIncreasePercent(
+      restaurant.staffEntries,
     );
-    var upkeepPerWeek =
-        EconomyService.totalUpgradeUpkeepPerWeek(restaurant.upgrades);
+    final adjustedBrigadeWages = unionChiefPercent == 0
+        ? brigadeWages
+        : brigadeWages
+              .map((wage) => (wage * (100 + unionChiefPercent) / 100).round())
+              .toList();
+    final wagePerWeek = EconomyService.billWeeklyStaffWages([
+      ...adjustedBrigadeWages,
+      StaffRoleService.nonCombatWeeklyWages(restaurant.staffEntries),
+    ], 1);
+    var upkeepPerWeek = EconomyService.totalUpgradeUpkeepPerWeek(
+      restaurant.upgrades,
+    );
     // V10 (Phase 6): Der Plongeur senkt die laufenden Betriebskosten.
-    final upkeepReductionPercent =
-        SupportRoleService.upkeepReductionPercent(restaurant.supportStaff);
+    final upkeepReductionPercent = SupportRoleService.upkeepReductionPercent(
+      restaurant.supportStaff,
+    );
     if (upkeepReductionPercent != 0) {
-      upkeepPerWeek =
-          (upkeepPerWeek * (100 - upkeepReductionPercent) / 100).round();
+      upkeepPerWeek = (upkeepPerWeek * (100 - upkeepReductionPercent) / 100)
+          .round();
     }
 
     // `11a` E12: passive Kosten-Minderung der Verwaltungsrollen.
@@ -530,19 +564,29 @@ class GameClockService {
     // laufenden Kosten“ des Buchhalters decken zusätzlich Arztkosten und
     // Erweiterungs-Unterhalt ab. Beide Werte sind binär (Anwesenheit), die
     // Rundung erfolgt kaufmännisch (`StaffRoleService.reduceByPercent`).
-    final staffCostReductionPercent = StaffRoleService
-            .chefSecretaryStaffCostReductionPercent(restaurant.staffEntries) +
+    final staffCostReductionPercent =
+        StaffRoleService.chefSecretaryStaffCostReductionPercent(
+          restaurant.staffEntries,
+        ) +
         StaffRoleService.accountantOngoingCostReductionPercent(
-            restaurant.staffEntries);
+          restaurant.staffEntries,
+        );
     final ongoingCostReductionPercent =
         StaffRoleService.accountantOngoingCostReductionPercent(
-            restaurant.staffEntries);
+          restaurant.staffEntries,
+        );
     final reducedMedicPerWeek = StaffRoleService.reduceByPercent(
-        medicPerWeek, ongoingCostReductionPercent);
-    final reducedWagePerWeek =
-        StaffRoleService.reduceByPercent(wagePerWeek, staffCostReductionPercent);
+      medicPerWeek,
+      ongoingCostReductionPercent,
+    );
+    final reducedWagePerWeek = StaffRoleService.reduceByPercent(
+      wagePerWeek,
+      staffCostReductionPercent,
+    );
     final reducedUpkeepPerWeek = StaffRoleService.reduceByPercent(
-        upkeepPerWeek, ongoingCostReductionPercent);
+      upkeepPerWeek,
+      ongoingCostReductionPercent,
+    );
 
     var budget = restaurant.budget;
     var totalIncome = 0;
@@ -551,6 +595,9 @@ class GameClockService {
     var totalUpkeep = 0;
     var totalInterest = 0;
     var totalPenalty = 0;
+    // V12: im laufenden Block aufgelaufene laufende Feature-Kosten (Tageskosten).
+    var totalFeature = 0;
+    var featureForBlock = 0;
     // `11a` E16: Tage im laufenden Block, an denen die Kreative Buchführung
     // alle laufenden Kosten negiert (tagesanteilig am Blockende).
     var negatedCostDays = 0;
@@ -558,6 +605,9 @@ class GameClockService {
     var penaltyForBlock = 0;
     // `11a` E14: zusätzliche Tageserträge aus einem Sabotage-Fenster.
     var sabotageBonusForBlock = 0;
+    // V13: Abschöpfung durch **unentdeckte** Rivalen-Sabotage (je Block).
+    var rivalLossForBlock = 0;
+    var totalRivalLoss = 0;
     final settlements = <WeekSettlement>[];
     var cursor = lastSeen;
 
@@ -575,10 +625,17 @@ class GameClockService {
       _applyFeatureDailyXp(restaurant, cursor);
       // `11a` E16: Kreative Buchführung negiert tagesanteilig die Kosten.
       if (_creativeAccountingActive(restaurant, cursor)) negatedCostDays++;
+      // V12: Laufende Tageskosten aktiver Features („Organisation ist alles“).
+      featureForBlock += ManagementFeatureService.featureDailyCosts(
+        restaurant.staffEntries,
+        cursor,
+      );
       // `11a` E14: Tagesgenauer Einkommens-Bonus eines Sabotage-Fensters
       // (der Rivale verliert Kunden – die wechseln zum Spieler über).
-      final sabotagePercent =
-          RivalService.sabotageIncomeBonusPercent(restaurant, cursor);
+      final sabotagePercent = RivalService.sabotageIncomeBonusPercent(
+        restaurant,
+        cursor,
+      );
       if (sabotagePercent > 0) {
         final bonus = (dailyIncome * sabotagePercent / 100).round();
         budget += bonus;
@@ -597,42 +654,93 @@ class GameClockService {
 
       if (!isBlockEnd) continue;
 
+      // V13: Eingehende Rivalen-Sabotage wird am **Blockende** abgerechnet –
+      // deterministisch je Rivale und Blockanker (idempotent, V8). Ein im
+      // eigenen Fenster entdeckter Angriff kann den Gegenschlag des
+      // Sicherheitschefs auslösen; seine Strafe zählt wie jede andere Strafe
+      // zum Block (die Wirkung eines erfolgreichen Gegenschlags läuft als
+      // Einkommens-Fenster in den Folgeblock).
+      final incoming = RivalService.resolveIncomingSabotage(
+        restaurant,
+        weekAnchor,
+        now: cursor,
+      );
+      final counterFine = incoming?.counter?.fine ?? 0;
+      if (counterFine > 0) {
+        budget -= counterFine;
+        penaltyForBlock += counterFine;
+      }
+
+      // V13: **Unentdeckte** Versuche schöpfen Einkommen ab – je Angreifer
+      // `incomingSabotageIncomePenaltyPercent` des Brutto-Blockeinkommens,
+      // gedeckelt über `incomingSabotageIncomePenaltyMaxPercent`. Der Angreifer
+      // bleibt dabei unbekannt (kein Gegenschlag); die Abschöpfung mindert
+      // Blockbudget und ausgewiesenes Einkommen, nicht die Strafen. Das Fenster
+      // eines erfolgreichen Gegenschlags läuft erst im Folgeblock.
+      final blockIncomeGross =
+          incomePerDay * 6 + incomeLastDayOfBlock + sabotageBonusForBlock;
+      final rivalPenaltyPercent =
+          ((incoming?.undetectedCount ?? 0) *
+                  EconomyBalance.incomingSabotageIncomePenaltyPercent)
+              .clamp(0, EconomyBalance.incomingSabotageIncomePenaltyMaxPercent);
+      rivalLossForBlock = rivalPenaltyPercent == 0
+          ? 0
+          : (blockIncomeGross * rivalPenaltyPercent / 100).round();
+      if (rivalLossForBlock > 0) {
+        budget -= rivalLossForBlock;
+        totalIncome -= rivalLossForBlock;
+        totalRivalLoss += rivalLossForBlock;
+      }
+
       // Blockende: wöchentliche Kosten und Zinsen (§ 8/§ 10) – die Zinsen
       // werden auf den jeweiligen Saldo am Blockende angewandt.
       final blockMedic = _negateCostDays(reducedMedicPerWeek, negatedCostDays);
       final blockWage = _negateCostDays(reducedWagePerWeek, negatedCostDays);
-      final blockUpkeep =
-          _negateCostDays(reducedUpkeepPerWeek, negatedCostDays);
+      final blockUpkeep = _negateCostDays(
+        reducedUpkeepPerWeek,
+        negatedCostDays,
+      );
+      final blockFeature = _negateCostDays(featureForBlock, negatedCostDays);
       budget -= blockMedic;
       totalMedic += blockMedic;
       budget -= blockWage;
       totalWage += blockWage;
       budget -= blockUpkeep;
       totalUpkeep += blockUpkeep;
+      budget -= blockFeature;
+      totalFeature += blockFeature;
       final beforeInterest = budget;
       budget = EconomyService.applyNegativeInterest(budget);
       final interest = beforeInterest - budget;
       totalInterest += interest;
       totalPenalty += penaltyForBlock;
 
-      settlements.add(WeekSettlement(
-        weekIndex: settlements.length,
-        periodStart: weekAnchor,
-        periodEnd: weekAnchor.add(week),
-        income:
-            incomePerDay * 6 + incomeLastDayOfBlock + sabotageBonusForBlock,
-        medicCosts: blockMedic,
-        staffCosts: blockWage,
-        upgradeUpkeep: blockUpkeep,
-        negativeInterest: interest,
-        penaltyCosts: penaltyForBlock,
-        budgetAfter: budget,
-      ));
+      settlements.add(
+        WeekSettlement(
+          weekIndex: settlements.length,
+          periodStart: weekAnchor,
+          periodEnd: weekAnchor.add(week),
+          income:
+              incomePerDay * 6 +
+              incomeLastDayOfBlock +
+              sabotageBonusForBlock -
+              rivalLossForBlock,
+          medicCosts: blockMedic,
+          staffCosts: blockWage,
+          upgradeUpkeep: blockUpkeep,
+          negativeInterest: interest,
+          penaltyCosts: penaltyForBlock,
+          featureCosts: blockFeature,
+          budgetAfter: budget,
+        ),
+      );
       // Wochenraster exakt eine Woche weiterziehen (kein Drift).
       weekAnchor = weekAnchor.add(week);
       negatedCostDays = 0;
       penaltyForBlock = 0;
       sabotageBonusForBlock = 0;
+      rivalLossForBlock = 0;
+      featureForBlock = 0;
       // V9 (Phase 3): Am Block-Ende werden Vitalität/Moral auf den Basiswert
       // aufgefüllt (deterministisch aus Persönlichkeit + Charakter-ID).
       // `11a`: In der Nachteilphase eines Features nur mit halbem Delta.
@@ -661,6 +769,8 @@ class GameClockService {
       upgradeUpkeep: totalUpkeep,
       negativeInterest: totalInterest,
       penaltyCosts: totalPenalty,
+      featureCosts: totalFeature,
+      rivalSabotageLosses: totalRivalLoss,
       budgetAfter: budget,
       bankrupt: EconomyService.isBankrupt(budget),
       settlements: settlements,
@@ -705,28 +815,99 @@ class GameClockService {
 
   /// Senkt Vitalität/Moral um den Tages-Sink und pflegt die Null-Anker
   /// (V9 § 6; die Anker sind die Basis des Erschöpfungs-Malus).
+  ///
+  /// V12: Der passive Gewerkschaftschef und die aktiven Features „Rush Hour“
+  /// bzw. „Lagertetris“ (Mali entfallen) sowie „Organisation ist alles“ senken
+  /// den Sink; die „Rush Hour“ erzeugt zusätzlich eine **rangverteilte**
+  /// Erschöpfungslast.
   static void _applyDailyResourceSink(RestaurantData restaurant, DateTime now) {
     // `11a`: In der Nachteilphase eines Features sinkt die Ressource des
     // Kampagnen-Ziels doppelt (`featureAftermathSinkMultiplier`).
     final multipliers = ManagementFeatureService.aftermathSinkMultipliers(
-        restaurant.staffEntries, now);
+      restaurant.staffEntries,
+      now,
+    );
+    // V12: prozentuale Sink-Senkung (Gewerkschaftschef + Feature-Mali).
+    final reliefPercent = ManagementFeatureService.sinkReliefPercent(
+      restaurant.staffEntries,
+      now,
+    );
+    // V12: Zusatzlast der „Rush Hour“, ranggewichtet verteilt.
+    final extraSink = _rushHourExhaustionShares(restaurant, now);
     for (final s in restaurant.staff) {
       final multiplier = multipliers[s.id] ?? 1;
+      var sinkAmount = EconomyBalance.resourceSinkPerDay * multiplier;
+      if (reliefPercent > 0) {
+        sinkAmount = (sinkAmount * (100 - reliefPercent) / 100).round();
+      }
+      sinkAmount += extraSink[s.id] ?? 0;
+      if (sinkAmount <= 0) continue;
       if (s.vitalityCurrent != null) {
-        final sink = StressService.sink(s.vitalityCurrent!,
-            EconomyBalance.resourceSinkPerDay * multiplier);
+        final sink = StressService.sink(s.vitalityCurrent!, sinkAmount);
         s.vitalityCurrent = sink.value;
         s.vitalityZeroSinceAt = StressService.updateZeroAnchor(
-            s.vitalityZeroSinceAt, atZero: sink.atZero, now: now);
+          s.vitalityZeroSinceAt,
+          atZero: sink.atZero,
+          now: now,
+        );
       }
       if (s.moraleCurrent != null) {
-        final sink = StressService.sink(
-            s.moraleCurrent!, EconomyBalance.resourceSinkPerDay * multiplier);
+        final sink = StressService.sink(s.moraleCurrent!, sinkAmount);
         s.moraleCurrent = sink.value;
         s.moraleZeroSinceAt = StressService.updateZeroAnchor(
-            s.moraleZeroSinceAt, atZero: sink.atZero, now: now);
+          s.moraleZeroSinceAt,
+          atZero: sink.atZero,
+          now: now,
+        );
       }
     }
+  }
+
+  /// Verteilt die Zusatzlast einer aktiven „Rush Hour“ **ranggewichtet** auf das
+  /// Personal (V12: „von oben herab“): höhere Ränge tragen mehr als niedrigere,
+  /// und je mehr Mitarbeiter anwesend sind, desto geringer die Last des
+  /// Einzelnen. Der Rundungsrest geht deterministisch an den ranghöchsten
+  /// Charakter.
+  static Map<int, int> _rushHourExhaustionShares(
+    RestaurantData restaurant,
+    DateTime now,
+  ) {
+    final total = ManagementFeatureService.rushHourExtraSink(
+      restaurant.staffEntries,
+      now,
+    );
+    if (total <= 0 || restaurant.staff.isEmpty) return const {};
+
+    final weights = <int, int>{};
+    var weightSum = 0;
+    for (final s in restaurant.staff) {
+      final rank = s.rank.isNotEmpty ? s.rank : rankFromType(s.type);
+      final weight = EconomyService.promotionLevel(rank) + 1;
+      weights[s.id] = weight;
+      weightSum += weight;
+    }
+    if (weightSum <= 0) return const {};
+
+    final shares = <int, int>{};
+    var assigned = 0;
+    for (final s in restaurant.staff) {
+      final share = total * weights[s.id]! ~/ weightSum;
+      shares[s.id] = share;
+      assigned += share;
+    }
+    if (assigned < total) {
+      var bestId = restaurant.staff.first.id;
+      var bestWeight = -1;
+      for (final s in restaurant.staff) {
+        final weight = weights[s.id]!;
+        if (weight > bestWeight) {
+          bestWeight = weight;
+          bestId = s.id;
+        }
+      }
+      shares[bestId] = (shares[bestId] ?? 0) + (total - assigned);
+    }
+    return shares;
   }
 
   /// Setzt Vitalität/Moral am Wochenblock-Ende auf den Trait-Basiswert zurück
@@ -791,15 +972,18 @@ class GameClockService {
   /// zentral über [`EconomyService.grantXp`].
   static void _applyFeatureDailyXp(RestaurantData restaurant, DateTime now) {
     for (final feature in kAllManagementFeatures) {
-      final entry =
-          ManagementFeatureService.activeEntry(restaurant.staffEntries, feature, now);
+      final entry = ManagementFeatureService.activeEntry(
+        restaurant.staffEntries,
+        feature,
+        now,
+      );
       final targetId = entry?.featureTargetId;
       if (entry == null || targetId == null) continue;
       final target = _staffById(restaurant, targetId);
       if (target == null) continue;
-      final boost =
-          ManagementFeatureService.boostPercentFor(
-              ManagementFeatureService.competenceOf(entry));
+      final boost = ManagementFeatureService.boostPercentFor(
+        ManagementFeatureService.competenceOf(entry),
+      );
       final xp = EconomyService.boostedXp(
         ManagementFeatureService.dailyXpFor(target.levelValue),
         boost,
@@ -836,10 +1020,21 @@ class GameClockService {
   /// Führt je Charakter ein Proben-Paar für die abgerechnete Staffel aus
   /// (V9 § 6; der Zufall ist injizierbar, V7/L7).
   static void _probeResources(
-      RestaurantData restaurant, DateTime now, Random rng) {
+    RestaurantData restaurant,
+    DateTime now,
+    Random rng,
+  ) {
     // V10 (Phase 6): Der Tournant senkt den Erschöpfungs-Malus der Nulltage.
+    // V12: Der Gewerkschaftschef und die aktiven Features „Rush Hour“/
+    // „Lagertetris“ (Mali entfallen) sowie „Organisation ist alles“ senken ihn
+    // zusätzlich (additiv, auf 100 % gedeckelt).
     final reliefPercent =
-        SupportRoleService.exhaustionReliefPercent(restaurant.supportStaff);
+        (SupportRoleService.exhaustionReliefPercent(restaurant.supportStaff) +
+                ManagementFeatureService.malusReliefPercent(
+                  restaurant.staffEntries,
+                  now,
+                ))
+            .clamp(0, 100);
     for (final s in restaurant.staff) {
       final vitality = s.vitalityCurrent;
       final morale = s.moraleCurrent;
@@ -890,8 +1085,9 @@ class GameClockService {
   /// `true`, wenn dieses Restaurant einen **aktiven** (zugeteilten)
   /// Chef de cuisine führt (Karrierepfade, V10 § 6).
   static bool hasActiveHeadChef(RestaurantData restaurant) =>
-      restaurant.staff.any((s) =>
-          s.rank == kRankHeadChef && s.headChefRole == kHeadChefRoleActive);
+      restaurant.staff.any(
+        (s) => s.rank == kRankHeadChef && s.headChefRole == kHeadChefRoleActive,
+      );
 
   /// Management-Faktor des aktiven Chef de cuisine auf die drei Werte des
   /// passiven Einkommens (`1.0` ohne aktiven Chef, sonst `1 + Prozent`).
@@ -909,8 +1105,10 @@ class GameClockService {
         staff.rank.isNotEmpty ? staff.rank : rankFromType(staff.type);
     final thriftiness = staff.personalityId < 0
         ? 50
-        : PersonalityTraits.forProfile(staff.personalityId, staff.id)
-            .thriftiness;
+        : PersonalityTraits.forProfile(
+            staff.personalityId,
+            staff.id,
+          ).thriftiness;
     return EconomyService.staffWagePerWeek(rank, thriftiness);
   }
 
@@ -930,6 +1128,18 @@ class GameClockService {
     value *= _headChefManagementFactor(restaurant);
     // V10 (Phase 6): Commis und Garçon de cuisine heben die Attraktivität.
     value += SupportRoleService.attractivenessBonus(restaurant.supportStaff);
+    // V12: Der Oberkellner hebt die Attraktivität (binär).
+    value += StaffRoleService.headWaiterAttractivenessBonus(
+      restaurant.staffEntries,
+    );
+    // V12: Eine aktive „Rush Hour“ hebt alle Eingangswerte befristet an.
+    if (now != null) {
+      final boost = ManagementFeatureService.inputBoostPercent(
+        restaurant.staffEntries,
+        now,
+      );
+      if (boost != 0) value *= 1.0 + boost / 100;
+    }
     // Erweiterungen wirken multiplikativ vor dem Clamp (§ 10).
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).attractiveness;
     final penaltyUntil = restaurant.rebrandingPenaltyUntil;
@@ -952,21 +1162,42 @@ class GameClockService {
 
   /// Kundenzufriedenheit: `1 + Teamgesundheit × Gewicht + Ergebnisbonus`,
   /// geclamped auf die Domäne `0–inputDomainMax`.
-  static double satisfactionOf(RestaurantData restaurant) {
-    var value = EconomyBalance.satisfactionBase +
+  ///
+  /// [now] aktiviert die befristeten V12-Zuschläge (Personalchef-Passiv wirkt
+  /// unabhängig davon; „Rush Hour“ nur innerhalb der Wirkdauer).
+  static double satisfactionOf(RestaurantData restaurant, {DateTime? now}) {
+    var value =
+        EconomyBalance.satisfactionBase +
         teamHealthOf(restaurant) * EconomyBalance.satisfactionHealthWeight +
         _resultBonus(restaurant.lastMatchResult);
     // V10 (Phase 5): Ein aktiver Chef de cuisine hebt die Zufriedenheit.
     value *= _headChefManagementFactor(restaurant);
     // V10 (Phase 6): Der Garçon de cuisine hebt die Zufriedenheit leicht.
     value += SupportRoleService.satisfactionBonus(restaurant.supportStaff);
-    value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).satisfaction;
+    // V12: Der Personalchef hebt die Zufriedenheit (binär).
+    value += StaffRoleService.personnelManagerSatisfactionBonus(
+      restaurant.staffEntries,
+    );
+    // V12: Eine aktive „Rush Hour“ hebt alle Eingangswerte befristet an.
+    if (now != null) {
+      final boost = ManagementFeatureService.inputBoostPercent(
+        restaurant.staffEntries,
+        now,
+      );
+      if (boost != 0) value *= 1.0 + boost / 100;
+    }
+    value *=
+        1.0 + EconomyService.upgradeEffects(restaurant.upgrades).satisfaction;
     return value.clamp(0.0, EconomyBalance.inputDomainMax);
   }
 
   /// Kapazität: `Ø(moneyValue des Personals) / Norm`, geclamped auf
   /// `0–capacityMax`. Ohne Personal: 0.
-  static double capacityOf(RestaurantData restaurant) {
+  ///
+  /// V12: Oberkellner, Personalchef und Lagerist heben die Kapazität prozentual;
+  /// eine aktive „Rush Hour“ hebt alle Eingangswerte, ein aktives „Lagertetris“
+  /// vervielfacht die Kapazität.
+  static double capacityOf(RestaurantData restaurant, {DateTime? now}) {
     if (restaurant.staff.isEmpty) return 0.0;
     final sum = restaurant.staff
         .map((s) => s.moneyValue)
@@ -975,6 +1206,22 @@ class GameClockService {
     var value = mean / EconomyBalance.capacityMoneyNorm;
     // V10 (Phase 5): Ein aktiver Chef de cuisine hebt die Kapazität.
     value *= _headChefManagementFactor(restaurant);
+    // V12: passive Kapazitäts-Zuschläge der Verwaltungsrollen.
+    final capacityPercent = StaffRoleService.capacityPercent(
+      restaurant.staffEntries,
+    );
+    if (capacityPercent != 0) value *= 1.0 + capacityPercent / 100;
+    if (now != null) {
+      final boost = ManagementFeatureService.inputBoostPercent(
+        restaurant.staffEntries,
+        now,
+      );
+      if (boost != 0) value *= 1.0 + boost / 100;
+      value *= ManagementFeatureService.capacityFactor(
+        restaurant.staffEntries,
+        now,
+      );
+    }
     value *= 1.0 + EconomyService.upgradeEffects(restaurant.upgrades).capacity;
     return value.clamp(0.0, EconomyBalance.capacityMax);
   }

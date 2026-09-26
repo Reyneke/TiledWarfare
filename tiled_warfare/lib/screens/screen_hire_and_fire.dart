@@ -39,10 +39,12 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   void _generateAvailablePersonnel() {
     _availablePersonnel.clear();
     for (var i = 0; i < _poolSize; i++) {
-      _availablePersonnel.add(ObjectTeamMedic(
-        teamSize: _profile.personalCount,
-        nameZone: _profile.activeCuisine.zone,
-      ));
+      _availablePersonnel.add(
+        ObjectTeamMedic(
+          teamSize: _profile.personalCount,
+          nameZone: _profile.activeCuisine.zone,
+        ),
+      );
     }
   }
 
@@ -98,10 +100,94 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
         await _startPrCampaign(feature);
       case ManagementFeature.sabotage:
         await _startSabotage();
+      case ManagementFeature.unionWorkers:
+        await _startUnionWorkers();
       case ManagementFeature.legalTrick:
       case ManagementFeature.creativeAccounting:
+      case ManagementFeature.rushHour:
+      case ManagementFeature.organisationIsEverything:
+      case ManagementFeature.storageTetris:
+      case ManagementFeature.counterSabotage:
         await _startUntargetedFeature(feature);
     }
+  }
+
+  /// Schlagmannschaft für „Alle Räder …“ wählen und aktivieren (V12).
+  ///
+  /// Die Auswahl ist auf `ObjectProfile.unionWorkersTeamLimit`
+  /// (Kompetenz × Schritt) begrenzt; die Aktivierung bucht die Einmalkosten
+  /// unmittelbar (`ObjectProfile.activateUnionWorkers`).
+  Future<void> _startUnionWorkers() async {
+    final l10n = AppLocalizations.of(context)!;
+    final limit = _profile.unionWorkersTeamLimit;
+    final candidates = _profile.personal
+        .where(
+          (c) =>
+              c.status != CharacterStatus.dying &&
+              c.status != CharacterStatus.dead &&
+              c.status != CharacterStatus.overkilled,
+        )
+        .toList();
+    if (candidates.isEmpty || limit <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.managementFeatureNoTargets)));
+      return;
+    }
+    final selected = <int>{};
+    final team = await showDialog<List<ObjectApprentice>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setLocalState) => AlertDialog(
+          title: Text(l10n.managementFeatureSelectTeam),
+          content: SizedBox(
+            width: 320,
+            height: 320,
+            child: ListView.builder(
+              itemCount: candidates.length,
+              itemBuilder: (context, index) {
+                final c = candidates[index];
+                final checked = selected.contains(c.id);
+                return CheckboxListTile(
+                  value: checked,
+                  title: Text(c.name),
+                  subtitle: Text('Lv ${c.levelValue}'),
+                  onChanged: (value) => setLocalState(() {
+                    if (value == true) {
+                      if (selected.length < limit) selected.add(c.id);
+                    } else {
+                      selected.remove(c.id);
+                    }
+                  }),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(candidates.where((c) => selected.contains(c.id)).toList()),
+              child: Text(l10n.managementFeatureActivate),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (team == null || !mounted) return;
+    final ok = _profile.activateUnionWorkers(team);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.managementFeatureActivationFailed)),
+      );
+      return;
+    }
+    setState(() {});
+    await _saveWithFeedback();
   }
 
   /// Aktiviert ein ziel-loses Feature (Winkelzug, Kreative Buchführung).
@@ -128,9 +214,9 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     final l10n = AppLocalizations.of(context)!;
     final rivals = _profile.rivals;
     if (rivals.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.managementSabotageNoRivals)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.managementSabotageNoRivals)));
       return;
     }
     final chance = _profile.sabotageSuccessPercent;
@@ -170,15 +256,17 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   Future<void> _startPrCampaign(ManagementFeature feature) async {
     final l10n = AppLocalizations.of(context)!;
     final candidates = _profile.personal
-        .where((c) =>
-            c.status != CharacterStatus.dying &&
-            c.status != CharacterStatus.dead &&
-            c.status != CharacterStatus.overkilled)
+        .where(
+          (c) =>
+              c.status != CharacterStatus.dying &&
+              c.status != CharacterStatus.dead &&
+              c.status != CharacterStatus.overkilled,
+        )
         .toList();
     if (candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.managementFeatureNoTargets)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.managementFeatureNoTargets)));
       return;
     }
 
@@ -228,7 +316,25 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     if (feature == ManagementFeature.sabotage) {
       if (_profile.managementFeatureIsActive(feature, now: now)) {
         return l10n.managementSabotagePending(
-            _formatUntil(ManagementFeatureService.activeEndOf(entry)));
+          _formatUntil(ManagementFeatureService.activeEndOf(entry)),
+        );
+      }
+      final until = _profile.sabotageAppliedUntil;
+      if (entry.featureResolvedAt != null &&
+          until != null &&
+          now.isBefore(until)) {
+        return l10n.managementSabotageEffect(_formatUntil(until));
+      }
+    }
+    // V13: „Rache ist Blutwurst“ ist reaktiv – solange scharf geschaltet, ist
+    // der Gegenschlag bereit; nach einem ausgeführten Gegenschlag läuft das
+    // Wirkungsfenster gegen den Angreifer (gleiches Vokabular wie die Sabotage).
+    if (feature == ManagementFeature.counterSabotage) {
+      if (_profile.managementFeatureIsActive(feature, now: now) &&
+          entry.featureResolvedAt == null) {
+        return l10n.managementCounterSabotagePending(
+          _formatUntil(ManagementFeatureService.activeEndOf(entry)),
+        );
       }
       final until = _profile.sabotageAppliedUntil;
       if (entry.featureResolvedAt != null &&
@@ -239,31 +345,41 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     }
     if (_profile.managementFeatureIsActive(feature, now: now)) {
       return l10n.managementFeatureActive(
-          _formatUntil(ManagementFeatureService.activeEndOf(entry)));
+        _formatUntil(ManagementFeatureService.activeEndOf(entry)),
+      );
     }
     if (_profile.managementFeatureIsInAftermath(feature, now: now)) {
       return l10n.managementFeatureAftermath(
-          _formatUntil(ManagementFeatureService.aftermathEndOf(entry)));
+        _formatUntil(ManagementFeatureService.aftermathEndOf(entry)),
+      );
     }
     return null;
   }
 
   /// Icon je Feature (Aktivierungs-Button der Träger-Karte).
   IconData _featureIcon(ManagementFeature feature) => switch (feature) {
-        ManagementFeature.prCampaign => Icons.campaign,
-        ManagementFeature.sabotage => Icons.local_fire_department,
-        ManagementFeature.legalTrick => Icons.gavel,
-        ManagementFeature.creativeAccounting => Icons.calculate,
-      };
+    ManagementFeature.prCampaign => Icons.campaign,
+    ManagementFeature.sabotage => Icons.local_fire_department,
+    ManagementFeature.legalTrick => Icons.gavel,
+    ManagementFeature.creativeAccounting => Icons.calculate,
+    ManagementFeature.rushHour => Icons.local_dining,
+    ManagementFeature.organisationIsEverything => Icons.account_tree,
+    ManagementFeature.storageTetris => Icons.inventory_2,
+    ManagementFeature.unionWorkers => Icons.groups,
+    ManagementFeature.counterSabotage => Icons.shield,
+  };
 
   /// Beschriftung des Aktivierungs-Buttons; ziel-lose Features zeigen ihre
-  /// Einmalkosten direkt am Button (`11a` E15/E16).
-  String _featureButtonLabel(
-    AppLocalizations l10n,
-    ManagementFeature feature,
-  ) {
-    final cost = ManagementFeatureService.fixedCostOf(feature);
-    if (cost == null) return l10n.managementFeatureActivate;
+  /// Einmalkosten direkt am Button (`11a` E15/E16). „Organisation ist alles“
+  /// zeigt stattdessen die **laufenden** Tageskosten (V12).
+  String _featureButtonLabel(AppLocalizations l10n, ManagementFeature feature) {
+    if (feature == ManagementFeature.organisationIsEverything) {
+      return l10n.managementFeatureDailyCost(
+        EconomyBalance.organisationCostPerDay,
+      );
+    }
+    final cost = _profile.managementFeatureActivationCost(feature);
+    if (cost <= 0) return l10n.managementFeatureActivate;
     return l10n.managementFeatureCost(cost);
   }
 
@@ -275,18 +391,32 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
         '${two(until.hour)}:${two(until.minute)}';
   }
 
-  /// Gesamte Wochenlast: Arztkosten + Support-Löhne + Personal-Löhne (V10).
+  /// Gesamte Wochenlast: Arztkosten + Support-Löhne + Personal-Löhne (V10)
+  /// plus die laufenden Tageskosten aktiver Features (V12).
   int get _totalWeeklyLoad {
-    final medicCosts = _profile.hiredMedics
-        .fold<int>(0, (sum, medic) => sum + medic.costPerWeek);
-    final supportCosts =
-        StaffRoleService.nonCombatWeeklyWages(_profile.staffEntries);
+    final medicCosts = _profile.hiredMedics.fold<int>(
+      0,
+      (sum, medic) => sum + medic.costPerWeek,
+    );
+    final supportCosts = StaffRoleService.nonCombatWeeklyWages(
+      _profile.staffEntries,
+    );
     final staffCosts = _profile.personal.fold<int>(0, (sum, character) {
-      final traits =
-          PersonalityTraits.forProfile(character.personalityId, character.id);
-      return sum + EconomyService.staffWagePerWeek(character.rank, traits.thriftiness);
+      final traits = PersonalityTraits.forProfile(
+        character.personalityId,
+        character.id,
+      );
+      return sum +
+          EconomyService.staffWagePerWeek(character.rank, traits.thriftiness);
     });
-    return medicCosts + supportCosts + staffCosts;
+    // V12: „Organisation ist alles“ wird je aktivem Tag bezahlt.
+    final featureCosts =
+        ManagementFeatureService.featureDailyCosts(
+          _profile.staffEntries,
+          DateTime.now(),
+        ) *
+        7;
+    return medicCosts + supportCosts + staffCosts + featureCosts;
   }
 
   /// Speichert den Spielstand und meldet einen Fehlschlag sichtbar (V6/L4).
@@ -294,9 +424,9 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     final ok = await _profile.saveToStorage();
     if (ok || !mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.saveFailed)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.saveFailed)));
   }
 
   void _regeneratePool() {
@@ -354,23 +484,14 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                 ),
               ),
             ),
-            SizedBox(
-              height: 220,
-              child: _buildHiredSupportList(context),
-            ),
+            SizedBox(height: 220, child: _buildHiredSupportList(context)),
             const Divider(),
           ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
-              l10n.supportRoles,
-              style: theme.textTheme.titleMedium,
-            ),
+            child: Text(l10n.supportRoles, style: theme.textTheme.titleMedium),
           ),
-          SizedBox(
-            height: 180,
-            child: _buildAvailableRoles(context),
-          ),
+          SizedBox(height: 180, child: _buildAvailableRoles(context)),
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -379,10 +500,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          SizedBox(
-            height: 180,
-            child: _buildAvailableManagementRoles(context),
-          ),
+          SizedBox(height: 180, child: _buildAvailableManagementRoles(context)),
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -392,10 +510,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          SizedBox(
-            height: 96,
-            child: _buildRivalsSection(context),
-          ),
+          SizedBox(height: 96, child: _buildRivalsSection(context)),
           const Divider(),
           if (_profile.hiredMedicsCount > 0 ||
               _profile.staffEntries.isNotEmpty ||
@@ -477,8 +592,9 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
             ? (managementRoleLabelFor(l10n, entry.role) ?? entry.role)
             : (supportRoleLabelFor(l10n, entry.role) ?? entry.role);
         final feature = role == null ? null : managementFeatureOf(role);
-        final featureStatus =
-            feature == null ? null : _featureStatusText(l10n, entry, feature);
+        final featureStatus = feature == null
+            ? null
+            : _featureStatusText(l10n, entry, feature);
         return SizedBox(
           width: 220,
           child: Card(
@@ -564,8 +680,11 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       itemCount: rivals.length,
       itemBuilder: (context, index) {
         final rival = rivals[index];
-        final isSabotaged =
-            rival.isSabotagedAt(_profile.sabotageTargetId, sabotagedUntil, now);
+        final isSabotaged = rival.isSabotagedAt(
+          _profile.sabotageTargetId,
+          sabotagedUntil,
+          now,
+        );
         return SizedBox(
           width: 200,
           child: Card(
@@ -801,8 +920,11 @@ class _PersonnelCard extends StatelessWidget {
                     ),
                   ),
                   if (isHired)
-                    Icon(Icons.check_circle,
-                        size: 18, color: colorScheme.primary),
+                    Icon(
+                      Icons.check_circle,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -838,17 +960,15 @@ class _PersonnelCard extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(Icons.psychology,
-                      size: 16, color: colorScheme.onSurface),
+                  Icon(
+                    Icons.psychology,
+                    size: 16,
+                    color: colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '${medic.enneagramProfile.name} · ${l10n.medicScores(
-                        ObjectTeamMedic.helpfulnessScoreFor(
-                            medic.enneagramProfile, medic.quality),
-                        ObjectTeamMedic.treatmentQualityScoreFor(
-                            medic.enneagramProfile, medic.quality),
-                      )}',
+                      '${medic.enneagramProfile.name} · ${l10n.medicScores(ObjectTeamMedic.helpfulnessScoreFor(medic.enneagramProfile, medic.quality), ObjectTeamMedic.treatmentQualityScoreFor(medic.enneagramProfile, medic.quality))}',
                       style: theme.textTheme.bodySmall,
                       overflow: TextOverflow.ellipsis,
                     ),

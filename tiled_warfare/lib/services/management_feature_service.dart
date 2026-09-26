@@ -28,7 +28,8 @@ class ManagementFeatureService {
   /// Abgeleitet aus der stabilen Personal-ID – kein Zufall, kein Pool; damit
   /// über Ladevorgänge hinweg reproduzierbar.
   static int competenceOf(StaffEntryData entry) {
-    final span = EconomyBalance.featureCompetenceMax -
+    final span =
+        EconomyBalance.featureCompetenceMax -
         EconomyBalance.featureCompetenceMin +
         1;
     if (span <= 1) return EconomyBalance.featureCompetenceMin;
@@ -74,6 +75,16 @@ class ManagementFeatureService {
       case ManagementFeature.creativeAccounting:
         return EconomyBalance.creativeAccountingPerCompetence *
             competenceOf(entry);
+      case ManagementFeature.rushHour:
+        return EconomyBalance.rushHourPerCompetence * competenceOf(entry);
+      case ManagementFeature.organisationIsEverything:
+        return EconomyBalance.organisationPerCompetence * competenceOf(entry);
+      case ManagementFeature.storageTetris:
+        return EconomyBalance.storageTetrisActiveDuration;
+      case ManagementFeature.unionWorkers:
+        return EconomyBalance.unionWorkersActiveDuration;
+      case ManagementFeature.counterSabotage:
+        return EconomyBalance.counterSabotageActiveDuration;
       case ManagementFeature.prCampaign:
       case null:
         return EconomyBalance.featureActiveDuration;
@@ -86,11 +97,20 @@ class ManagementFeatureService {
     switch (feature) {
       case ManagementFeature.sabotage:
         return EconomyBalance.sabotageAftermathDuration;
+      case ManagementFeature.counterSabotage:
+        return EconomyBalance.counterSabotageAftermathDuration;
       case ManagementFeature.legalTrick:
         return EconomyBalance.legalTrickAftermathDuration;
       case ManagementFeature.creativeAccounting:
         return EconomyBalance.creativeAccountingAftermathPerCompetence *
             competenceOf(entry);
+      case ManagementFeature.rushHour:
+      case ManagementFeature.organisationIsEverything:
+      case ManagementFeature.storageTetris:
+      case ManagementFeature.unionWorkers:
+        // Die V12-Features haben keine Nachteilphase (die Kosten bzw. die
+        // Erschöpfung fallen während der Wirkdauer an).
+        return Duration.zero;
       case ManagementFeature.prCampaign:
       case null:
         return EconomyBalance.featureAftermathDuration;
@@ -98,14 +118,38 @@ class ManagementFeatureService {
   }
 
   /// Feste Einmalkosten eines ziel-losen Features (oder `null`, wenn die Kosten
-  /// mit dem Ziel skalieren – PR-Kampagne, E9).
+  /// mit dem Ziel oder der Kompetenz skalieren – PR-Kampagne, E9; Lagertetris,
+  /// „Organisation ist alles“, V12).
   static int? fixedCostOf(ManagementFeature feature) => switch (feature) {
-        ManagementFeature.sabotage => EconomyBalance.sabotageCost,
-        ManagementFeature.legalTrick => EconomyBalance.legalTrickCost,
-        ManagementFeature.creativeAccounting =>
-          EconomyBalance.creativeAccountingCost,
-        ManagementFeature.prCampaign => null,
-      };
+    ManagementFeature.sabotage => EconomyBalance.sabotageCost,
+    ManagementFeature.legalTrick => EconomyBalance.legalTrickCost,
+    ManagementFeature.creativeAccounting =>
+      EconomyBalance.creativeAccountingCost,
+    ManagementFeature.rushHour => EconomyBalance.rushHourCost,
+    ManagementFeature.unionWorkers => EconomyBalance.unionWorkersCost,
+    ManagementFeature.counterSabotage => EconomyBalance.counterSabotageCost,
+    ManagementFeature.organisationIsEverything => null,
+    ManagementFeature.storageTetris => null,
+    ManagementFeature.prCampaign => null,
+  };
+
+  /// Einmalkosten der Aktivierung von [feature] durch den Träger [entry].
+  ///
+  /// „Organisation ist alles“ kostet nichts im Voraus – sie wird **je aktivem
+  /// Tag** bezahlt (`featureDailyCosts`, `V12`). „Lagertetris“ skaliert mit der
+  /// Kompetenz (`storageTetrisCostPerCompetence`).
+  static int activationCostFor(
+    ManagementFeature feature,
+    StaffEntryData entry,
+  ) {
+    final fixed = fixedCostOf(feature);
+    if (fixed != null) return fixed;
+    if (feature == ManagementFeature.storageTetris) {
+      return competenceOf(entry) *
+          EconomyBalance.storageTetrisCostPerCompetence;
+    }
+    return 0;
+  }
 
   /// Erfolgswahrscheinlichkeit einer Sabotage (Prozent) für den Träger [entry]:
   /// Grundwert plus Kompetenz-Zuschlag (E14).
@@ -115,22 +159,189 @@ class ManagementFeatureService {
 
   /// Deterministischer Wurf (0–99) einer Sabotage auf den Rivalen [rivalId].
   ///
-  /// Abgeleitet aus Träger-ID, Anker der Aktivierung und Rivalen-ID – **kein**
-  /// Zufall im Catch-up (V8-Idempotenz).
-  static int sabotageRollFor(StaffEntryData entry, int rivalId) {
+  /// Abgeleitet aus Träger-ID, Anker der Aktivierung, Rivalen-ID und
+  /// Versuchs-Nummer – **kein** Zufall im Catch-up (V8-Idempotenz). Die
+  /// Versuchs-Nummer (`attempt`, ab 0) bildet den **Reroll** je zusätzlichem
+  /// Teammitglied ab („Alle Räder …“, V12).
+  static int sabotageRollFor(
+    StaffEntryData entry,
+    int rivalId, {
+    int attempt = 0,
+  }) {
     final anchor = entry.featureActivatedAt?.toIso8601String() ?? '';
-    return CRC32.compute('sabotage:${entry.id}:$rivalId:$anchor').abs() % 100;
+    return CRC32
+            .compute('sabotage:${entry.id}:$rivalId:$anchor:$attempt')
+            .abs() %
+        100;
   }
 
   /// `true`, wenn die Sabotage von [entry] gegen [rivalId] gelingt.
-  static bool sabotageSucceeds(StaffEntryData entry, int rivalId) =>
-      sabotageRollFor(entry, rivalId) < sabotageSuccessPercentFor(entry);
+  ///
+  /// Bei [attempts] `> 1` genügt ein erfolgreicher Versuch (Reroll je
+  /// zusätzlichem Teammitglied, V12); `attempts: 1` ist das unveränderte
+  /// Verhalten aus `11a` E14.
+  static bool sabotageSucceeds(
+    StaffEntryData entry,
+    int rivalId, {
+    int attempts = 1,
+    int? chancePercent,
+  }) {
+    final chance = chancePercent ?? sabotageSuccessPercentFor(entry);
+    final tries = attempts < 1 ? 1 : attempts;
+    for (var attempt = 0; attempt < tries; attempt++) {
+      if (sabotageRollFor(entry, rivalId, attempt: attempt) < chance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// `shadiness`-Bonus (Prozent) auf die Sabotage-Erfolgschance aus der
+  /// **gemittelten** `shadiness` der Beteiligten (V12).
+  ///
+  /// Linear zwischen den Extremwerten: `0` (`−shadinessMaxBonusPercent`) über
+  /// `shadinessNeutral` (`0`) bis `100` (`+shadinessMaxBonusPercent`). Ohne
+  /// Beteiligte (`teamIds` leer bzw. keine Shadiness bekannt) → `0`.
+  static int shadinessBonusPercent(
+    Iterable<int> teamIds,
+    Map<int, int> shadinessById,
+  ) {
+    var sum = 0;
+    var count = 0;
+    for (final id in teamIds) {
+      final shadiness = shadinessById[id];
+      if (shadiness == null) continue;
+      sum += shadiness;
+      count++;
+    }
+    if (count == 0) return 0;
+    final average = sum / count;
+    return ((average - EconomyBalance.shadinessNeutral) *
+            EconomyBalance.shadinessMaxBonusPercent /
+            EconomyBalance.shadinessNeutral)
+        .round();
+  }
+
+  /// Mannschafts-IDs des Trägers von „Alle Räder …“ zum Zeitpunkt [now]
+  /// (leer, wenn das Feature nicht aktiv ist).
+  static List<int> unionWorkersTeamIds(
+    Iterable<StaffEntryData> entries,
+    DateTime now,
+  ) {
+    final entry = activeEntry(entries, ManagementFeature.unionWorkers, now);
+    final ids = entry?.featureTeamIds;
+    return ids == null ? const [] : List<int>.unmodifiable(ids);
+  }
+
+  /// Größe der Sabotage-Mannschaft zum Zeitpunkt [now]: ohne „Alle Räder …“
+  /// genau `1`, sonst `1 + Anzahl der gewählten Mitglieder`. Die Mitgliederzahl
+  /// ist bereits bei der Aktivierung auf die Kompetenz begrenzt.
+  static int sabotageTeamSize(Iterable<StaffEntryData> entries, DateTime now) {
+    final team = unionWorkersTeamIds(entries, now);
+    return 1 + team.length;
+  }
+
+  /// Anzahl der Sabotage-Versuche (ein Reroll je zusätzlichem Teammitglied).
+  static int sabotageAttempts(Iterable<StaffEntryData> entries, DateTime now) =>
+      sabotageTeamSize(entries, now);
+
+  /// Erschöpfung, die **jedes** beteiligte Teammitglied eines Sabotage-Auftrags
+  /// trifft (Vitalität **und** Moral): `sabotageExhaustionPerMission` gemittelt
+  /// über die Mannschaftsgröße (mindestens `1`, wenn überhaupt jemand dabei ist).
+  static int sabotageExhaustionPerMember(int teamSize) {
+    if (teamSize <= 0) return 0;
+    final share = EconomyBalance.sabotageExhaustionPerMission ~/ teamSize;
+    return share < 1 ? 1 : share;
+  }
 
   /// Strafen-Minderung eines aktiven **Winkelzugs** (Prozent): Kompetenz ×
   /// `legalTrickPenaltyReductionPercentPerStep` (E15).
   static int legalTrickReductionPercentFor(StaffEntryData entry) =>
       competenceOf(entry) *
       EconomyBalance.legalTrickPenaltyReductionPercentPerStep;
+
+  // ── Sicherheitschef / „Rache ist Blutwurst“ (V13) ──────────────────────
+
+  /// Entdeckungs-Zuschlag (Prozent) des passiven **Sicherheitschefs**:
+  /// höchste Kompetenz-Stufe × `securityChiefDetectionBonusPercentPerCompetence`
+  /// (`0` ohne Träger). Analog zum passiven Gewerkschaftschef.
+  static int securityChiefDetectionBonusPercent(
+    Iterable<StaffEntryData> entries,
+  ) {
+    var best = 0;
+    for (final entry in entries) {
+      if (entry.kind != RoleKind.management) continue;
+      if (entry.role != ManagementRole.securityChief.name) continue;
+      final competence = competenceOf(entry);
+      if (competence > best) best = competence;
+    }
+    return best * EconomyBalance.securityChiefDetectionBonusPercentPerCompetence;
+  }
+
+  /// Maximale Mannschaftsgröße eines Gegenschlags des Trägers [leader]
+  /// (Kompetenz × `counterSabotageTeamPerCompetence`).
+  static int counterSabotageTeamLimit(StaffEntryData leader) =>
+      competenceOf(leader) * EconomyBalance.counterSabotageTeamPerCompetence;
+
+  /// Grund-Erfolgschance (Prozent) eines Gegenschlags des Trägers [leader]:
+  /// `sabotageBaseSuccessPercent` plus Kompetenz-Zuschlag (V13).
+  static int counterSabotageSuccessPercentFor(StaffEntryData leader) =>
+      EconomyBalance.sabotageBaseSuccessPercent +
+      competenceOf(leader) *
+          EconomyBalance.counterSabotageLeaderBonusPercentPerCompetence;
+
+  /// Deterministischer Wurf (0–99) eines Gegenschlags auf den Angreifer
+  /// [rivalId] zum Anker [anchor].
+  ///
+  /// Eigener Namensraum (`counter-sabotage:`) – der Wurf korreliert damit
+  /// **nicht** mit der regulären Sabotage; `attempt` bildet einen Reroll ab.
+  static int counterSabotageRollFor(
+    StaffEntryData leader,
+    DateTime anchor,
+    int rivalId, {
+    int attempt = 0,
+  }) {
+    final stamp = anchor.toIso8601String();
+    return CRC32
+            .compute('counter-sabotage:${leader.id}:$rivalId:$stamp:$attempt')
+            .abs() %
+        100;
+  }
+
+  /// `true`, wenn der Gegenschlag des Trägers [leader] gegen den Angreifer
+  /// [rivalId] gelingt ([attempts] Versuche, Erfolg beim ersten Treffer).
+  static bool counterSabotageSucceeds(
+    StaffEntryData leader,
+    DateTime anchor,
+    int rivalId, {
+    int attempts = 1,
+    int? chancePercent,
+  }) {
+    final chance = chancePercent ?? counterSabotageSuccessPercentFor(leader);
+    final tries = attempts < 1 ? 1 : attempts;
+    for (var attempt = 0; attempt < tries; attempt++) {
+      if (counterSabotageRollFor(leader, anchor, rivalId, attempt: attempt) <
+          chance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// `true`, wenn das **ziel-lose** Feature [feature] zum Zeitpunkt [now]
+  /// scharf geschaltet ist, aber noch **nicht** aufgelöst wurde (kein
+  /// `featureResolvedAt`).
+  ///
+  /// Für das reaktive „Rache ist Blutwurst“ (V13): Trifft im Fenster kein
+  /// entdeckter Angriff ein, bleibt der Marker leer und das Fenster verfällt.
+  static bool isArmed(
+    Iterable<StaffEntryData> entries,
+    ManagementFeature feature,
+    DateTime now,
+  ) {
+    final entry = activeEntry(entries, feature, now);
+    return entry != null && entry.featureResolvedAt == null;
+  }
 
   /// `true`, wenn der Träger [entry] sein Feature zum Zeitpunkt [now] **aktiv**
   /// trägt (Fenster `[start, start + activeDuration]`, inklusiv).
@@ -173,8 +384,7 @@ class ManagementFeatureService {
     Iterable<StaffEntryData> entries,
     ManagementFeature feature,
     DateTime now,
-  ) =>
-      activeEntry(entries, feature, now) != null;
+  ) => activeEntry(entries, feature, now) != null;
 
   /// Träger-Eintrag, solange [feature] zum Zeitpunkt [now] aktiv ist.
   static StaffEntryData? activeEntry(
@@ -224,6 +434,7 @@ class ManagementFeatureService {
       entry.featureTargetId = null;
       entry.featureActivatedAt = null;
       entry.featureResolvedAt = null;
+      entry.featureTeamIds = null;
     }
   }
 
@@ -273,5 +484,94 @@ class ManagementFeatureService {
       }
     }
     return 0;
+  }
+
+  // ── Wirkungen der V12-Features ─────────────────────────────────────────
+
+  /// Prozentualer Zuschlag auf die drei Eingangswerte des passiven Einkommens
+  /// (Attraktivität, Zufriedenheit, Kapazität) durch ein aktives **Rush Hour**
+  /// (`0` außerhalb der Wirkdauer).
+  static int inputBoostPercent(
+    Iterable<StaffEntryData> entries,
+    DateTime now,
+  ) => activeEntry(entries, ManagementFeature.rushHour, now) == null
+      ? 0
+      : EconomyBalance.rushHourInputBonusPercent;
+
+  /// Kapazitäts-Faktor aus einem aktiven **Lagertetris**
+  /// (`1 + Faktor × Kompetenz`; `1.0` außerhalb der Wirkdauer).
+  static double capacityFactor(Iterable<StaffEntryData> entries, DateTime now) {
+    final entry = activeEntry(entries, ManagementFeature.storageTetris, now);
+    if (entry == null) return 1.0;
+    return 1.0 +
+        EconomyBalance.storageTetrisCapacityFactorPerCompetence *
+            competenceOf(entry);
+  }
+
+  /// Senkung des **Tages-Sinks** (Vitalität/Moral) in Prozent zum Zeitpunkt
+  /// [now].
+  ///
+  /// Quellen: der passive Gewerkschaftschef (Kompetenz-abhängig) sowie die
+  /// aktiven Features Rush Hour und Lagertetris (Mali entfallen vollständig)
+  /// und „Organisation ist alles“ (`organisationSinkReductionPercent`).
+  /// Auf `100` gedeckelt.
+  static int sinkReliefPercent(Iterable<StaffEntryData> entries, DateTime now) {
+    var percent = unionChiefSinkReliefPercent(entries);
+    if (activeEntry(entries, ManagementFeature.rushHour, now) != null) {
+      percent += 100;
+    }
+    if (activeEntry(entries, ManagementFeature.storageTetris, now) != null) {
+      percent += 100;
+    }
+    if (activeEntry(entries, ManagementFeature.organisationIsEverything, now) !=
+        null) {
+      percent += EconomyBalance.organisationSinkReductionPercent;
+    }
+    return percent.clamp(0, 100);
+  }
+
+  /// Senkung des **Erschöpfungs-Malus** (Nulltage) in Prozent – dieselben
+  /// Quellen wie [sinkReliefPercent] (V12).
+  static int malusReliefPercent(
+    Iterable<StaffEntryData> entries,
+    DateTime now,
+  ) => sinkReliefPercent(entries, now);
+
+  /// Zusätzlicher Tages-Sink durch eine aktive **Rush Hour**
+  /// (`Kompetenz × rushHourExhaustionPerCompetence`); `0` sonst.
+  ///
+  /// Der Wert ist die **Gesamtlast** eines Tages und wird in
+  /// `GameClockService` ranggewichtet auf das Personal verteilt („von oben
+  /// herab“).
+  static int rushHourExtraSink(Iterable<StaffEntryData> entries, DateTime now) {
+    final entry = activeEntry(entries, ManagementFeature.rushHour, now);
+    if (entry == null) return 0;
+    return competenceOf(entry) * EconomyBalance.rushHourExhaustionPerCompetence;
+  }
+
+  /// Laufende **Tageskosten** aktiver Features zum Zeitpunkt [now] (Euro).
+  ///
+  /// Derzeit nur „Organisation ist alles“ (`organisationCostPerDay`, V12); der
+  /// Betrag wird im Catch-up am Blockende als `featureCosts` gebucht.
+  static int featureDailyCosts(
+    Iterable<StaffEntryData> entries,
+    DateTime now,
+  ) =>
+      activeEntry(entries, ManagementFeature.organisationIsEverything, now) ==
+          null
+      ? 0
+      : EconomyBalance.organisationCostPerDay;
+
+  /// Prozentuale Sink-Senkung des passiven **Gewerkschaftschefs** (ohne
+  /// Feature-Einfluss) – Kompetenz × `unionChiefSinkReductionPercentPerCompetence`.
+  static int unionChiefSinkReliefPercent(Iterable<StaffEntryData> entries) {
+    var best = 0;
+    for (final entry in entries) {
+      if (entry.kind != RoleKind.management) continue;
+      if (entry.role != ManagementRole.unionChief.name) continue;
+      final competence = competenceOf(entry);
+      if (competence > best) best = competence;
+    }
+    return best * EconomyBalance.unionChiefSinkReductionPercentPerCompetence;
   }
 }

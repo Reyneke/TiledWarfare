@@ -19,8 +19,7 @@ class StaffRoleService {
   static List<StaffEntryData> ofKind(
     Iterable<StaffEntryData> entries,
     RoleKind kind,
-  ) =>
-      entries.where((entry) => entry.kind == kind).toList(growable: false);
+  ) => entries.where((entry) => entry.kind == kind).toList(growable: false);
 
   /// `true`, wenn mindestens ein Eintrag der Kategorie [kind] existiert.
   static bool hasKind(Iterable<StaffEntryData> entries, RoleKind kind) =>
@@ -54,46 +53,49 @@ class StaffRoleService {
   /// Effekt-Zuschlag einer Verwaltungs-/Marketing-Rolle (zentrale Quelle:
   /// `EconomyBalance`).
   static int _managementIncomePercentOf(ManagementRole role) => switch (role) {
-        ManagementRole.socialMediaManager =>
-          EconomyBalance.socialMediaManagerIncomePercent,
-        // Die neuen Verwaltungsrollen (E12) wirken nicht auf das Einkommen,
-        // sondern auf Kosten und Strafen (siehe unten).
-        ManagementRole.chefSecretary => 0,
-        ManagementRole.lawyer => 0,
-        ManagementRole.accountant => 0,
-      };
+    ManagementRole.socialMediaManager =>
+      EconomyBalance.socialMediaManagerIncomePercent,
+    // Die neuen Verwaltungsrollen (E12) wirken nicht auf das Einkommen,
+    // sondern auf Kosten und Strafen (siehe unten).
+    ManagementRole.chefSecretary => 0,
+    ManagementRole.lawyer => 0,
+    ManagementRole.accountant => 0,
+    // Die V12-Rollen wirken auf die Eingangswerte/Kosten (siehe unten).
+    ManagementRole.headWaiter => 0,
+    ManagementRole.personnelManager => 0,
+    ManagementRole.storekeeper => 0,
+    ManagementRole.unionChief => 0,
+    // Der Sicherheitschef wirkt auf die Entdeckung, nicht auf das Einkommen.
+    ManagementRole.securityChief => 0,
+  };
 
   /// `true`, wenn die Verwaltungsrolle [role] angestellt ist (binäre Wirkung).
   static bool hasManagementRole(
     Iterable<StaffEntryData> entries,
     ManagementRole role,
-  ) =>
-      hasRole(ofKind(entries, RoleKind.management), role.name);
+  ) => hasRole(ofKind(entries, RoleKind.management), role.name);
 
   /// Chefsekretärin: Abzug auf die laufenden **Mitarbeiterkosten** (Prozent).
   static int chefSecretaryStaffCostReductionPercent(
     Iterable<StaffEntryData> entries,
-  ) =>
-      hasManagementRole(entries, ManagementRole.chefSecretary)
-          ? EconomyBalance.chefSecretaryStaffCostReductionPercent
-          : 0;
+  ) => hasManagementRole(entries, ManagementRole.chefSecretary)
+      ? EconomyBalance.chefSecretaryStaffCostReductionPercent
+      : 0;
 
   /// Chefsekretärin: Abzug auf die **Anschaffungskosten von Erweiterungen**
   /// (Prozent) – wirkt beim Kauf (`ObjectProfile.buyUpgrade`).
   static int chefSecretaryUpgradeCostReductionPercent(
     Iterable<StaffEntryData> entries,
-  ) =>
-      hasManagementRole(entries, ManagementRole.chefSecretary)
-          ? EconomyBalance.chefSecretaryUpgradeCostReductionPercent
-          : 0;
+  ) => hasManagementRole(entries, ManagementRole.chefSecretary)
+      ? EconomyBalance.chefSecretaryUpgradeCostReductionPercent
+      : 0;
 
   /// Buchhalter: Abzug auf **alle laufenden Kosten** (Prozent).
   static int accountantOngoingCostReductionPercent(
     Iterable<StaffEntryData> entries,
-  ) =>
-      hasManagementRole(entries, ManagementRole.accountant)
-          ? EconomyBalance.accountantOngoingCostReductionPercent
-          : 0;
+  ) => hasManagementRole(entries, ManagementRole.accountant)
+      ? EconomyBalance.accountantOngoingCostReductionPercent
+      : 0;
 
   /// Strafen-Minderung insgesamt (Prozent, gedeckelt auf 100).
   ///
@@ -136,6 +138,101 @@ class StaffRoleService {
     if (percent <= 0) return amount;
     if (percent >= 100) return 0;
     return (amount * (100 - percent) / 100).round();
+  }
+
+  // ── Passive Effekte der V12-Rollen ─────────────────────────────────────
+
+  /// Oberkellner: absoluter Attraktivitäts-Zuschlag (`0.0` ohne Rolle).
+  static double headWaiterAttractivenessBonus(
+    Iterable<StaffEntryData> entries,
+  ) => hasManagementRole(entries, ManagementRole.headWaiter)
+      ? EconomyBalance.headWaiterAttractivenessBonus
+      : 0.0;
+
+  /// Personalchef: absoluter Zufriedenheits-Zuschlag (`0.0` ohne Rolle).
+  static double personnelManagerSatisfactionBonus(
+    Iterable<StaffEntryData> entries,
+  ) => hasManagementRole(entries, ManagementRole.personnelManager)
+      ? EconomyBalance.personnelManagerSatisfactionBonus
+      : 0.0;
+
+  /// Summe der relativen Kapazitäts-Zuschläge (Prozent) aus Oberkellner,
+  /// Personalchef und Lagerist.
+  static int capacityPercent(Iterable<StaffEntryData> entries) {
+    var percent = 0;
+    if (hasManagementRole(entries, ManagementRole.headWaiter)) {
+      percent += EconomyBalance.headWaiterCapacityPercent;
+    }
+    if (hasManagementRole(entries, ManagementRole.personnelManager)) {
+      percent += EconomyBalance.personnelManagerCapacityPercent;
+    }
+    if (hasManagementRole(entries, ManagementRole.storekeeper)) {
+      percent += EconomyBalance.storekeeperCapacityPercent;
+    }
+    return percent;
+  }
+
+  /// Gewerkschaftschef: Erhöhung der Mitarbeiterkosten (Prozent).
+  static int unionChiefWageIncreasePercent(Iterable<StaffEntryData> entries) =>
+      hasManagementRole(entries, ManagementRole.unionChief)
+      ? EconomyBalance.unionChiefWageIncreasePercent
+      : 0;
+
+  /// Gewerkschaftschef: Senkung des Tages-Sinks (Prozent), skaliert mit der
+  /// Kompetenz-Stufe des Trägers (höchste Stufe bei mehreren Trägern).
+  static int unionChiefSinkReductionPercent(Iterable<StaffEntryData> entries) =>
+      ManagementFeatureService.unionChiefSinkReliefPercent(entries);
+
+  /// Sicherheitschef: Entdeckungs-Zuschlag (Prozent) auf eingehende
+  /// Sabotageversuche (V13) – höchste Kompetenz-Stufe des Trägers.
+  static int securityChiefDetectionBonusPercent(
+    Iterable<StaffEntryData> entries,
+  ) => ManagementFeatureService.securityChiefDetectionBonusPercent(entries);
+
+  /// Strafen-Minderung eines **Gegenschlags** (V13).
+  ///
+  /// Wie [penaltyReductionPercent], aber der **Winkelzug** des angestellten
+  /// Rechtsanwalts wird automatisch mit ausgelöst („gemeinsame Sache“), falls er
+  /// nicht ohnehin schon läuft – die Rechtsanwalt-Einträge werden dabei **nicht**
+  /// verändert. Auf `100` gedeckelt.
+  static int counterSabotagePenaltyReductionPercent(
+    Iterable<StaffEntryData> entries, {
+    DateTime? now,
+  }) {
+    final at = now ?? DateTime.now();
+    var percent = penaltyReductionPercent(entries, now: at);
+    final legalTrickActive =
+        ManagementFeatureService.activeEntry(
+          entries,
+          ManagementFeature.legalTrick,
+          at,
+        ) !=
+        null;
+    if (!legalTrickActive) {
+      var best = 0;
+      for (final entry in entries) {
+        if (entry.kind != RoleKind.management) continue;
+        if (entry.role != ManagementRole.lawyer.name) continue;
+        final reduction = ManagementFeatureService.legalTrickReductionPercentFor(
+          entry,
+        );
+        if (reduction > best) best = reduction;
+      }
+      percent += best;
+    }
+    return percent.clamp(0, 100);
+  }
+
+  /// Mindert die Strafe eines gescheiterten Gegenschlags (V13) um
+  /// [counterSabotagePenaltyReductionPercent] (kaufmännisch gerundet).
+  static int reducedCounterPenalty(
+    Iterable<StaffEntryData> entries,
+    int fine, {
+    DateTime? now,
+  }) {
+    final percent = counterSabotagePenaltyReductionPercent(entries, now: now);
+    if (percent <= 0) return fine;
+    return (fine * (100 - percent) / 100).round();
   }
 
   /// Summe der Wochenlöhne des gesamten **Nicht-Kampf-Personals** (alle

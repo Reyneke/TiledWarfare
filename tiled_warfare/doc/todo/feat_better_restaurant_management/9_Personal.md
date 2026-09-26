@@ -68,7 +68,7 @@ Die Grundsatzentscheidungen sind fixiert und werden hier **nicht** neu verhandel
 4. **Z4 – Stabile Identität.** Jeder Charakter erhält eine CRC32-`id` (analog `ObjectTeamMedic`/`RestaurantData`).
 5. **Z5 – Modell an neutraler Stelle.** `EnneagramProfile`/`Personality` liegen in einem eigenen Modell (z. B. `lib/models/personality.dart`); Host und Personal nutzen dieselbe Definition.
 
-**Nicht-Ziele:** kein Persönlichkeits-Einfluss auf Heilzeit/-qualität (bleibt deterministisch, `team_rules.md` § 4.3/§ 4.5); die **Ableitung** von Traits/Varianz ist RNG-frei (§ 4.1) – die **Würfelproben** in § 6 (Stress/Ruhe) sind davon ausgenommen und nutzen injizierbaren `Random`; keine neuen Charakterklassen; `vitality`/`morale` berühren die V3-Wundkette nicht (Erreichen 0 ⇒ nur Malus, § 6); `shadiness` bleibt vorerst wirkungslos (nur Datenmodell).
+**Nicht-Ziele:** kein Persönlichkeits-Einfluss auf Heilzeit/-qualität (bleibt deterministisch, `team_rules.md` § 4.3/§ 4.5); die **Ableitung** von Traits/Varianz ist RNG-frei (§ 4.1) – die **Würfelproben** in § 6 (Stress/Ruhe) sind davon ausgenommen und nutzen injizierbaren `Random`; keine neuen Charakterklassen; `vitality`/`morale` berühren die V3-Wundkette nicht (Erreichen 0 ⇒ nur Malus, § 6); `shadiness` wirkt seit **V12** als Sabotage-Erfolgsbonus der Mannschaft („Alle Räder …“, `11a`) und seit **V13** als **passive Entdeckungswahrscheinlichkeit** eingehender Rivalen-Sabotage – ohne Persistenz, siehe unten.
 
 ## Attribute
 
@@ -149,7 +149,7 @@ Alle Charaktere – ob aktiv im Gefecht oder nicht – verfügen über Attribute
 | `thriftiness` | int | 0–100 | **aus `personality`** | Wochenkosten-Faktor (Lohnforderung) |
 | `vitality` | int | 0–100 | **aus `personality` + Varianz** | **Basiswert (Max)** der Vitalität – die Ressource sinkt pro Tag/Einsatz und wird am Ende der Woche wieder aufgefüllt (§ 2, „Ressourcen“) |
 | `morale` | int | 0–100 | **aus `personality` + Varianz** | **Basiswert (Max)** der Moral – die Ressource sinkt pro Tag/Einsatz und wird am Ende der Woche wieder aufgefüllt (§ 2, „Ressourcen“) |
-| `shadiness` | int | 0–100 | **aus `personality` + Varianz** | Wille, illegale Mittel einzusetzen – **Datenmodell ja, Wirkung offen** (siehe „Offene Punkte“) |
+| `shadiness` | int | 0–100 | **aus `personality` + Varianz** | Wille, illegale Mittel einzusetzen – **seit V12 Wirkung: gemittelter Sabotage-Erfolgsbonus der Mannschaft** (`11a`, „Alle Räder …“), **seit V13 zusätzlich passive Entdeckung eingehender Sabotage** (`RivalService.incomingDetectionPercent`) |
 
 > **Abgrenzung:** Der Tabellenwert ist jeweils der **Basiswert (Max)** des Traits. Der **aktuelle** Ressourcenstand (`vitalityCurrent`/`moraleCurrent`) gehört zu den Zustands-Attributen (§ 2, „Ressourcen“).
 
@@ -181,7 +181,7 @@ Modifikatoren  ── multiplikativ/additiv auf ──▶  Basis-Attribut (Klass
 | `aggressiveness`, `riskTolerance`, `tacticalComplexity`, `thriftiness` | **Persönlichkeit** (+ Varianz) | **ja** – aus dem Profil |
 | `helpfulness` | **Persönlichkeit × Arzt-Qualität** (+ Varianz) | **ja** – Profil + `medicQualitySpecs` |
 | `vitality`, `morale` (Basiswert) | **Persönlichkeit** (+ Varianz) | **ja** – aus dem Profil |
-| `shadiness` | **Persönlichkeit** (+ Varianz) | **ja** – nur Datenmodell, Wirkung offen |
+| `shadiness` | **Persönlichkeit** (+ Varianz) | **ja** – seit V12 Sabotage-Erfolgsbonus der Mannschaft (`11a`, „Alle Räder …“), seit **V13** passive Entdeckung eingehender Sabotage (`13_Gegner_Restaurants.md`) |
 | `vitalityCurrent`, `moraleCurrent` (Stand) | Tick (Tag/Einsatz) + Wochenauffüllung | **indirekt** – Basiswert stammt aus der Persönlichkeit |
 | `personality` selbst | Erzeugung/Auswahl, 1× festgeschrieben | – (Wurzel) |
 
@@ -213,7 +213,7 @@ Alle Persönlichkeits-Effekte sind **Modifikatoren** (additiv/multiplikativ auf 
 | Host-KI | alle Traits | Fuzzy-Auswertung – endlich **verdrahtet** | `HostPersonality` |
 | Heilung | – | **kein Einfluss** (Regelwerk § 4.3/§ 4.5) | – |
 | Wirtschaft (Ressourcen) | `vitality`, `morale` (Stand) | sinkt je Tag/Einsatz, Wochen-Refill auf den Basiswert | `GameClockService` (Tages-/Wochentick) |
-| Illegale Mittel (später) | `shadiness` | **keine Wirkung** – nur Datenmodell, Wirkung offen | – |
+| Illegale Mittel (später) | `shadiness` | **seit V12: gemittelter Sabotage-Erfolgsbonus der Mannschaft** (`11a`, „Alle Räder …“); **seit V13: passive Entdeckung eingehender Sabotage** | `ManagementFeatureService.shadinessBonusPercent`, `RivalService.incomingDetectionPercent` |
 | Stress & Ruhe | W100-Proben je Verlust | **vollständiger, temporärer Persönlichkeitswechsel** (Override), Dauerstaffel je Über-/Unterschreitung | `StressService` (§ 6), `GameClockService` |
 | Erschöpfungs-Malus | `vitalityZeroSinceAt`/`moraleZeroSinceAt` | −5 pp je Nulltag auf **alle** W100-Zielwerte (beide auf 0: −10 pp/Tag), kein Cap, Reset im Wochen-Refill | `EconomyService`/`StressService` (§ 6) |
 
@@ -331,7 +331,7 @@ effektiver W100-Zielwert = clamp( Zielwert − malusPercent(t), 0, 100 )
 - **Regelwerk:** `team_rules.md` ergänzt – **erledigt** (neuer Abschnitt 2.6, Vererbungs-Regel in 2.3, Querverweise in 4.2/4.3 und 7).
 - **Teamdynamik:** Affinitäten/Konflikte zwischen Persönlichkeiten (Attraktivität, Zufriedenheit) – bewusst ein späterer Schritt.
 - **Weitere Klassen:** Sous Chef/Patissier erhalten eigene Klassen-Profile – **bestätigt**, mit der Leitlinie: **alle Gefechtsklassen erben von der Grundklasse `ObjectApprentice`** (kein Parallelmodell, keine eigene Attribut-/Persönlichkeitsstruktur).
-- **`shadiness`:** Wirkung (illegale Mittel) noch zu entwerfen – bis dahin nur Datenmodell; keine Umsetzungsphase verdrahtet sie. Der erste Anwendungsfall (Sabotage: passiv Bemerken / aktiv Ausführen) ist in `13_Gegner_Restaurants.md` → „Sabotage“ entworfen. **V11:** Das dortige **Minimal-Modul** (Spieler-Sabotage über die Chefsekretärin, `11a` E14) ist umgesetzt und skaliert mit der **Kompetenz des Trägers**, **nicht** mit `shadiness`; das Attribut bleibt bis zur Rivalen-Sabotage gegen den Spieler (passive Erkennung) wirkungslos.
+- **`shadiness`:** Beide Richtungen sind inzwischen umgesetzt. **Aktiv (V12):** In `11a` tragen die gemittelte `shadiness` und die Erschöpfung der Mannschaft in „Alle Räder …“ (`ManagementFeature.unionWorkers`) zum Erfolg bzw. zur Belastung der Sabotage-Mission bei (`RivalService.resolveSabotage` / `ManagementFeatureService.shadinessBonusPercent`; linear ±15 % um den Neutralwert 50, `EconomyBalance.shadiness*`). **Passiv (V13):** Als **Entdeckungswahrscheinlichkeit** eingehender Rivalen-Sabotage – die Ø-`shadiness` des Kampfpersonals × 50 % plus Kompetenz-Bonus des **Sicherheitschefs** (`RivalService.incomingDetectionPercent`) entscheidet, ob ein Angriff bemerkt wird und damit einen **Gegenschlag** („Rache ist Blutwurst“) erlaubt (`13_Gegner_Restaurants.md`, „Minimal-Modul (V13)“). Das V11-Minimal-Modul (Spieler-Sabotage über die Chefsekretärin, `11a` E14) skaliert unverändert mit der **Kompetenz des Trägers**, nicht mit `shadiness`.
 - **Nomenklatur:** `vitality`/`morale` statt `health`/`mental_health` – **bestätigt** (Kollision mit `woundValue`/`teamHealthOf` vermieden).
 - **Erschöpfungs-Malus (Höhe + Kumulation):** je Nulltag `resourceZeroMalusPerDay = 5` pp, beide auf 0 `resourceZeroMalusPerDayBoth = 10` pp; **kein Cap** (Reset im Wochen-Refill) – alles in `EconomyBalance` einstellbar (V7). Die früheren Werte `vitalityZeroCombatMalusPercent`/`moraleZeroEconomyMalusPercent` entfallen.
 
@@ -351,7 +351,7 @@ Alle sieben Phasen aus „Umsetzungsschritte“ sind umgesetzt; die Validierung 
 
 **Tests (neu):** `test/personality_test.dart` (7), `test/resource_state_test.dart` (6), `test/stress_ruhe_test.dart` (11), `test/personality_combat_test.dart` (3), `test/host_personality_test.dart` (4), `test/screen_character_detail_personality_test.dart` (1); `profile_data_test`, `upgrade_line_cook_test`, `object_team_medic_test` wurden an die neuen Regeln angepasst.
 
-**Weiterhin offen:** `shadiness`-Wirkung (nur Datenmodell) und Teamdynamik (Affinitäten/Konflikte); die Balance-Zahlen (`ruheMargin`, Sink-Werte, Trait-Prozente, Lohn-Spanne) sind Tuning-Werte in `EconomyBalance`.
+**Weiterhin offen:** Die **Konsequenz unentdeckter** Rivalen-Sabotage (die Entdeckung selbst ist seit V13 umgesetzt, s. o.) und Teamdynamik (Affinitäten/Konflikte); die Balance-Zahlen (`ruheMargin`, Sink-Werte, Trait-Prozente, Lohn-Spanne) sind Tuning-Werte in `EconomyBalance`.
 
 ## Anhang: Belegstellen
 

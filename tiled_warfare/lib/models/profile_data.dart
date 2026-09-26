@@ -21,9 +21,12 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 8 = Verwaltungsrollen-Features & Rivalen-Minimal-Modul (`11a` E12–E17,
 /// Kapitel 13): `StaffEntryData.featureResolvedAt` sowie
 /// `RestaurantData.sabotageTargetId`/`sabotageAppliedUntil` (additiv/tolerant).
+/// Version 9 = zweite Rollen-Erweiterung (V12): `StaffEntryData.featureTeamIds`
+/// (Mannschaft des Features „Alle Räder …“, additiv/tolerant – `null` bei
+/// Alt-Beständen).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 8;
+const int kProfileSchemaVersion = 9;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -66,10 +69,9 @@ const String kHeadChefRoleFormal = 'formell';
 
 /// Leitet den Karriere-Rang aus dem (Legacy-)Klassen-Schlüssel [type] ab.
 String rankFromType(String? type) => switch (type) {
-      kRankLineCook => kRankLineCook,
-      _ => kRankApprentice,
-    };
-
+  kRankLineCook => kRankLineCook,
+  _ => kRankApprentice,
+};
 
 /// Datenmodell für ein einzelnes Nutzerprofil.
 ///
@@ -113,22 +115,22 @@ class ProfileData {
     List<StaffData>? staff,
     List<MedicData>? medics,
     List<RestaurantData>? restaurants,
-  })  : staff = staff ?? [],
-        medics = medics ?? [],
-        restaurants = restaurants ?? [];
+  }) : staff = staff ?? [],
+       medics = medics ?? [],
+       restaurants = restaurants ?? [];
 
   /// Erzeugt einen JSON-kompatiblen Map-Repräsentation.
   Map<String, dynamic> toJson() => {
-        'version': kProfileSchemaVersion,
-        'id': id,
-        'name': name,
-        'creationDate': creationDate.toIso8601String(),
-        if (profileImagePath != null) 'profileImagePath': profileImagePath,
-        // Profile level no longer holds any play state: budget/staff/medics
-        // live per restaurant (V1 "mehrere Restaurants"). fromJson still reads
-        // the legacy fields so they can be migrated once on load.
-        'restaurants': restaurants.map((r) => r.toJson()).toList(),
-      };
+    'version': kProfileSchemaVersion,
+    'id': id,
+    'name': name,
+    'creationDate': creationDate.toIso8601String(),
+    if (profileImagePath != null) 'profileImagePath': profileImagePath,
+    // Profile level no longer holds any play state: budget/staff/medics
+    // live per restaurant (V1 "mehrere Restaurants"). fromJson still reads
+    // the legacy fields so they can be migrated once on load.
+    'restaurants': restaurants.map((r) => r.toJson()).toList(),
+  };
 
   /// Erzeugt ein [ProfileData] aus einer JSON-Map.
   ///
@@ -136,15 +138,15 @@ class ProfileData {
   /// Defaults, nicht zu einer Exception. Ein einzelner defekter Wert kann so
   /// nicht mehr das Laden des gesamten Bestands verhindern.
   factory ProfileData.fromJson(Map<String, dynamic> json) => ProfileData(
-        id: readInt(json['id']) ?? -1,
-        name: readString(json['name']) ?? '',
-        creationDate: readDateTime(json['creationDate']) ?? DateTime.now(),
-        budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
-        profileImagePath: readString(json['profileImagePath']),
-        staff: _mapList(json['staff'], StaffData.fromJson),
-        medics: _mapList(json['medics'], MedicData.fromJson),
-        restaurants: _mapList(json['restaurants'], RestaurantData.fromJson),
-      );
+    id: readInt(json['id']) ?? -1,
+    name: readString(json['name']) ?? '',
+    creationDate: readDateTime(json['creationDate']) ?? DateTime.now(),
+    budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
+    profileImagePath: readString(json['profileImagePath']),
+    staff: _mapList(json['staff'], StaffData.fromJson),
+    medics: _mapList(json['medics'], MedicData.fromJson),
+    restaurants: _mapList(json['restaurants'], RestaurantData.fromJson),
+  );
 
   @override
   String toString() =>
@@ -283,90 +285,89 @@ class StaffData {
     this.vitalityZeroSinceAt,
     this.moraleZeroSinceAt,
     List<Map<String, dynamic>>? matchHistory,
-  })  : rank = rank ?? rankFromType(type),
-        matchHistory = matchHistory ?? [];
+  }) : rank = rank ?? rankFromType(type),
+       matchHistory = matchHistory ?? [];
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'imagePath': imagePath,
-        'type': type,
-        'rank': rank,
-        if (station != null) 'station': station,
-        if (headChefRole != null) 'headChefRole': headChefRole,
-        if (assignedRestaurantId != null)
-          'assignedRestaurantId': assignedRestaurantId,
-        'id': id,
-        'personalityId': personalityId,
-        'levelValue': levelValue,
-        'currentXPValue': currentXPValue,
-        'woundValue': woundValue,
-        'attackValue': attackValue,
-        'defenseValue': defenseValue,
-        'movementValue': movementValue,
-        'damageValue': damageValue,
-        'rangeValue': rangeValue,
-        'moneyValue': moneyValue,
-        'xpValue': xpValue,
-        'status': status,
-        if (injuryStartedAt != null)
-          'injuryStartedAt': injuryStartedAt!.toIso8601String(),
-        if (injuryStartStatus != null) 'injuryStartStatus': injuryStartStatus,
-        if (emergencyShotAt != null)
-          'emergencyShotAt': emergencyShotAt!.toIso8601String(),
-        if (suppressedStatus != null) 'suppressedStatus': suppressedStatus,
-        if (vitalityCurrent != null) 'vitalityCurrent': vitalityCurrent,
-        if (moraleCurrent != null) 'moraleCurrent': moraleCurrent,
-        if (lastResourceRefillAt != null)
-          'lastResourceRefillAt': lastResourceRefillAt!.toIso8601String(),
-        'personalityOverrideId': personalityOverrideId,
-        if (personalityOverrideUntil != null)
-          'personalityOverrideUntil':
-              personalityOverrideUntil!.toIso8601String(),
-        if (personalityOverrideCause != null)
-          'personalityOverrideCause': personalityOverrideCause,
-        if (vitalityZeroSinceAt != null)
-          'vitalityZeroSinceAt': vitalityZeroSinceAt!.toIso8601String(),
-        if (moraleZeroSinceAt != null)
-          'moraleZeroSinceAt': moraleZeroSinceAt!.toIso8601String(),
-        'matchHistory': matchHistory,
-      };
+    'name': name,
+    'imagePath': imagePath,
+    'type': type,
+    'rank': rank,
+    if (station != null) 'station': station,
+    if (headChefRole != null) 'headChefRole': headChefRole,
+    if (assignedRestaurantId != null)
+      'assignedRestaurantId': assignedRestaurantId,
+    'id': id,
+    'personalityId': personalityId,
+    'levelValue': levelValue,
+    'currentXPValue': currentXPValue,
+    'woundValue': woundValue,
+    'attackValue': attackValue,
+    'defenseValue': defenseValue,
+    'movementValue': movementValue,
+    'damageValue': damageValue,
+    'rangeValue': rangeValue,
+    'moneyValue': moneyValue,
+    'xpValue': xpValue,
+    'status': status,
+    if (injuryStartedAt != null)
+      'injuryStartedAt': injuryStartedAt!.toIso8601String(),
+    if (injuryStartStatus != null) 'injuryStartStatus': injuryStartStatus,
+    if (emergencyShotAt != null)
+      'emergencyShotAt': emergencyShotAt!.toIso8601String(),
+    if (suppressedStatus != null) 'suppressedStatus': suppressedStatus,
+    if (vitalityCurrent != null) 'vitalityCurrent': vitalityCurrent,
+    if (moraleCurrent != null) 'moraleCurrent': moraleCurrent,
+    if (lastResourceRefillAt != null)
+      'lastResourceRefillAt': lastResourceRefillAt!.toIso8601String(),
+    'personalityOverrideId': personalityOverrideId,
+    if (personalityOverrideUntil != null)
+      'personalityOverrideUntil': personalityOverrideUntil!.toIso8601String(),
+    if (personalityOverrideCause != null)
+      'personalityOverrideCause': personalityOverrideCause,
+    if (vitalityZeroSinceAt != null)
+      'vitalityZeroSinceAt': vitalityZeroSinceAt!.toIso8601String(),
+    if (moraleZeroSinceAt != null)
+      'moraleZeroSinceAt': moraleZeroSinceAt!.toIso8601String(),
+    'matchHistory': matchHistory,
+  };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory StaffData.fromJson(Map<String, dynamic> json) => StaffData(
-        name: readString(json['name']) ?? '',
-        imagePath: readString(json['imagePath']) ?? '',
-        type: readString(json['type']) ?? kRankApprentice,
-        rank: readString(json['rank']),
-        station: readString(json['station']),
-        headChefRole: readString(json['headChefRole']),
-        assignedRestaurantId: readInt(json['assignedRestaurantId']),
-        id: readInt(json['id']) ?? -1,
-        personalityId: readInt(json['personalityId']) ?? -1,
-        levelValue: readInt(json['levelValue']) ?? 1,
-        currentXPValue: readInt(json['currentXPValue']) ?? 0,
-        woundValue: readInt(json['woundValue']) ?? 3,
-        attackValue: readInt(json['attackValue']) ?? 40,
-        defenseValue: readInt(json['defenseValue']) ?? 20,
-        movementValue: readInt(json['movementValue']) ?? 6,
-        damageValue: readInt(json['damageValue']) ?? 2,
-        rangeValue: readInt(json['rangeValue']) ?? 3,
-        moneyValue: readInt(json['moneyValue']) ?? 100,
-        xpValue: readInt(json['xpValue']) ?? 25,
-        status: readString(json['status']) ?? 'ready',
-        injuryStartedAt: readDateTime(json['injuryStartedAt']),
-        injuryStartStatus: readString(json['injuryStartStatus']),
-        emergencyShotAt: readDateTime(json['emergencyShotAt']),
-        suppressedStatus: readString(json['suppressedStatus']),
-        vitalityCurrent: readInt(json['vitalityCurrent']),
-        moraleCurrent: readInt(json['moraleCurrent']),
-        lastResourceRefillAt: readDateTime(json['lastResourceRefillAt']),
-        personalityOverrideId: readInt(json['personalityOverrideId']) ?? -1,
-        personalityOverrideUntil: readDateTime(json['personalityOverrideUntil']),
-        personalityOverrideCause: readString(json['personalityOverrideCause']),
-        vitalityZeroSinceAt: readDateTime(json['vitalityZeroSinceAt']),
-        moraleZeroSinceAt: readDateTime(json['moraleZeroSinceAt']),
-        matchHistory: readMapList(json['matchHistory']),
-      );
+    name: readString(json['name']) ?? '',
+    imagePath: readString(json['imagePath']) ?? '',
+    type: readString(json['type']) ?? kRankApprentice,
+    rank: readString(json['rank']),
+    station: readString(json['station']),
+    headChefRole: readString(json['headChefRole']),
+    assignedRestaurantId: readInt(json['assignedRestaurantId']),
+    id: readInt(json['id']) ?? -1,
+    personalityId: readInt(json['personalityId']) ?? -1,
+    levelValue: readInt(json['levelValue']) ?? 1,
+    currentXPValue: readInt(json['currentXPValue']) ?? 0,
+    woundValue: readInt(json['woundValue']) ?? 3,
+    attackValue: readInt(json['attackValue']) ?? 40,
+    defenseValue: readInt(json['defenseValue']) ?? 20,
+    movementValue: readInt(json['movementValue']) ?? 6,
+    damageValue: readInt(json['damageValue']) ?? 2,
+    rangeValue: readInt(json['rangeValue']) ?? 3,
+    moneyValue: readInt(json['moneyValue']) ?? 100,
+    xpValue: readInt(json['xpValue']) ?? 25,
+    status: readString(json['status']) ?? 'ready',
+    injuryStartedAt: readDateTime(json['injuryStartedAt']),
+    injuryStartStatus: readString(json['injuryStartStatus']),
+    emergencyShotAt: readDateTime(json['emergencyShotAt']),
+    suppressedStatus: readString(json['suppressedStatus']),
+    vitalityCurrent: readInt(json['vitalityCurrent']),
+    moraleCurrent: readInt(json['moraleCurrent']),
+    lastResourceRefillAt: readDateTime(json['lastResourceRefillAt']),
+    personalityOverrideId: readInt(json['personalityOverrideId']) ?? -1,
+    personalityOverrideUntil: readDateTime(json['personalityOverrideUntil']),
+    personalityOverrideCause: readString(json['personalityOverrideCause']),
+    vitalityZeroSinceAt: readDateTime(json['vitalityZeroSinceAt']),
+    moraleZeroSinceAt: readDateTime(json['moraleZeroSinceAt']),
+    matchHistory: readMapList(json['matchHistory']),
+  );
 }
 
 /// Serialisierbare Daten eines angestellten Teamarztes.
@@ -399,23 +400,23 @@ class MedicData {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'quality': quality,
-        'costPerWeek': costPerWeek,
-        'enneagramProfileName': enneagramProfileName,
-        if (personalityId != null) 'personalityId': personalityId,
-      };
+    'id': id,
+    'name': name,
+    'quality': quality,
+    'costPerWeek': costPerWeek,
+    'enneagramProfileName': enneagramProfileName,
+    if (personalityId != null) 'personalityId': personalityId,
+  };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory MedicData.fromJson(Map<String, dynamic> json) => MedicData(
-        id: readInt(json['id']) ?? -1,
-        name: readString(json['name']) ?? '',
-        quality: readString(json['quality']) ?? 'niedrig',
-        costPerWeek: readInt(json['costPerWeek']) ?? 0,
-        enneagramProfileName: readString(json['enneagramProfileName']) ?? '',
-        personalityId: readInt(json['personalityId']),
-      );
+    id: readInt(json['id']) ?? -1,
+    name: readString(json['name']) ?? '',
+    quality: readString(json['quality']) ?? 'niedrig',
+    costPerWeek: readInt(json['costPerWeek']) ?? 0,
+    enneagramProfileName: readString(json['enneagramProfileName']) ?? '',
+    personalityId: readInt(json['personalityId']),
+  );
 }
 
 /// Serialisierbare Daten einer Hilfs-/Service-Rolle (Karrierepfade, V10).
@@ -449,12 +450,12 @@ class SupportRoleData {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'role': role,
-        'costPerWeek': costPerWeek,
-        if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'role': role,
+    'costPerWeek': costPerWeek,
+    if (hiredAt != null) 'hiredAt': hiredAt!.toIso8601String(),
+  };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory SupportRoleData.fromJson(Map<String, dynamic> json) =>
@@ -570,11 +571,11 @@ class RestaurantData {
     Map<UpgradeType, int>? upgrades,
     this.sabotageTargetId,
     this.sabotageAppliedUntil,
-  })  : staff = staff ?? [],
-        medics = medics ?? [],
-        supportStaff = supportStaff ?? [],
-        staffEntries = _resolveStaffEntries(staffEntries, supportStaff),
-        upgrades = upgrades ?? {};
+  }) : staff = staff ?? [],
+       medics = medics ?? [],
+       supportStaff = supportStaff ?? [],
+       staffEntries = _resolveStaffEntries(staffEntries, supportStaff),
+       upgrades = upgrades ?? {};
 
   /// Vereinheitlicht [staffEntries] und die Alt-Bestände aus [supportStaff]
   /// (Option C, `11a`): Ein nicht-leeres [staffEntries] hat Vorrang; andernfalls
@@ -598,59 +599,55 @@ class RestaurantData {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        if (logoPath != null) 'logoPath': logoPath,
-        if (district != null) 'district': district,
-        'cuisine': cuisine.name,
-        if (rebrandingPenaltyUntil != null)
-          'rebrandingPenaltyUntil': rebrandingPenaltyUntil!.toIso8601String(),
-        'budget': budget,
-        'staff': staff.map((s) => s.toJson()).toList(),
-        'medics': medics.map((m) => m.toJson()).toList(),
-        'supportStaff': supportStaff.map((s) => s.toJson()).toList(),
-        'staffEntries': staffEntries.map((s) => s.toJson()).toList(),
-        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
-        if (weekAnchorAt != null)
-          'weekAnchorAt': weekAnchorAt!.toIso8601String(),
-        'isDissolved': isDissolved,
-        if (dissolvedAt != null) 'dissolvedAt': dissolvedAt!.toIso8601String(),
-        if (lastMatchResult != null) 'lastMatchResult': lastMatchResult!.name,
-        'upgrades': {
-          for (final entry in upgrades.entries) entry.key.name: entry.value,
-        },
-        if (sabotageTargetId != null) 'sabotageTargetId': sabotageTargetId,
-        if (sabotageAppliedUntil != null)
-          'sabotageAppliedUntil': sabotageAppliedUntil!.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    if (logoPath != null) 'logoPath': logoPath,
+    if (district != null) 'district': district,
+    'cuisine': cuisine.name,
+    if (rebrandingPenaltyUntil != null)
+      'rebrandingPenaltyUntil': rebrandingPenaltyUntil!.toIso8601String(),
+    'budget': budget,
+    'staff': staff.map((s) => s.toJson()).toList(),
+    'medics': medics.map((m) => m.toJson()).toList(),
+    'supportStaff': supportStaff.map((s) => s.toJson()).toList(),
+    'staffEntries': staffEntries.map((s) => s.toJson()).toList(),
+    if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+    if (weekAnchorAt != null) 'weekAnchorAt': weekAnchorAt!.toIso8601String(),
+    'isDissolved': isDissolved,
+    if (dissolvedAt != null) 'dissolvedAt': dissolvedAt!.toIso8601String(),
+    if (lastMatchResult != null) 'lastMatchResult': lastMatchResult!.name,
+    'upgrades': {
+      for (final entry in upgrades.entries) entry.key.name: entry.value,
+    },
+    if (sabotageTargetId != null) 'sabotageTargetId': sabotageTargetId,
+    if (sabotageAppliedUntil != null)
+      'sabotageAppliedUntil': sabotageAppliedUntil!.toIso8601String(),
+  };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
   factory RestaurantData.fromJson(Map<String, dynamic> json) => RestaurantData(
-        id: readInt(json['id']) ?? -1,
-        name: readString(json['name']) ?? '',
-        logoPath: readString(json['logoPath']),
-        district: readString(json['district']),
-        cuisine: Cuisine.fromName(readString(json['cuisine'])),
-        rebrandingPenaltyUntil:
-            readDateTime(json['rebrandingPenaltyUntil']),
-        budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
-        staff: _mapList(json['staff'], StaffData.fromJson),
-        medics: _mapList(json['medics'], MedicData.fromJson),
-        supportStaff:
-            _mapList(json['supportStaff'], SupportRoleData.fromJson),
-        staffEntries: json['staffEntries'] == null
-            ? null
-            : _mapList(json['staffEntries'], StaffEntryData.fromJson),
-        lastSeenAt: readDateTime(json['lastSeenAt']),
-        weekAnchorAt: readDateTime(json['weekAnchorAt']),
-        isDissolved: readBool(json['isDissolved']) ?? false,
-        dissolvedAt: readDateTime(json['dissolvedAt']),
-        lastMatchResult:
-            _matchResultFromName(readString(json['lastMatchResult'])),
-        upgrades: _upgradesFromJson(json['upgrades']),
-        sabotageTargetId: readInt(json['sabotageTargetId']),
-        sabotageAppliedUntil: readDateTime(json['sabotageAppliedUntil']),
-      );
+    id: readInt(json['id']) ?? -1,
+    name: readString(json['name']) ?? '',
+    logoPath: readString(json['logoPath']),
+    district: readString(json['district']),
+    cuisine: Cuisine.fromName(readString(json['cuisine'])),
+    rebrandingPenaltyUntil: readDateTime(json['rebrandingPenaltyUntil']),
+    budget: readInt(json['budget']) ?? kDefaultRestaurantBudget,
+    staff: _mapList(json['staff'], StaffData.fromJson),
+    medics: _mapList(json['medics'], MedicData.fromJson),
+    supportStaff: _mapList(json['supportStaff'], SupportRoleData.fromJson),
+    staffEntries: json['staffEntries'] == null
+        ? null
+        : _mapList(json['staffEntries'], StaffEntryData.fromJson),
+    lastSeenAt: readDateTime(json['lastSeenAt']),
+    weekAnchorAt: readDateTime(json['weekAnchorAt']),
+    isDissolved: readBool(json['isDissolved']) ?? false,
+    dissolvedAt: readDateTime(json['dissolvedAt']),
+    lastMatchResult: _matchResultFromName(readString(json['lastMatchResult'])),
+    upgrades: _upgradesFromJson(json['upgrades']),
+    sabotageTargetId: readInt(json['sabotageTargetId']),
+    sabotageAppliedUntil: readDateTime(json['sabotageAppliedUntil']),
+  );
 
   /// Liest die Erweiterungs-Stufen aus dem JSON (unbekannte Typen werden
   /// ignoriert – abwärtskompatibel).
@@ -701,7 +698,8 @@ class RestaurantData {
       );
 
   @override
-  String toString() => 'RestaurantData(id=$id, name=$name, district=$district, '
+  String toString() =>
+      'RestaurantData(id=$id, name=$name, district=$district, '
       'budget=$budget, staff=${staff.length}, medics=${medics.length}, '
       'isDissolved=$isDissolved)';
 }

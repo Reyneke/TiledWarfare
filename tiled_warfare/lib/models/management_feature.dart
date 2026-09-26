@@ -28,6 +28,48 @@ enum ManagementFeature {
   /// laufenden Kosten; danach fällt der Träger für dieselbe Dauer aus
   /// (Burnout = Nachteilphase).
   creativeAccounting,
+
+  /// Rush Hour – (Oberkellner, V12): hebt befristet **alle drei Eingangswerte**
+  /// des passiven Einkommens (Attraktivität, Zufriedenheit, Kapazität) um
+  /// `rushHourInputBonusPercent`; währenddessen fallen die **Mali** weg
+  /// (Tages-Sink und Erschöpfungs-Malus). Die dafür anfallende Erschöpfung wird
+  /// **anteilig nach Ranghöhe** auf das anwesende Personal verteilt („von oben
+  /// herab“): je mehr Mitarbeiter, desto geringer die Last des Einzelnen.
+  rushHour,
+
+  /// Organisation ist alles – (Personalchef, V12): senkt befristet den Verlust
+  /// körperlicher wie geistiger Stabilität (Tages-Sink −
+  /// `organisationSinkReductionPercent`). Die Reduktion wird **mit Geld
+  /// bezahlt**: `organisationCostPerDay` je aktivem Tag (als `featureCosts`).
+  organisationIsEverything,
+
+  /// Lagertetris – (Lagerist, V12): vervielfacht die Kapazität für einen
+  /// Wochentick um `storageTetrisCapacityFactorPerCompetence` je Kompetenz-
+  /// Stufe; **alle Mali** (Tages-Sink und Erschöpfungs-Malus) fallen dabei weg.
+  /// Die Einmalkosten skalieren mit der Kompetenz
+  /// (`storageTetrisCostPerCompetence`).
+  storageTetris,
+
+  /// „Alle Räder …“ – (Gewerkschaftschef, V12): erlaubt es, **mehr als einen**
+  /// Mitarbeiter auf Sabotagemission zu schicken
+  /// (`ManagementFeatureService.sabotageTeamSize`: 1 + Kompetenz). Die
+  /// `shadiness` aller Beteiligten wird **gemittelt** (Erfolgs-Bonus), die aus
+  /// dem Auftrag resultierende Erschöpfung ebenso; je weiteres Teammitglied
+  /// gibt es einen **Reroll**, wenn ein Wurf scheitert.
+  unionWorkers,
+
+  /// „Rache ist Blutwurst“ – (Sicherheitschef, V13): schlägt **reaktiv** gegen
+  /// einen in der eigenen Stadtteil-Sabotage **entdeckten** Angreifer zurück
+  /// (`13_Gegner_Restaurants.md`, Minimal-Modul V13).
+  ///
+  /// Das Feature ist **ziel-los**: Es wird für ein Wochenfenster scharf
+  /// geschaltet (`featureActivatedAt`). Trifft in diesem Fenster ein entdeckter
+  /// Sabotageversuch eines Rivalen ein, wird **höchstens ein** Gegenschlag
+  /// ausgeführt (`featureResolvedAt` als Idempotenz-Marker); bleibt das Fenster
+  /// ohne entdeckten Angriff, verfällt es einfach. Ausführender ist die
+  /// angestellte Chefsekretärin (falls vorhanden, ohne Mutation ihrer Felder)
+  /// oder eine deterministisch rekrutierte Mannschaft aus dem Kampfpersonal.
+  counterSabotage,
 }
 
 /// Alle Features in Anzeige-Reihenfolge.

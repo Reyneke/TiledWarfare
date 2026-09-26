@@ -116,10 +116,11 @@ liegenden Regeln sind für alle gleich.
 
 ## Minimal-Modul (V11): Sabotage-Auflösung & Strafen
 
-> **Status:** Umgesetzt (V11). Dieses Teilstück ist der kleinste spielbare Ausschnitt dieses Kapitels: der
-> **Rivalen-Roster**, die **Spieler-Sabotage** (Feature der Chefsekretärin, `11a` E14) und die daraus
-> entstehenden **Strafen** (Rechtsanwalt, `11a` E15). Power Projection/Rangliste, Rivalen-Simulation,
-> Gefechtsteilnahme und die Rivalen-Sabotage gegen den Spieler bleiben offen.
+> **Status:** Umgesetzt (V11 **und** V13). Der kleinste spielbare Ausschnitt dieses Kapitels umfasst den
+> **Rivalen-Roster**, die **Spieler-Sabotage** (Feature der Chefsekretärin, `11a` E14) samt **Strafen**
+> (Rechtsanwalt, `11a` E15) und seit **V13** die **eingehende Rivalen-Sabotage** mit **Entdeckung**, der
+> **Einkommens-Abschöpfung** unentdeckter Angriffe und dem **Gegenschlag** des Sicherheitschefs
+> („Rache ist Blutwurst“). Power Projection/Rangliste, Rivalen-Simulation und Gefechtsteilnahme bleiben offen.
 
 **Modelle & Balance (V7: keine Literale im Fluss):** `RivalRestaurant` (`lib/models/rival_restaurant.dart`) mit
 `id`/`name`/`district`/`personalityId`/`basePrestige`, abgeleitet aus dem Stadtteil. Konfiguration in
@@ -142,27 +143,80 @@ Stadtteil zwischengespeichert.
 | Wirkung | `sabotageEffectDuration` (1 Woche) | Rivale −25 % Prestige (`sabotageRivalPrestigePenaltyPercent`); Spieler +15 % Einkommen (`sabotageIncomeBonusPercent`, tagesgenau) |
 | Nachlauf | `sabotageAftermathDuration` (1 Woche) | „Abtauchen“ – keine erneute Sabotage |
 
+**Schlagmannschaft („Alle Räder …“, V12):** Ist das Feature des **Gewerkschaftschefs** aktiv, besteht die
+Mission aus dem Träger plus bis zu `Kompetenz` gewählten Mitarbeitern (`StaffEntryData.featureTeamIds`):
+
+| Aspekt | Wirkung |
+|---|---|
+| Teamgröße | `1 + Mitglieder` (`ManagementFeatureService.sabotageTeamSize`) – mehr als ein Saboteur ist erlaubt |
+| Erfolgschance | `+ gemittelte shadiness` der Mannschaft (`shadinessBonusPercent`, ±15 % um den Neutralwert 50) |
+| Reroll | Ein zusätzlicher deterministischer Wurf je Mitglied (`sabotageAttempts`/`sabotageRollFor(attempt:)`); ein Treffer genügt |
+| Erschöpfung | `sabotageExhaustionPerMission` (12) **gemittelt** über die Mannschaftsgröße, trifft Vitalität **und** Moral der Mitglieder |
+
 **Strafen:** Strafe = `sabotageCaughtFine` (3000 €), gemindert um
 `StaffRoleService.penaltyReductionPercent` (Rechtsanwalt-Passiv + aktiver „Winkelzug“). Sie wird im
 Wochenbudget gebucht und als `penaltyCosts` in `WeekSettlement`/`WeeklyTickResult` ausgewiesen; die Auflösung
 selbst ist budgetneutral (eine Quelle der Wahrheit im Tick).
 
-**Persistenz (Schema v8):** Nur das **Wirkungsfenster** wird gespeichert
+**Persistenz (Schema v9):** Nur das **Wirkungsfenster** wird gespeichert
 (`RestaurantData.sabotageTargetId`/`sabotageAppliedUntil`), der Roster bleibt abgeleitet (wie in
 „Handlungen (Prototyp)“ Schritt 5 vorgesehen). Die Idempotenz der Auflösung liegt am Träger-Eintrag
-(`StaffEntryData.featureResolvedAt`).
+(`StaffEntryData.featureResolvedAt`); die Schlagmannschaft steht in `StaffEntryData.featureTeamIds` (V12).
 
 **Idempotenz & Determinismus (V8):** identischer Snapshot ⇒ identische Roster und identisches
 Auflösungsergebnis; ein zweiter Catch-up mit demselben `now` bucht weder Strafe noch Wirkung erneut
 (`test/rival_service_test.dart`, `test/sabotage_tick_test.dart`).
 
 **UI:** Der Sabotage-Dialog wählt einen Rivalen des Stadtteils (mit deterministisch angezeigter Erfolgschance);
-`ScreenHireAndFire` zeigt zusätzlich eine kompakte Rivalen-Liste mit Sabotage-Status.
+die Träger-Karte des Gewerkschaftschefs öffnet einen Mannschafts-Dialog; `ScreenHireAndFire` zeigt zusätzlich
+eine kompakte Rivalen-Liste mit Sabotage-Status.
 
-**Noch offen:** Rivalen-PP/Rangliste, Rivalen-Aktionen im Tick, Gefechtsteilnahme/Stance, Rivalen-Sabotage
-gegen den Spieler (dort greift `shadiness` als **passive** Erkennung, siehe „Sabotage“ oben) sowie ein
-`ScreenRestaurant`-Ranking-Badge. Im **umgesetzten** Modul wird `shadiness` bewusst noch **nicht**
-ausgewertet – die Erfolgschance der Spieler-Sabotage skaliert mit der Kompetenz der Chefsekretärin.
+**Noch offen:** Rivalen-PP/Rangliste, Rivalen-Aktionen im Tick, Gefechtsteilnahme/Stance sowie ein
+`ScreenRestaurant`-Ranking-Badge. Im **V11**-Modul wird `shadiness` nur über die **Schlagmannschaft**
+(„Alle Räder …“, V12) **aktiv** ausgewertet – solo skaliert die Erfolgschance mit der Kompetenz der
+Chefsekretärin. Die **passive** Entdeckung (Ø-`shadiness` des Personals) ist mit dem V13-Minimal-Modul unten
+umgesetzt.
+
+## Minimal-Modul (V13): Rivalen-Sabotage gegen den Spieler & Gegenschlag
+
+> **Status:** Umgesetzt (V13). Die Rivalen rechnen **selbst ab**: je vollem Wochenblock wird deterministisch
+> entschieden, ob ein Sabotageversuch eingeht und ob er entdeckt wird. Ein **entdeckter** Angriff ist die
+> Voraussetzung für den Gegenschlag des **Sicherheitschefs** (`11a`, Abschnitt „Verwaltungsrollen (umgesetzt
+> V13)“).
+
+**Modell (keine neuen Persistenzfelder):** Alle Würfe sind **reine Funktionen** aus Roster und Blockanker und
+damit über Ladevorgänge stabil (V8-Idempotenz); `kProfileSchemaVersion` bleibt **9**.
+
+| Schritt | Funktion | Regel |
+|---|---|---|
+| Versuch | `RivalService.incomingAttemptOccurs` | je Rivale und Blockanker `CRC32('rival-attack:<anchor>:<rivalId>') % 100 < incomingSabotageChanceBasePercent` (**20 %**) |
+| Entdeckung | `RivalService.incomingAttemptDetected` + `incomingDetectionPercent` | `CRC32('rival-attack-detected:<anchor>:<rivalId>') % 100 <` Detektionsschwelle; Schwelle = **Ø-`shadiness`** des (Kampf-)Personals × `incomingDetectionShadinessToPercent` (50 %) **+** `securityChiefDetectionBonusPercentPerCompetence` × Kompetenz des Sicherheitschefs (10 %/Stufe), gedeckelt auf 100 % |
+| Ereignis | `RivalService.resolveIncomingSabotage` | am **Blockende** (`GameClockService.catchUp`): Angreifer und entdeckte Angreifer werden ermittelt (Roster-Reihenfolge); nur entdeckte Angreifer sind **namentlich bekannt** |
+| Folge (unentdeckt) | `RivalService.IncomingSabotageOutcome.undetectedIds`/`undetectedCount`, `GameClockService.catchUp` | je **unentdecktem** Angreifer `incomingSabotageIncomePenaltyPercent` (**10 %**) des **Brutto-Blockeinkommens**, gedeckelt über `incomingSabotageIncomePenaltyMaxPercent` (**30 %**); mindert Blockbudget und `WeeklyTickResult.passiveIncome`, ausgewiesen in `WeeklyTickResult.rivalSabotageLosses` – **keine** Strafbuchung, der Angreifer bleibt unbekannt |
+| Gegenschlag | `RivalService.resolveCounterSabotage` | nur wenn „Rache ist Blutwurst“ in diesem Block scharf geschaltet ist **und** ein Angriff entdeckt wurde; **höchstens einer** je Arming (`featureResolvedAt`) |
+
+**Gegenschlag („Rache ist Blutwurst“, Feature des Sicherheitschefs):**
+
+| Aspekt | Verhalten |
+|---|---|
+| Ausführende | **Chefsekretärin**, falls angestellt und nicht selbst im Einsatz (gratis, ohne Mutation ihrer Felder) – sonst eine deterministisch rekrutierte Mannschaft: `Kompetenz × 1` shadiness-stärkste, einsatzfähige Charaktere (Tiebreak: kleinere ID) |
+| Erfolgschance | mit Chefsekretärin: wie ihre Sabotage (40 % + 10 %/Kompetenz); ohne sie: 40 % + 5 %/Kompetenz des Sicherheitschefs + gemittelte `shadiness` der Mannschaft („er führt die Truppe an“) |
+| Erfolg | Der Angreifer wird **wie durch eine eigene Sabotage** getroffen: `RestaurantData.sabotageTargetId`/`sabotageAppliedUntil` ⇒ Einkommens-Fenster des Spielers (+15 %) und Prestige-Malus des Rivalen |
+| Misserfolg | `counterSabotageFailureFine` (**1500 €**) als `penaltyCosts` – „er nimmt den Schaden auf sich“; gemindert um `StaffRoleService.counterSabotagePenaltyReductionPercent` (Rechtsanwalt-Passiv **plus** automatisch ausgelöster **Winkelzug**, gedeckelt auf 100 %, ohne den Rechtsanwalt zu verändern) |
+| Erschöpfung | nur die rekrutierte Mannschaft: `sabotageExhaustionPerMission` (12), gemittelt über `Mannschaft + 1`, trifft Vitalität **und** Moral |
+
+**Folge unentdeckter Angriffe (umgesetzt V13):** Ein **unbemerkter** Angriff schöpft **Einkommen** ab – je
+Angreifer 10 % des Brutto-Blockeinkommens, gedeckelt auf 30 % (`EconomyBalance.incomingSabotageIncomePenaltyPercent`
+/ `...PenaltyMaxPercent`), gebucht am Blockende in `GameClockService.catchUp` und in der Wochenabrechnung als
+`WeeklyTickResult.rivalSabotageLosses` ausgewiesen. Der Angreifer bleibt dabei unbekannt, also **ohne** Gegenschlag
+und ohne Strafbuchung – der passive Sicherheitschef zahlt sich damit über die Entdeckung aus (weniger Abschöpfung).
+**Noch offen (bewusst):** weitere Folgen wie Kunden-/Ansehensverlust, Erweiterungsschäden oder höhere laufende
+Kosten (siehe „Sabotage“ inkl. „Schwere der Tat“). Ebenso offen: Rivalen-PP/Rangliste und die Wirkung eines
+Rivalen-Siegs auf die Rivalen-Simulation.
+
+**Tests:** `test/management_roles_v13_test.dart` (Determinismus, Entdeckung, Fenster/Bereitschaft, Mannschaft,
+beide Ausführungszweige, automatischer Winkelzug, Einkommens-Abschöpfung inkl. Deckel und Wochentick-Integration),
+`test/rival_service_test.dart`, `test/game_clock_service_test.dart`, `test/balance_sanity_test.dart`.
 
 ## Sabotage
 
@@ -190,9 +244,10 @@ Optionen:
 - Aufhetzen des Gesundheitsamtes (inklusive vorher Beweise platzieren)
 - weitere
 
-> **Bezug zu `shadiness`:** Das Attribut ist in `9_Personal.md` (V9) bislang nur als **Datenmodell ohne Wirkung**
-> geführt; die Sabotage-Mechanik ist der erste Anwendungsfall. Die Abrechnung der Konsequenzen läuft im
-> **Wochen-Tick** (`8_Echtzeit-Zeitsystem.md`, V8); die Ansehen-/Kundenwirkung dockt an
+> **Bezug zu `shadiness`:** Das Attribut ist in `9_Personal.md` (V9) eingeführt und inzwischen in **beiden**
+> Richtungen im Einsatz: **aktiv** als Erfolgs-Bonus der Schlagmannschaft („Alle Räder …“, V12) und **passiv**
+> als **Entdeckungswahrscheinlichkeit** eingehender Angriffe (V13, Ø-`shadiness` × 50 %). Die Abrechnung der
+> Konsequenzen läuft im **Wochen-Tick** (`8_Echtzeit-Zeitsystem.md`, V8); die Ansehen-/Kundenwirkung dockt an
 > `2-Wirtschaftsschleife.md` § 8 an. Die Balance-Werte (Detektions-/Erfolgsschwellen je `shadiness`, Strafhöhen
 > je Schwere) gehören nach V7 in `EconomyBalance`.
 
@@ -268,6 +323,11 @@ Minimaler Umfang (schrittweise erweiterbar):
    `ScreenRestaurant`.
 5. **Persistenz:** Keine neuen Felder – Rivalen werden je Catch-up neu berechnet
    (idempotent, V8; identisch zur 12er-Entscheidung für PP/Ranking).
+6. **Eingehende Sabotage (umgesetzt V13, Minimalform):** Statt einer Rivalen-Simulation würfelt der
+   Wochen-Tick je Rivale deterministisch einen **Sabotageversuch** (20 %) und dessen **Entdeckung**
+   (Ø-`shadiness` + Sicherheitschef-Bonus). Ein entdeckter Angriff erlaubt den **Gegenschlag** des
+   Sicherheitschefs („Rache ist Blutwurst“); **unentdeckte** Angriffe schöpfen Einkommen ab (10 % je Angreifer,
+   Deckel 30 %; Abschnitt „Minimal-Modul (V13)“).
 
 **Abnahmekriterien:**
 
@@ -355,23 +415,29 @@ Rivalen gemeinsame Spawns/Reservefelder (Detail offen, „Offene Fragen“ 2).
 5. **Gegenwirkungs-Formel:** Exakte Formel für `konkurrenzdruckFaktor` (siehe „Rangliste“). => Vorschläge?
 6. **Faktorform:** Linearer Faktor vs. zweite Mini-Fuzzy-Stufe – gemeinsam mit
    `12_Power_Projection.md` (Offene Frage 6) entscheiden.
+7. **Folgen unentdeckter Sabotage (V13, teilweise umgesetzt):** Wie schlägt sich ein **unbemerkter** Angriff nieder –
+   Kunden-/Ansehensverlust, Erweiterungsschaden („Reparatur“), höhere laufende Kosten oder Strafzahlungen?
+   => V13 bucht die **Einkommens-Abschöpfung** (10 % je unentdecktem Angreifer, Deckel 30 % – Abschnitt
+   „Minimal-Modul (V13)“); die übrigen Folgen bleiben offen. Die Mechanik ist die Stelle, an der die
+   „Schwere der Tat“ (Abschnitt „Sabotage“) greifen wird.
 
 ## Betroffene Dateien
 
 | Datei | Änderung |
 |---|---|
 | `lib/models/rival_restaurant.dart` | **Neu:** `RivalRestaurant` (id, name, personalityId, simulierter Zustand) |
-| `lib/services/rival_service.dart` | **Neu:** Rostern + Wochen-Tick-Aktionen (rein, testbar) |
-| `lib/services/economy_balance.dart` | `rivalCountFromPrestige` + Schwellen/Caps, Stance-Schwellen, Gegenwirkungs-Parameter |
-| `lib/services/game_clock_service.dart` | Rivalen-Update im Wochen-Tick; `WeeklyTickResult` um Rang/Liste ergänzen |
+| `lib/services/rival_service.dart` | **Neu:** Rostern + Wochen-Tick-Aktionen (rein, testbar); **umgesetzt (V11):** Roster, `resolveSabotage`; **(V13):** `incomingAttemptOccurs`/`incomingAttemptDetected`/`incomingDetectionPercent`/`resolveIncomingSabotage`/`resolveCounterSabotage` + `IncomingSabotageOutcome.undetectedIds`/`undetectedCount` (Grundlage der Einkommens-Abschöpfung) |
+| `lib/services/economy_balance.dart` | `rivalCountFromPrestige` + Schwellen/Caps, Stance-Schwellen, Gegenwirkungs-Parameter; **(V13):** `incomingSabotageIncomePenaltyPercent` (10 %) / `incomingSabotageIncomePenaltyMaxPercent` (30 %) |
+| `lib/services/game_clock_service.dart` | Rivalen-Update im Wochen-Tick; `WeeklyTickResult` um Rang/Liste ergänzen; **(V13):** eingehende Sabotage + Gegenschlag am Blockende, Abschöpfung in `WeeklyTickResult.rivalSabotageLosses` |
 | `lib/objects/object_host.dart` | Rivalen-Orchestrierung im Tick + Steuerung der Rivalen-Truppen im Gefecht (Delegation an `RivalService`) |
 | `lib/widgets/widget_caretaker.dart` | Rivalen-Teams auf weitere `spawn_player*`-Punkte setzen; Stance im Gefecht anwenden |
 | `lib/screens/screen_restaurant.dart` | „Platz X von Y“ + Rivalen-Anzeige |
-| `lib/l10n/app_de.arb`, `app_en.arb` | Neue Strings (Platz, Rivalen, Pleite) |
+| `lib/l10n/app_de.arb`, `app_en.arb` | Neue Strings (Platz, Rivalen, Pleite, Catch-up-Hinweis auf die Einkommens-Abschöpfung) |
 
 ## Tests (neu)
 
-- `test/rival_service_test.dart` – Rostern nach Prestige-Tier, Caps, Determinismus/Idempotenz.
+- `test/rival_service_test.dart` – Rostern nach Prestige-Tier, Caps, Determinismus/Idempotenz; **(V13)** eingehende Sabotage (deterministische Versuche/Entdeckung, Ø-`shadiness`, Teilmengen-Regel).
+- `test/management_roles_v13_test.dart` – **(V13)** Sicherheitschef-Passiv, Fenster/Bereitschaft, Mannschaft, beide Ausführungszweige des Gegenschlags, automatischer Winkelzug, Wochentick-Integration.
 - `test/rival_fairness_test.dart` – Rivalen-Aktionen verletzen keine `EconomyBalance`-Limits.
 - `test/power_projection_ranking_test.dart` – Rangliste inkl. Rivalen (1-Tick-Verzögerung) + Gegenwirkungs-Faktor.
 - `test/rival_stance_test.dart` – deterministische Stance-Ableitung (Verbündet/Neutral/Feind), Neu-Beurteilung je Runde, Stance-Verlust durch Schaden (inkl. Erholung) und Teilnehmerzahl (1–4).

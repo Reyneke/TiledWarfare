@@ -40,20 +40,23 @@ void main() {
     expect(roleKindFromName(null), RoleKind.support);
   });
 
-  test('RestaurantData migriert supportStaff → staffEntries (kind=support)', () {
-    final legacy = RestaurantData.fromJson({
-      'id': 1,
-      'name': 'Alt',
-      'supportStaff': [
-        {'id': 5, 'name': 'Luigi', 'role': 'plongeur', 'costPerWeek': 70},
-      ],
-    });
+  test(
+    'RestaurantData migriert supportStaff → staffEntries (kind=support)',
+    () {
+      final legacy = RestaurantData.fromJson({
+        'id': 1,
+        'name': 'Alt',
+        'supportStaff': [
+          {'id': 5, 'name': 'Luigi', 'role': 'plongeur', 'costPerWeek': 70},
+        ],
+      });
 
-    expect(legacy.staffEntries, hasLength(1));
-    expect(legacy.staffEntries.first.kind, RoleKind.support);
-    expect(legacy.staffEntries.first.role, 'plongeur');
-    expect(legacy.staffEntries.first.costPerWeek, 70);
-  });
+      expect(legacy.staffEntries, hasLength(1));
+      expect(legacy.staffEntries.first.kind, RoleKind.support);
+      expect(legacy.staffEntries.first.role, 'plongeur');
+      expect(legacy.staffEntries.first.costPerWeek, 70);
+    },
+  );
 
   test('RestaurantData persistiert staffEntries über JSON-Roundtrip', () {
     final r = RestaurantData(
@@ -115,8 +118,8 @@ void main() {
     }
   });
 
-  test('kProfileSchemaVersion ist 8 (Verwaltungsrollen + Rivalen-Modul)', () {
-    expect(kProfileSchemaVersion, 8);
+  test('kProfileSchemaVersion ist 9 (V12: Feature-Mannschaft)', () {
+    expect(kProfileSchemaVersion, 9);
   });
 
   test('managementIncomePercent meldet den Social-Media-Manager-Zuschlag', () {
@@ -164,47 +167,55 @@ void main() {
     expect(StaffRoleService.nonCombatWeeklyWages(entries), 330);
   });
 
-  test('Social Media Manager erhöht das passive Einkommen (und kostet Lohn)',
-      () {
-    final start = DateTime(2026, 1, 1);
-    RestaurantData restaurant({List<StaffEntryData> entries = const []}) =>
-        RestaurantData(
-          id: 1,
-          name: 'R',
-          budget: 10000,
-          district: 'Harlem',
-          lastSeenAt: start,
-          weekAnchorAt: start,
-          staffEntries: entries,
-          staff: [
-            StaffData(
-              name: 'Koch',
-              imagePath: 'x.png',
-              type: kRankApprentice,
-              rank: kRankApprentice,
-              id: 4251,
-              personalityId: 2,
-            ),
-          ],
-        );
+  test(
+    'Social Media Manager erhöht das passive Einkommen (und kostet Lohn)',
+    () {
+      final start = DateTime(2026, 1, 1);
+      RestaurantData restaurant({List<StaffEntryData> entries = const []}) =>
+          RestaurantData(
+            id: 1,
+            name: 'R',
+            budget: 10000,
+            district: 'Harlem',
+            lastSeenAt: start,
+            weekAnchorAt: start,
+            staffEntries: entries,
+            staff: [
+              StaffData(
+                name: 'Koch',
+                imagePath: 'x.png',
+                type: kRankApprentice,
+                rank: kRankApprentice,
+                id: 4251,
+                personalityId: 2,
+              ),
+            ],
+          );
 
-    final plain = restaurant();
-    final boosted = restaurant(entries: [
-      StaffEntryData(
-        id: 1,
-        name: 'A',
-        kind: RoleKind.management,
-        role: ManagementRole.socialMediaManager.name,
-        costPerWeek: 180,
-      ),
-    ]);
+      final plain = restaurant();
+      final boosted = restaurant(
+        entries: [
+          StaffEntryData(
+            id: 1,
+            name: 'A',
+            kind: RoleKind.management,
+            role: ManagementRole.socialMediaManager.name,
+            costPerWeek: 180,
+          ),
+        ],
+      );
 
-    final without =
-        GameClockService.catchUp(plain, start.add(const Duration(days: 7)));
-    final withRole =
-        GameClockService.catchUp(boosted, start.add(const Duration(days: 7)));
+      final without = GameClockService.catchUp(
+        plain,
+        start.add(const Duration(days: 7)),
+      );
+      final withRole = GameClockService.catchUp(
+        boosted,
+        start.add(const Duration(days: 7)),
+      );
 
-    expect(withRole.passiveIncome, greaterThan(without.passiveIncome));
-    expect(withRole.staffCosts, greaterThan(without.staffCosts));
-  });
+      expect(withRole.passiveIncome, greaterThan(without.passiveIncome));
+      expect(withRole.staffCosts, greaterThan(without.staffCosts));
+    },
+  );
 }

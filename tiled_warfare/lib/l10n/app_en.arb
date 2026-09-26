@@ -590,6 +590,74 @@
   "@managementFeatureCreativeAccountingEffect": {
     "description": "Effect: creative accounting"
   },
+  "managementRoleHeadWaiter": "Head waiter",
+  "@managementRoleHeadWaiter": { "description": "Role: head waiter (V12)" },
+  "managementRoleEffectHeadWaiter": "Raises attractiveness and capacity.",
+  "@managementRoleEffectHeadWaiter": { "description": "Effect: head waiter" },
+  "managementRolePersonnelManager": "Personnel manager",
+  "@managementRolePersonnelManager": { "description": "Role: personnel manager (V12)" },
+  "managementRoleEffectPersonnelManager": "Raises customer satisfaction and capacity.",
+  "@managementRoleEffectPersonnelManager": { "description": "Effect: personnel manager" },
+  "managementRoleStorekeeper": "Storekeeper",
+  "@managementRoleStorekeeper": { "description": "Role: storekeeper (V12)" },
+  "managementRoleEffectStorekeeper": "Strongly raises capacity.",
+  "@managementRoleEffectStorekeeper": { "description": "Effect: storekeeper" },
+  "managementRoleUnionChief": "Union chief",
+  "@managementRoleUnionChief": { "description": "Role: union chief (V12)" },
+  "managementRoleEffectUnionChief": "Raises staff costs but lowers their exhaustion.",
+  "@managementRoleEffectUnionChief": { "description": "Effect: union chief" },
+  "managementFeatureRushHour": "Rush hour",
+  "@managementFeatureRushHour": {
+    "description": "Feature: rush hour (head waiter, V12)"
+  },
+  "managementFeatureRushHourEffect": "Active ability: temporarily boosts all input values; penalties lapse in exchange for exhaustion.",
+  "@managementFeatureRushHourEffect": { "description": "Effect: rush hour" },
+  "managementFeatureOrganisationIsEverything": "Organisation is everything",
+  "@managementFeatureOrganisationIsEverything": {
+    "description": "Feature: organisation is everything (personnel manager, V12)"
+  },
+  "managementFeatureOrganisationIsEverythingEffect": "Active ability: temporarily lowers the loss of stability – paid in money.",
+  "@managementFeatureOrganisationIsEverythingEffect": {
+    "description": "Effect: organisation is everything"
+  },
+  "managementFeatureStorageTetris": "Storage tetris",
+  "@managementFeatureStorageTetris": {
+    "description": "Feature: storage tetris (storekeeper, V12)"
+  },
+  "managementFeatureStorageTetrisEffect": "Active ability: temporarily multiplies capacity; all penalties lapse.",
+  "@managementFeatureStorageTetrisEffect": { "description": "Effect: storage tetris" },
+  "managementFeatureUnionWorkers": "All wheels …",
+  "@managementFeatureUnionWorkers": {
+    "description": "Feature: all wheels … (union chief, V12)"
+  },
+  "managementFeatureUnionWorkersEffect": "Active ability: sabotage crew with averaged shadiness and rerolls.",
+  "@managementFeatureUnionWorkersEffect": { "description": "Effect: all wheels …" },
+  "managementRoleSecurityChief": "Security chief",
+  "@managementRoleSecurityChief": { "description": "Role: security chief (V13)" },
+  "managementRoleEffectSecurityChief": "Detects sabotage attempts against the restaurant.",
+  "@managementRoleEffectSecurityChief": { "description": "Effect: security chief" },
+  "managementFeatureCounterSabotage": "Revenge is black pudding",
+  "@managementFeatureCounterSabotage": {
+    "description": "Feature: revenge is black pudding (security chief, V13)"
+  },
+  "managementFeatureCounterSabotageEffect": "Active ability: strikes back at an attacker detected inside the window.",
+  "@managementFeatureCounterSabotageEffect": {
+    "description": "Effect: revenge is black pudding"
+  },
+  "managementCounterSabotagePending": "Counterstrike ready until {time}",
+  "@managementCounterSabotagePending": {
+    "description": "Armed counterstrike (resolved on the weekly tick)",
+    "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureSelectTeam": "Choose strike crew",
+  "@managementFeatureSelectTeam": {
+    "description": "Dialog title: choose the crew for 'all wheels …'"
+  },
+  "managementFeatureDailyCost": "Ongoing: {cost} € / day",
+  "@managementFeatureDailyCost": {
+    "description": "Ongoing daily cost of a feature",
+    "placeholders": { "cost": { "type": "int" } }
+  },
   "managementSabotageSelectTarget": "Choose sabotage target",
   "@managementSabotageSelectTarget": {
     "description": "Dialog title: choose the rival to sabotage"
@@ -1032,6 +1100,11 @@
   "@catchUpLeftover": {
     "description": "Pro-rated leftover days of the daily step (V8/§ 6)",
     "placeholders": { "days": { "type": "int" }, "income": { "type": "int" } }
+  },
+  "catchUpRivalSabotageLoss": "Rival sabotage: income −{loss} €",
+  "@catchUpRivalSabotageLoss": {
+    "description": "Undetected rival sabotage skims block income (V13, chapter 13)",
+    "placeholders": { "loss": { "type": "int" } }
   },
   "healingComplete": "Fully fit for duty",
   "@healingComplete": { "description": "Character is fully healed (V3)" },

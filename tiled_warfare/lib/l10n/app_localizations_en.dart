@@ -505,6 +505,89 @@ class AppLocalizationsEn extends AppLocalizations {
       'Active ability: negates all ongoing costs for a while; then burnout.';
 
   @override
+  String get managementRoleHeadWaiter => 'Head waiter';
+
+  @override
+  String get managementRoleEffectHeadWaiter =>
+      'Raises attractiveness and capacity.';
+
+  @override
+  String get managementRolePersonnelManager => 'Personnel manager';
+
+  @override
+  String get managementRoleEffectPersonnelManager =>
+      'Raises customer satisfaction and capacity.';
+
+  @override
+  String get managementRoleStorekeeper => 'Storekeeper';
+
+  @override
+  String get managementRoleEffectStorekeeper => 'Strongly raises capacity.';
+
+  @override
+  String get managementRoleUnionChief => 'Union chief';
+
+  @override
+  String get managementRoleEffectUnionChief =>
+      'Raises staff costs but lowers their exhaustion.';
+
+  @override
+  String get managementFeatureRushHour => 'Rush hour';
+
+  @override
+  String get managementFeatureRushHourEffect =>
+      'Active ability: temporarily boosts all input values; penalties lapse in exchange for exhaustion.';
+
+  @override
+  String get managementFeatureOrganisationIsEverything =>
+      'Organisation is everything';
+
+  @override
+  String get managementFeatureOrganisationIsEverythingEffect =>
+      'Active ability: temporarily lowers the loss of stability – paid in money.';
+
+  @override
+  String get managementFeatureStorageTetris => 'Storage tetris';
+
+  @override
+  String get managementFeatureStorageTetrisEffect =>
+      'Active ability: temporarily multiplies capacity; all penalties lapse.';
+
+  @override
+  String get managementFeatureUnionWorkers => 'All wheels …';
+
+  @override
+  String get managementFeatureUnionWorkersEffect =>
+      'Active ability: sabotage crew with averaged shadiness and rerolls.';
+
+  @override
+  String get managementRoleSecurityChief => 'Security chief';
+
+  @override
+  String get managementRoleEffectSecurityChief =>
+      'Detects sabotage attempts against the restaurant.';
+
+  @override
+  String get managementFeatureCounterSabotage => 'Revenge is black pudding';
+
+  @override
+  String get managementFeatureCounterSabotageEffect =>
+      'Active ability: strikes back at an attacker detected inside the window.';
+
+  @override
+  String managementCounterSabotagePending(String time) {
+    return 'Counterstrike ready until $time';
+  }
+
+  @override
+  String get managementFeatureSelectTeam => 'Choose strike crew';
+
+  @override
+  String managementFeatureDailyCost(int cost) {
+    return 'Ongoing: $cost € / day';
+  }
+
+  @override
   String get managementSabotageSelectTarget => 'Choose sabotage target';
 
   @override
@@ -929,6 +1012,11 @@ class AppLocalizationsEn extends AppLocalizations {
       one: '1 leftover day',
     );
     return '$_temp0 income: +$income €';
+  }
+
+  @override
+  String catchUpRivalSabotageLoss(int loss) {
+    return 'Rival sabotage: income −$loss €';
   }
 
   @override

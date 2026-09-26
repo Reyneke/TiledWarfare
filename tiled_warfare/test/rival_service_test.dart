@@ -224,4 +224,80 @@ void main() {
       expect(RivalService.resolveSabotage(pending, owner, start), isNull);
     });
   });
+
+  group('RivalService: eingehende Sabotage (V13)', () {
+    StaffEntryData chief({int id = 1, DateTime? activatedAt}) => StaffEntryData(
+      id: id,
+      name: 'Sicherheitschef',
+      kind: RoleKind.management,
+      role: ManagementRole.securityChief.name,
+      costPerWeek:
+          EconomyBalance.managementRoleWagePerWeek[ManagementRole
+              .securityChief]!,
+      activeFeature: activatedAt == null
+          ? null
+          : ManagementFeature.counterSabotage.name,
+      featureActivatedAt: activatedAt,
+    );
+
+    test('Versuch und Entdeckung sind deterministisch (anker-gebunden)', () {
+      for (var i = 0; i < 10; i++) {
+        final anchor = start.add(Duration(days: 7 * i));
+        for (final entry in RivalService.rosterOf('Midtown')) {
+          final occurs = RivalService.incomingAttemptOccurs(entry.id, anchor);
+          expect(
+            RivalService.incomingAttemptOccurs(entry.id, anchor),
+            occurs,
+          );
+          final detected = RivalService.incomingAttemptDetected(
+            entry.id,
+            anchor,
+            50,
+          );
+          expect(
+            RivalService.incomingAttemptDetected(entry.id, anchor, 50),
+            detected,
+          );
+        }
+      }
+    });
+
+    test('Entdeckung ohne Personal ist 0, der Chef hebt sie', () {
+      final plain = restaurant();
+      expect(RivalService.averageShadiness(plain), 0);
+      expect(RivalService.incomingDetectionPercent(plain), 0);
+
+      final guarded = restaurant(entries: [chief(id: 1)]);
+      expect(
+        RivalService.incomingDetectionPercent(guarded),
+        ManagementFeatureService.competenceOf(guarded.staffEntries.first) *
+            EconomyBalance.securityChiefDetectionBonusPercentPerCompetence,
+      );
+    });
+
+    test('Blöcke ohne Angriff liefern kein Ereignis', () {
+      final plain = restaurant();
+      var found = false;
+      for (var i = 0; i < 100 && !found; i++) {
+        final anchor = start.add(Duration(days: 7 * i));
+        if (RivalService.incomingAttackerIds(plain, anchor).isNotEmpty) {
+          continue;
+        }
+        found = true;
+        expect(RivalService.resolveIncomingSabotage(plain, anchor), isNull);
+      }
+      expect(found, isTrue, reason: 'es muss Blöcke ohne Angriff geben');
+    });
+
+    test('entdeckte Angreifer sind Teilmenge der Angreifer', () {
+      final guarded = restaurant(entries: [chief(id: 3, activatedAt: start)]);
+      for (var i = 0; i < 30; i++) {
+        final anchor = start.add(Duration(days: 7 * i));
+        final attackers = RivalService.incomingAttackerIds(guarded, anchor);
+        final detected = RivalService.detectedAttackerIds(guarded, anchor);
+        expect(detected.every(attackers.contains), isTrue);
+        expect(detected.length, lessThanOrEqualTo(attackers.length));
+      }
+    });
+  });
 }

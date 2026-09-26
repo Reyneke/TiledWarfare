@@ -304,7 +304,12 @@ void main() {
       expect(result.weeks, 1);
       expect(result.leftoverDays, 1);
       expect(result.leftoverIncome, perDay);
-      expect(result.passiveIncome, weekly + perDay);
+      // V13: Eingehende Rivalen-Sabotage mindert das Blockeinkommen
+      // (je unentdecktem Angreifer); die Resttage bleiben unberührt.
+      expect(
+        result.passiveIncome,
+        weekly + perDay - result.rivalSabotageLosses,
+      );
       expect(r.weekAnchorAt, base.add(const Duration(days: 7)));
     });
 
@@ -320,7 +325,17 @@ void main() {
       expect(result.settlements, hasLength(4));
       expect(result.leftoverDays, 2);
       expect(result.leftoverIncome, perDay * 2);
-      expect(result.passiveIncome, weekly * 4 + perDay * 2);
+      // V13: Das Einkommen der Blöcke ist um die Abschöpfung unentdeckter
+      // Rivalen-Angriffe gemindert (Resttage unberührt).
+      expect(
+        result.passiveIncome,
+        weekly * 4 + perDay * 2 - result.rivalSabotageLosses,
+      );
+      expect(
+        result.rivalSabotageLosses,
+        result.settlements
+            .fold<int>(0, (sum, s) => sum + (weekly - s.income)),
+      );
     });
 
     test('Tagesbuchungen summieren sich exakt zur Woche (Rundung)', () {

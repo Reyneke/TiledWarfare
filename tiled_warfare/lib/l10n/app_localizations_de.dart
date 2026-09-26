@@ -511,6 +511,89 @@ class AppLocalizationsDe extends AppLocalizations {
       'Aktive Fertigkeit: negiert befristet alle laufenden Kosten; danach Burnout.';
 
   @override
+  String get managementRoleHeadWaiter => 'Oberkellner';
+
+  @override
+  String get managementRoleEffectHeadWaiter =>
+      'Hebt Attraktivität und Kapazität.';
+
+  @override
+  String get managementRolePersonnelManager => 'Personalchef';
+
+  @override
+  String get managementRoleEffectPersonnelManager =>
+      'Hebt Kundenzufriedenheit und Kapazität.';
+
+  @override
+  String get managementRoleStorekeeper => 'Lagerist';
+
+  @override
+  String get managementRoleEffectStorekeeper => 'Hebt die Kapazität deutlich.';
+
+  @override
+  String get managementRoleUnionChief => 'Gewerkschaftschef';
+
+  @override
+  String get managementRoleEffectUnionChief =>
+      'Erhöht die Mitarbeiterkosten, senkt dafür deren Erschöpfung.';
+
+  @override
+  String get managementFeatureRushHour => 'Rush Hour';
+
+  @override
+  String get managementFeatureRushHourEffect =>
+      'Aktive Fertigkeit: hebt befristet alle Eingangswerte; Mali entfallen, dafür Erschöpfung.';
+
+  @override
+  String get managementFeatureOrganisationIsEverything =>
+      'Organisation ist alles';
+
+  @override
+  String get managementFeatureOrganisationIsEverythingEffect =>
+      'Aktive Fertigkeit: senkt befristet den Stabilitätsverlust – gegen Geld.';
+
+  @override
+  String get managementFeatureStorageTetris => 'Lagertetris';
+
+  @override
+  String get managementFeatureStorageTetrisEffect =>
+      'Aktive Fertigkeit: vervielfacht befristet die Kapazität; alle Mali entfallen.';
+
+  @override
+  String get managementFeatureUnionWorkers => 'Alle Räder …';
+
+  @override
+  String get managementFeatureUnionWorkersEffect =>
+      'Aktive Fertigkeit: Sabotage-Mannschaft mit gemittelter Shadiness und Rerolls.';
+
+  @override
+  String get managementRoleSecurityChief => 'Sicherheitschef';
+
+  @override
+  String get managementRoleEffectSecurityChief =>
+      'Entdeckt Sabotageversuche gegen das Restaurant.';
+
+  @override
+  String get managementFeatureCounterSabotage => 'Rache ist Blutwurst';
+
+  @override
+  String get managementFeatureCounterSabotageEffect =>
+      'Aktive Fertigkeit: schlägt gegen einen im Fenster entdeckten Angreifer zurück.';
+
+  @override
+  String managementCounterSabotagePending(String time) {
+    return 'Gegenschlag bereit bis $time';
+  }
+
+  @override
+  String get managementFeatureSelectTeam => 'Schlagmannschaft wählen';
+
+  @override
+  String managementFeatureDailyCost(int cost) {
+    return 'Laufend: $cost € / Tag';
+  }
+
+  @override
   String get managementSabotageSelectTarget => 'Ziel der Sabotage wählen';
 
   @override
@@ -936,6 +1019,11 @@ class AppLocalizationsDe extends AppLocalizations {
       one: '1 Resttag',
     );
     return '$_temp0 Einkommen: +$income €';
+  }
+
+  @override
+  String catchUpRivalSabotageLoss(int loss) {
+    return 'Rivalen-Sabotage: Einkommen −$loss €';
   }
 
   @override

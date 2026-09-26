@@ -211,14 +211,16 @@ class ObjectProfile {
       hiredAt: hiredAt,
     );
     _supportStaff.add(entry);
-    _staffEntries.add(StaffEntryData(
-      id: entry.id,
-      name: entry.name,
-      kind: RoleKind.support,
-      role: entry.role,
-      costPerWeek: entry.costPerWeek,
-      hiredAt: entry.hiredAt,
-    ));
+    _staffEntries.add(
+      StaffEntryData(
+        id: entry.id,
+        name: entry.name,
+        kind: RoleKind.support,
+        role: entry.role,
+        costPerWeek: entry.costPerWeek,
+        hiredAt: entry.hiredAt,
+      ),
+    );
     return entry;
   }
 
@@ -230,8 +232,8 @@ class ObjectProfile {
 
   /// Gibt die angestellten Verwaltungs-/Marketing-Rollen zurück (Option C).
   List<StaffEntryData> get managementStaff => List.unmodifiable(
-        _staffEntries.where((e) => e.kind == RoleKind.management),
-      );
+    _staffEntries.where((e) => e.kind == RoleKind.management),
+  );
 
   /// Stellt eine Verwaltungs-/Marketing-Rolle ein (Option C, `11a`).
   ///
@@ -265,15 +267,60 @@ class ObjectProfile {
 
   /// `true`, wenn die Chefsekretärin angestellt ist (Trägerin der Sabotage).
   bool get hasChefSecretary => StaffRoleService.hasManagementRole(
-      _staffEntries, ManagementRole.chefSecretary);
+    _staffEntries,
+    ManagementRole.chefSecretary,
+  );
 
   /// Erfolgswahrscheinlichkeit einer Sabotage (Prozent) – `0` ohne Trägerin.
+  ///
+  /// V12: Ist „Alle Räder …“ aktiv, fließt die **gemittelte** `shadiness` der
+  /// Mannschaft als Bonus/Malus ein (identische Rechnung wie in
+  /// `RivalService.resolveSabotage`).
   int get sabotageSuccessPercent {
     final owner = managementFeatureOwner(ManagementFeature.sabotage);
-    return owner == null
-        ? 0
-        : ManagementFeatureService.sabotageSuccessPercentFor(owner);
+    if (owner == null) return 0;
+    final teamIds = ManagementFeatureService.unionWorkersTeamIds(
+      _staffEntries,
+      DateTime.now(),
+    );
+    return ManagementFeatureService.sabotageSuccessPercentFor(owner) +
+        ManagementFeatureService.shadinessBonusPercent(teamIds, shadinessById);
   }
+
+  /// `shadiness` der In-Memory-Charaktere (ID → Wert); Charaktere ohne
+  /// Persönlichkeits-Profil werden ausgelassen (V12).
+  Map<int, int> get shadinessById {
+    final result = <int, int>{};
+    for (final character in _personal) {
+      if (character.personalityId < 0) continue;
+      result[character.id] = PersonalityTraits.forProfile(
+        character.personalityId,
+        character.id,
+      ).shadiness;
+    }
+    return result;
+  }
+
+  /// Maximale Mannschaftsgröße von „Alle Räder …“ (Kompetenz × Schritt).
+  int get unionWorkersTeamLimit {
+    final owner = managementFeatureOwner(ManagementFeature.unionWorkers);
+    if (owner == null) return 0;
+    return ManagementFeatureService.competenceOf(owner) *
+        EconomyBalance.unionWorkersTeamPerCompetence;
+  }
+
+  /// Einmalkosten der Aktivierung von [feature] (V12; z. B. Kompetenz × 500 €
+  /// bei „Lagertetris“).
+  int managementFeatureActivationCost(ManagementFeature feature) {
+    final owner = managementFeatureOwner(feature);
+    if (owner == null) return 0;
+    return ManagementFeatureService.activationCostFor(feature, owner);
+  }
+
+  /// `true`, wenn [feature] im Träger-Fenster eine laufende **Tageskosten**
+  /// verursacht („Organisation ist alles“, V12).
+  bool managementFeatureHasDailyCosts(ManagementFeature feature) =>
+      feature == ManagementFeature.organisationIsEverything;
 
   /// `true`, wenn die Sabotage gegen [rival] gelingen würde (UI-Vorschau).
   ///
@@ -281,8 +328,8 @@ class ObjectProfile {
   /// Tick (`ManagementFeatureService.sabotageSucceeds`).
   bool sabotageWouldSucceed(RivalRestaurant rival) {
     final owner = managementFeatureOwner(ManagementFeature.sabotage);
-    return owner != null && ManagementFeatureService.sabotageSucceeds(
-        owner, rival.id);
+    return owner != null &&
+        ManagementFeatureService.sabotageSucceeds(owner, rival.id);
   }
 
   /// Startet die Sabotage gegen [rival] (Chefsekretärin, `11a` E14).
@@ -303,22 +350,67 @@ class ObjectProfile {
     return true;
   }
 
-  /// Aktiviert ein Feature **ohne Ziel** (Winkelzug, Kreative Buchführung).
+  /// Aktiviert ein Feature **ohne Ziel** (Winkelzug, Kreative Buchführung,
+  /// Rush Hour, Lagertetris, Organisation ist alles).
   ///
-  /// Kosten: `ManagementFeatureService.fixedCostOf(feature)` – sofort abgebucht.
-  /// Gibt `false` zurück, wenn kein Träger angestellt ist, dort bereits ein
-  /// Feature läuft oder das Feature nicht ziel-los ist.
+  /// Kosten: `ManagementFeatureService.activationCostFor` – sofort abgebucht
+  /// („Organisation ist alles“ kostet `0` im Voraus und wird je aktivem Tag als
+  /// `featureCosts` gebucht, V12). Gibt `false` zurück, wenn kein Träger
+  /// angestellt ist, dort bereits ein Feature läuft, das Budget nicht reicht
+  /// oder das Feature eine Mannschaft/ein Ziel benötigt.
   bool activateUntargetedFeature(ManagementFeature feature, {DateTime? now}) {
-    final cost = ManagementFeatureService.fixedCostOf(feature);
-    if (cost == null) return false;
+    if (feature == ManagementFeature.prCampaign ||
+        feature == ManagementFeature.sabotage ||
+        feature == ManagementFeature.unionWorkers) {
+      // Ziel- bzw. mannschaftsgebundene Features haben eigene Wege.
+      return false;
+    }
     final owner = managementFeatureOwner(feature);
     if (owner == null || owner.activeFeature != null) return false;
+    final cost = ManagementFeatureService.activationCostFor(feature, owner);
     if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
     budget -= cost;
     owner.activeFeature = feature.name;
     owner.featureTargetId = null;
     owner.featureActivatedAt = now ?? DateTime.now();
     owner.featureResolvedAt = null;
+    owner.featureTeamIds = null;
+    return true;
+  }
+
+  /// Startet „Alle Räder …“ (Gewerkschaftschef, V12).
+  ///
+  /// [team] sind die zusätzlichen Mitarbeiter; sie werden auf
+  /// `Kompetenz × unionWorkersTeamPerCompetence` begrenzt (deterministisch:
+  /// die Reihenfolge der übergebenen Liste zählt). Die Einmalkosten
+  /// (`unionWorkersCost`) werden sofort abgebucht. Während des Fensters erlaubt
+  /// das Feature mehr Sabotage-Versuche (Reroll je Mitglied), mittelt die
+  /// `shadiness` der Mannschaft in die Erfolgschance und verteilt die
+  /// Auftrags-Erschöpfung.
+  bool activateUnionWorkers(List<ObjectApprentice> team, {DateTime? now}) {
+    final owner = managementFeatureOwner(ManagementFeature.unionWorkers);
+    if (owner == null || owner.activeFeature != null) return false;
+    final competence = ManagementFeatureService.competenceOf(owner);
+    final limit = competence * EconomyBalance.unionWorkersTeamPerCompetence;
+    final members = <int>[];
+    for (final character in team) {
+      if (members.length >= limit) break;
+      if (!_personal.contains(character)) continue;
+      if (character.status == CharacterStatus.dying ||
+          character.status == CharacterStatus.dead ||
+          character.status == CharacterStatus.overkilled) {
+        continue;
+      }
+      members.add(character.id);
+    }
+    final cost = EconomyBalance.unionWorkersCost;
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return false;
+    budget -= cost;
+    owner.activeFeature = ManagementFeature.unionWorkers.name;
+    owner.featureTargetId = null;
+    owner.featureActivatedAt = now ?? DateTime.now();
+    owner.featureResolvedAt = null;
+    owner.featureTeamIds = members.isEmpty ? null : members;
     return true;
   }
 
@@ -336,19 +428,29 @@ class ObjectProfile {
   /// `true`, wenn [feature] gerade **aktiv** ist (XP-Boost-Phase).
   bool managementFeatureIsActive(ManagementFeature feature, {DateTime? now}) =>
       ManagementFeatureService.isActive(
-          _staffEntries, feature, now ?? DateTime.now());
+        _staffEntries,
+        feature,
+        now ?? DateTime.now(),
+      );
 
   /// `true`, wenn [feature] gerade in der **Nachteilphase** läuft.
-  bool managementFeatureIsInAftermath(ManagementFeature feature,
-          {DateTime? now}) =>
+  bool managementFeatureIsInAftermath(
+    ManagementFeature feature, {
+    DateTime? now,
+  }) =>
       ManagementFeatureService.aftermathEntry(
-          _staffEntries, feature, now ?? DateTime.now()) !=
+        _staffEntries,
+        feature,
+        now ?? DateTime.now(),
+      ) !=
       null;
 
   /// Das Kampagnen-Ziel von [feature] (oder `null`).
   ObjectApprentice? managementFeatureTarget(ManagementFeature feature) {
-    final targetId = ManagementFeatureService.ownerOf(_staffEntries, feature)
-        ?.featureTargetId;
+    final targetId = ManagementFeatureService.ownerOf(
+      _staffEntries,
+      feature,
+    )?.featureTargetId;
     if (targetId == null) return null;
     for (final character in _personal) {
       if (character.id == targetId) return character;
@@ -365,7 +467,10 @@ class ObjectProfile {
   /// Prozentualer XP-Zuschlag, den [feature] dem Charakter [characterId] gibt.
   int managementFeatureXpBoostPercentFor(int characterId, {DateTime? now}) =>
       ManagementFeatureService.xpBoostPercentFor(
-          _staffEntries, characterId, now ?? DateTime.now());
+        _staffEntries,
+        characterId,
+        now ?? DateTime.now(),
+      );
 
   /// Einmalkosten der Feature-Aktivierung für [target] (Level × 1000 €).
   int managementFeatureCostFor(ObjectApprentice target) =>
@@ -411,8 +516,10 @@ class ObjectProfile {
     medic.costPerWeek = EconomyService.weeklyMedicCost(
       medic.quality,
       personalCount,
-      PersonalityTraits.forProfile(medic.enneagramProfile.id, medic.id)
-          .thriftiness,
+      PersonalityTraits.forProfile(
+        medic.enneagramProfile.id,
+        medic.id,
+      ).thriftiness,
     );
     _hiredMedics.add(medic);
   }
@@ -449,9 +556,12 @@ class ObjectProfile {
     // Stabile ID erst nach der Namensgenerierung (V9): Sie ist die Referenz
     // für Persönlichkeits-Varianz und Ressourcen.
     apprentice.id = CRC32.compute(
-        apprentice.name + createdAt.toIso8601String());
-    final traits =
-        PersonalityTraits.forProfile(apprentice.personalityId, apprentice.id);
+      apprentice.name + createdAt.toIso8601String(),
+    );
+    final traits = PersonalityTraits.forProfile(
+      apprentice.personalityId,
+      apprentice.id,
+    );
     apprentice.vitalityCurrent = traits.vitality;
     apprentice.moraleCurrent = traits.morale;
     _personal.add(apprentice);
@@ -463,7 +573,8 @@ class ObjectProfile {
   /// Es gibt keine Rückerstattung des Anheuerungspreises. Fällt dabei der
   /// aktive Chef de cuisine aus, rückt ein formeller Chef nach (V10 § 6).
   void fireCharacter(ObjectApprentice character) {
-    final wasActiveHeadChef = character.rank == kRankHeadChef &&
+    final wasActiveHeadChef =
+        character.rank == kRankHeadChef &&
         character.headChefRole == kHeadChefRoleActive;
     _personal.remove(character);
     if (wasActiveHeadChef) nachrueckenHeadChef();
@@ -497,12 +608,15 @@ class ObjectProfile {
     final existing = _pendingTargetEdits[targetRestaurantId];
     final pendingDelta = existing?.budgetDelta ?? 0;
     if (!EconomyService.canAfford(
-        budget: target.budget + pendingDelta, cost: cost)) {
+      budget: target.budget + pendingDelta,
+      cost: cost,
+    )) {
       return false;
     }
 
     // Quelle (aktives Restaurant): sofort aus dem Team entfernen.
-    final wasActiveHeadChef = staff.rank == kRankHeadChef &&
+    final wasActiveHeadChef =
+        staff.rank == kRankHeadChef &&
         staff.headChefRole == kHeadChefRoleActive;
     _personal.remove(staff);
     // V10 § 6: Im Ziel ist der transferierte Chef zunächst **formell**; im
@@ -528,9 +642,10 @@ class ObjectProfile {
   /// Dünner Wrapper um [promoteToRank]; die Kosten bleiben als Parameter
   /// erhalten (Alt-Aufrufer/Tests), Standard ist
   /// `EconomyBalance.upgradeToLineCookCost`.
-  ObjectApprentice? upgradeToLineCook(ObjectApprentice apprentice,
-          {int cost = EconomyBalance.upgradeToLineCookCost}) =>
-      promoteToRank(apprentice, kRankLineCook, cost: cost);
+  ObjectApprentice? upgradeToLineCook(
+    ObjectApprentice apprentice, {
+    int cost = EconomyBalance.upgradeToLineCookCost,
+  }) => promoteToRank(apprentice, kRankLineCook, cost: cost);
 
   /// Befördert [character] in den Zielrang [targetRank] (Karrierepfade, V10).
   ///
@@ -556,7 +671,9 @@ class ObjectProfile {
       return null; // falscher Ausgangsrang oder unbekannter Zielrang
     }
     if (!EconomyService.canPromote(
-        rank: targetRank, level: character.levelValue)) {
+      rank: targetRank,
+      level: character.levelValue,
+    )) {
       return null; // Level-Gate nicht erreicht
     }
     final promotionCost = cost ?? EconomyService.promotionCost(targetRank);
@@ -632,7 +749,9 @@ class ObjectProfile {
   /// Überträgt Identität, Fortschritt, Zustand und Station von [source] auf
   /// [target] (V9/V10) – die einzige Stelle des Identitätserhalts bei Aufstieg.
   static void _transferIdentity(
-      ObjectApprentice target, ObjectApprentice source) {
+    ObjectApprentice target,
+    ObjectApprentice source,
+  ) {
     target.levelValue = source.levelValue;
     target.currentXPValue = source.currentXPValue;
     target.woundValue = source.woundValue;
@@ -709,8 +828,10 @@ class ObjectProfile {
   /// sortiert nach höchstem Level, bei Gleichstand nach ältester (kleinster) ID.
   List<ObjectApprentice> formalHeadChefCandidates() {
     final candidates = _personal
-        .where((c) =>
-            c.rank == kRankHeadChef && c.headChefRole != kHeadChefRoleActive)
+        .where(
+          (c) =>
+              c.rank == kRankHeadChef && c.headChefRole != kHeadChefRoleActive,
+        )
         .toList();
     candidates.sort((a, b) {
       final byLevel = b.levelValue.compareTo(a.levelValue);
@@ -784,8 +905,9 @@ class ObjectProfile {
   /// gefallene Einheiten korrekt auflisten kann.
   List<ObjectApprentice> selectTeamForBattle(List<ObjectApprentice> selected) {
     // Nur einsatzbereite Charaktere erlauben
-    final validSelection =
-        selected.where((c) => c.status != CharacterStatus.dying).toList();
+    final validSelection = selected
+        .where((c) => c.status != CharacterStatus.dying)
+        .toList();
 
     // Teammitglieder an ObjectPlayer übergeben. Die Trefferpunkte werden beim
     // Gefechtsstart konsistent aus dem Management-Status abgeleitet (V3): eine
@@ -831,8 +953,9 @@ class ObjectProfile {
     final nowTime = now ?? DateTime.now();
     final hasMedic = _hiredMedics.isNotEmpty;
     final medicBonus = hasMedic
-        ? _hiredMedics.map((m) => m.effectiveSurvivalBonus).reduce(
-            (a, b) => a > b ? a : b)
+        ? _hiredMedics
+              .map((m) => m.effectiveSurvivalBonus)
+              .reduce((a, b) => a > b ? a : b)
         : 0;
 
     for (final unit in _personal.toList()) {
@@ -842,8 +965,8 @@ class ObjectProfile {
       int targetValue = EconomyBalance.survivalBase;
       targetValue += unit.levelValue * EconomyBalance.survivalPerLevel;
       if (unit.defenseValue > EconomyBalance.survivalDefenseThreshold) {
-        targetValue += (unit.defenseValue -
-                EconomyBalance.survivalDefenseThreshold) *
+        targetValue +=
+            (unit.defenseValue - EconomyBalance.survivalDefenseThreshold) *
             EconomyBalance.survivalPerDefenseOverThreshold;
       }
       // Strafe bei übermäßigem Schaden (overkilled).
@@ -872,7 +995,9 @@ class ObjectProfile {
       // Der Wächter folgt der einheitlichen Negativgrenzen-Regel (V7/L4).
       if (hasMedic &&
           EconomyService.canAfford(
-              budget: budget, cost: EconomyBalance.revivalCost)) {
+            budget: budget,
+            cost: EconomyBalance.revivalCost,
+          )) {
         budget -= EconomyBalance.revivalCost; // Kosten für Wiederbelebung
         roll = EconomyService.rollD100(rng);
         if (roll <= EconomyService.clampTargetToD100(targetValue)) {
@@ -914,13 +1039,15 @@ class ObjectProfile {
     Map<String, int>? deaths,
   }) {
     for (final character in _personal) {
-      character.matchHistory.add(MatchRecord(
-        date: DateTime.now(),
-        opponentName: opponentName,
-        result: result,
-        kills: kills?[character.name] ?? 0,
-        deaths: deaths?[character.name] ?? 0,
-      ));
+      character.matchHistory.add(
+        MatchRecord(
+          date: DateTime.now(),
+          opponentName: opponentName,
+          result: result,
+          kills: kills?[character.name] ?? 0,
+          deaths: deaths?[character.name] ?? 0,
+        ),
+      );
     }
   }
 
@@ -933,34 +1060,45 @@ class ObjectProfile {
   /// [survivors] sind die Einheiten, die das Gefecht überlebt haben
   /// (woundValue > 0). Einheiten in [_personal], die nicht in [survivors]
   /// enthalten sind, gelten als gefallen und durchlaufen den Rettungswurf.
-  void syncUnitsAfterBattle(List<ObjectApprentice> survivors,
-      {Random? random, DateTime? now}) {
+  void syncUnitsAfterBattle(
+    List<ObjectApprentice> survivors, {
+    Random? random,
+    DateTime? now,
+  }) {
     // V9 (Phase 3/4): Ein Gefechtseinsatz kostet Vitalität und Moral und kann
     // Stress oder Ruhe auslösen (W100-Proben, § 6; injizierbarer Zufall).
     final battleRng = random ?? Random();
     final battleNow = now ?? DateTime.now();
     for (final survivor in survivors) {
       final vitalitySink = StressService.sink(
-          survivor.vitalityCurrent, EconomyBalance.resourceSinkPerBattle);
+        survivor.vitalityCurrent,
+        EconomyBalance.resourceSinkPerBattle,
+      );
       final moraleSink = StressService.sink(
-          survivor.moraleCurrent, EconomyBalance.resourceSinkPerBattle);
+        survivor.moraleCurrent,
+        EconomyBalance.resourceSinkPerBattle,
+      );
       survivor.vitalityCurrent = vitalitySink.value;
       survivor.moraleCurrent = moraleSink.value;
       survivor.vitalityZeroSinceAt = StressService.updateZeroAnchor(
-          survivor.vitalityZeroSinceAt,
-          atZero: vitalitySink.atZero,
-          now: battleNow);
+        survivor.vitalityZeroSinceAt,
+        atZero: vitalitySink.atZero,
+        now: battleNow,
+      );
       survivor.moraleZeroSinceAt = StressService.updateZeroAnchor(
-          survivor.moraleZeroSinceAt,
-          atZero: moraleSink.atZero,
-          now: battleNow);
+        survivor.moraleZeroSinceAt,
+        atZero: moraleSink.atZero,
+        now: battleNow,
+      );
       final override = StressService.probe(
         vitalityCurrent: survivor.vitalityCurrent,
         moraleCurrent: survivor.moraleCurrent,
         currentProfileId: survivor.personalityId,
         random: battleRng,
-        malusPercent:
-            StressService.malusPercentForCharacter(survivor, battleNow),
+        malusPercent: StressService.malusPercentForCharacter(
+          survivor,
+          battleNow,
+        ),
       );
       if (override != null) {
         survivor.personalityOverrideId = override.profileId;
@@ -1023,8 +1161,9 @@ class ObjectProfile {
     if (markCurrentDissolved &&
         _profileData != null &&
         activeRestaurantId > 0) {
-      final index = _profileData!.restaurants
-          .indexWhere((r) => r.id == activeRestaurantId);
+      final index = _profileData!.restaurants.indexWhere(
+        (r) => r.id == activeRestaurantId,
+      );
       if (index >= 0) {
         final current = _profileData!.restaurants[index];
         current.isDissolved = true;
@@ -1033,8 +1172,9 @@ class ObjectProfile {
     }
 
     final newId = CRC32.compute(
-        '${restaurantName.isEmpty ? 'Neues Restaurant' : restaurantName}'
-        '${DateTime.now().microsecondsSinceEpoch}');
+      '${restaurantName.isEmpty ? 'Neues Restaurant' : restaurantName}'
+      '${DateTime.now().microsecondsSinceEpoch}',
+    );
     activeRestaurantId = newId;
     activeDistrict = district;
     restaurantName = 'Neues Restaurant';
@@ -1140,8 +1280,9 @@ class ObjectProfile {
     for (final entry in restaurant.staffEntries) {
       final known = switch (entry.kind) {
         RoleKind.support => SupportRole.values.any((r) => r.name == entry.role),
-        RoleKind.management =>
-          ManagementRole.values.any((r) => r.name == entry.role),
+        RoleKind.management => ManagementRole.values.any(
+          (r) => r.name == entry.role,
+        ),
         RoleKind.medic => false,
       };
       if (known) _staffEntries.add(entry);
@@ -1156,9 +1297,9 @@ class ObjectProfile {
     if (activeRestaurantId > 0) wanted.add(activeRestaurantId);
     for (final candidate in wanted) {
       final match = data.restaurants.cast<RestaurantData?>().firstWhere(
-            (r) => r!.id == candidate,
-            orElse: () => null,
-          );
+        (r) => r!.id == candidate,
+        orElse: () => null,
+      );
       if (match != null) return match;
     }
     return data.restaurants.isNotEmpty ? data.restaurants.first : null;
@@ -1175,7 +1316,8 @@ class ObjectProfile {
     var activeId = activeRestaurantId;
     if (activeId <= 0 && restaurantName.isNotEmpty) {
       activeId = CRC32.compute(
-          '$restaurantName${DateTime.now().toIso8601String()}');
+        '$restaurantName${DateTime.now().toIso8601String()}',
+      );
     }
 
     final restaurants = _profileData != null
@@ -1215,10 +1357,12 @@ class ObjectProfile {
       sabotageAppliedUntil: sabotageAppliedUntil,
       // V3/V8: den (ggf. durch den Catch-up fortgeschriebenen) Zeitanker
       // persistieren, damit verpasste Zeit nicht erneut abgerechnet wird.
-      lastSeenAt: lastSeenAt ??
+      lastSeenAt:
+          lastSeenAt ??
           (existingIndex >= 0 ? restaurants[existingIndex].lastSeenAt : null) ??
           DateTime.now(),
-      weekAnchorAt: weekAnchorAt ??
+      weekAnchorAt:
+          weekAnchorAt ??
           (existingIndex >= 0 ? restaurants[existingIndex].weekAnchorAt : null),
       lastMatchResult: lastMatchResult,
       isDissolved: existingIndex >= 0
@@ -1253,24 +1397,24 @@ class ObjectProfile {
   /// Liefert einen Snapshot des aktiven Restaurants (ohne zu speichern) –
   /// für Ableitungen wie Countdown und passives Einkommen in der UI.
   RestaurantData activeRestaurantSnapshot() => RestaurantData(
-        id: activeRestaurantId,
-        name: restaurantName,
-        logoPath: restaurantLogoPath,
-        district: activeDistrict,
-        cuisine: activeCuisine,
-        rebrandingPenaltyUntil: rebrandingPenaltyUntil,
-        budget: budget,
-        staff: _personal.map(_apprenticeToStaffData).toList(),
-        medics: _hiredMedics.map(_medicToMedicData).toList(),
-        supportStaff: List.of(_supportStaff),
-        staffEntries: List.of(_staffEntries),
-        upgrades: Map.of(activeUpgrades),
-        sabotageTargetId: sabotageTargetId,
-        sabotageAppliedUntil: sabotageAppliedUntil,
-        lastSeenAt: lastSeenAt,
-        weekAnchorAt: weekAnchorAt,
-        lastMatchResult: lastMatchResult,
-      );
+    id: activeRestaurantId,
+    name: restaurantName,
+    logoPath: restaurantLogoPath,
+    district: activeDistrict,
+    cuisine: activeCuisine,
+    rebrandingPenaltyUntil: rebrandingPenaltyUntil,
+    budget: budget,
+    staff: _personal.map(_apprenticeToStaffData).toList(),
+    medics: _hiredMedics.map(_medicToMedicData).toList(),
+    supportStaff: List.of(_supportStaff),
+    staffEntries: List.of(_staffEntries),
+    upgrades: Map.of(activeUpgrades),
+    sabotageTargetId: sabotageTargetId,
+    sabotageAppliedUntil: sabotageAppliedUntil,
+    lastSeenAt: lastSeenAt,
+    weekAnchorAt: weekAnchorAt,
+    lastMatchResult: lastMatchResult,
+  );
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
@@ -1284,7 +1428,8 @@ class ObjectProfile {
   /// (`ScreenRestaurant._buildUpgradeTile`).
   int upgradePurchaseCost(UpgradeType type) {
     final level = upgradeLevel(type);
-    final gross = EconomyService.upgradeCost(type, level + 1) -
+    final gross =
+        EconomyService.upgradeCost(type, level + 1) -
         EconomyService.upgradeCost(type, level);
     return StaffRoleService.reduceByPercent(
       gross,
@@ -1420,40 +1565,40 @@ class ObjectProfile {
   // ── Konvertierungshilfen ───────────────────────────────────────────────
 
   static StaffData _apprenticeToStaffData(ObjectApprentice a) => StaffData(
-        name: a.name,
-        imagePath: a.imagePath,
-        type: a.rank,
-        rank: a.rank,
-        station: a.station,
-        headChefRole: a.headChefRole,
-        assignedRestaurantId: a.assignedRestaurantId,
-        levelValue: a.levelValue,
-        currentXPValue: a.currentXPValue,
-        woundValue: a.woundValue,
-        attackValue: a.attackValue,
-        defenseValue: a.defenseValue,
-        movementValue: a.movementValue,
-        damageValue: a.damageValue,
-        rangeValue: a.rangeValue,
-        moneyValue: a.moneyValue,
-        xpValue: a.xpValue,
-        status: a.status.name,
-        injuryStartedAt: a.injuryStartedAt,
-        injuryStartStatus: a.injuryStartStatus?.name,
-        emergencyShotAt: a.emergencyShotAt,
-        suppressedStatus: a.suppressedStatus?.name,
-        id: a.id,
-        personalityId: a.personalityId,
-        vitalityCurrent: a.vitalityCurrent,
-        moraleCurrent: a.moraleCurrent,
-        lastResourceRefillAt: a.lastResourceRefillAt,
-        personalityOverrideId: a.personalityOverrideId,
-        personalityOverrideUntil: a.personalityOverrideUntil,
-        personalityOverrideCause: a.personalityOverrideCause,
-        vitalityZeroSinceAt: a.vitalityZeroSinceAt,
-        moraleZeroSinceAt: a.moraleZeroSinceAt,
-        matchHistory: a.matchHistory.map((m) => m.toJson()).toList(),
-      );
+    name: a.name,
+    imagePath: a.imagePath,
+    type: a.rank,
+    rank: a.rank,
+    station: a.station,
+    headChefRole: a.headChefRole,
+    assignedRestaurantId: a.assignedRestaurantId,
+    levelValue: a.levelValue,
+    currentXPValue: a.currentXPValue,
+    woundValue: a.woundValue,
+    attackValue: a.attackValue,
+    defenseValue: a.defenseValue,
+    movementValue: a.movementValue,
+    damageValue: a.damageValue,
+    rangeValue: a.rangeValue,
+    moneyValue: a.moneyValue,
+    xpValue: a.xpValue,
+    status: a.status.name,
+    injuryStartedAt: a.injuryStartedAt,
+    injuryStartStatus: a.injuryStartStatus?.name,
+    emergencyShotAt: a.emergencyShotAt,
+    suppressedStatus: a.suppressedStatus?.name,
+    id: a.id,
+    personalityId: a.personalityId,
+    vitalityCurrent: a.vitalityCurrent,
+    moraleCurrent: a.moraleCurrent,
+    lastResourceRefillAt: a.lastResourceRefillAt,
+    personalityOverrideId: a.personalityOverrideId,
+    personalityOverrideUntil: a.personalityOverrideUntil,
+    personalityOverrideCause: a.personalityOverrideCause,
+    vitalityZeroSinceAt: a.vitalityZeroSinceAt,
+    moraleZeroSinceAt: a.moraleZeroSinceAt,
+    matchHistory: a.matchHistory.map((m) => m.toJson()).toList(),
+  );
 
   static ObjectApprentice? _staffDataToApprentice(StaffData sd) {
     // Karriere-Rang ist führend; `type` bleibt als Fallback für Alt-Daten (V10).
@@ -1472,24 +1617,29 @@ class ObjectProfile {
     }
     // Alle anderen Ränge (u. a. die späteren höheren Klassen) werden vorerst als
     // Basisklasse geladen; der Rang bleibt in `apprentice.rank` erhalten.
-    return _buildApprentice<ObjectApprentice>(sd, ObjectApprentice(
-      name: sd.name,
-      imagePath: sd.imagePath,
-      attackValue: sd.attackValue,
-      defenseValue: sd.defenseValue,
-      movementValue: sd.movementValue,
-      damageValue: sd.damageValue,
-      rangeValue: sd.rangeValue,
-      moneyValue: sd.moneyValue,
-      xpValue: sd.xpValue,
-    ));
+    return _buildApprentice<ObjectApprentice>(
+      sd,
+      ObjectApprentice(
+        name: sd.name,
+        imagePath: sd.imagePath,
+        attackValue: sd.attackValue,
+        defenseValue: sd.defenseValue,
+        movementValue: sd.movementValue,
+        damageValue: sd.damageValue,
+        rangeValue: sd.rangeValue,
+        moneyValue: sd.moneyValue,
+        xpValue: sd.xpValue,
+      ),
+    );
   }
 
   /// Wendet die modifizierbaren Felder aus [StaffData] auf [apprentice] an.
   /// [name] und [imagePath] sind jetzt nicht mehr `final`, daher können wir
   /// auch beim [ObjectLineCook] nachträglich die gespeicherten Werte setzen.
   static T _buildApprentice<T extends ObjectApprentice>(
-      StaffData sd, T apprentice) {
+    StaffData sd,
+    T apprentice,
+  ) {
     apprentice.name = sd.name;
     apprentice.imagePath = sd.imagePath;
     apprentice.levelValue = sd.levelValue;
@@ -1533,8 +1683,10 @@ class ObjectProfile {
     apprentice.personalityId = sd.personalityId >= 0
         ? sd.personalityId
         : CRC32.compute(sd.name) % EnneagramProfile.all.length;
-    final traits =
-        PersonalityTraits.forProfile(apprentice.personalityId, apprentice.id);
+    final traits = PersonalityTraits.forProfile(
+      apprentice.personalityId,
+      apprentice.id,
+    );
     apprentice.vitalityCurrent = sd.vitalityCurrent ?? traits.vitality;
     apprentice.moraleCurrent = sd.moraleCurrent ?? traits.morale;
     apprentice.lastResourceRefillAt = sd.lastResourceRefillAt;
@@ -1553,13 +1705,13 @@ class ObjectProfile {
 
   /// Konvertiert einen [ObjectTeamMedic] in [MedicData] für die Serialisierung.
   static MedicData _medicToMedicData(ObjectTeamMedic m) => MedicData(
-        id: m.id,
-        name: m.name,
-        quality: m.quality.name,
-        costPerWeek: m.costPerWeek,
-        enneagramProfileName: m.enneagramProfile.name,
-        personalityId: m.enneagramProfile.id,
-      );
+    id: m.id,
+    name: m.name,
+    quality: m.quality.name,
+    costPerWeek: m.costPerWeek,
+    enneagramProfileName: m.enneagramProfile.name,
+    personalityId: m.enneagramProfile.id,
+  );
 
   /// Konvertiert [MedicData] zurück in einen [ObjectTeamMedic].
   /// Da die Felder von [ObjectTeamMedic] jetzt nicht mehr final sind,
@@ -1576,7 +1728,8 @@ class ObjectProfile {
     // Bevorzugt der stabile Index (V9); der Anzeigename bleibt Fallback für
     // Alt-Spielstände (V6-Prinzip).
     final medicProfileId = md.personalityId;
-    medic.enneagramProfile = medicProfileId != null &&
+    medic.enneagramProfile =
+        medicProfileId != null &&
             medicProfileId >= 0 &&
             medicProfileId < EnneagramProfile.all.length
         ? EnneagramProfile.all[medicProfileId]
