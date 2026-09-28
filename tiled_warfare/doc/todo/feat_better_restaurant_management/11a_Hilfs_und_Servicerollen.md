@@ -226,8 +226,21 @@ Kategorie-Zuordnung (`support` vs. `management`) ist noch offen (E6):
 > ihre Feature-Sonderfertigkeiten („Rush Hour“/„Lagertetris“) stammen aus der ersten Rohskizze. Offen bleiben
 > **Caissier** (Negativzinsen) und **Sommelier** (Zufriedenheit, Überschneidung mit dem Garçon).
 
-> Abgestimmt mit `11b`: Der **Caviste** überschneidet sich mit dem dort vorgeschlagenen Erweiterungstyp
-> „Weinkeller“; der **Plongeur** ist der wichtigste Hebel für die Balance des Erweiterungs-Unterhalts.
+> Abgestimmt mit `11b` (aktualisiert): Der **Plongeur** ist der wichtigste Hebel für die Balance des
+> Erweiterungs-Unterhalts. Die frühere Überschneidung **Caviste ↔ „Weinkeller“** ist aufgelöst: Caviste ist als
+> **Lagerist** (V12) der **Kapazitäts-/Lager-Hebel**, das **Zufriedenheits-Viertel** gehört dem **Keller**.
+
+**Zuordnung Rolle ↔ Erweiterung (neu, abgestimmt mit `11b`)** – nach dem **Plongeur-Muster**: Die Erweiterung
+**schafft die Wirkungsbasis**, die Rolle wird dadurch erst wertvoll.
+
+| Rolle (`11a`) | Passende Erweiterung (`11b`) | Wirkungsbasis |
+|---|---|---|
+| **Teamarzt** (V8, umgesetzt) | **Erste-Hilfe-Station** (`firstAid`) – **Erweiterung umgesetzt** ✅ | Verkürzt die vom Arzt **gesetzte** Stufenzeit (`healTimePerStage`) prozentual (max. −15 %); der **Rettungswurf** bleibt allein die Arzt-Domäne (die Alternative „+1 Rettungswurf-Zielwert“ wurde bewusst verworfen). |
+| **Sommelier** (offen) | **Wein-/Getränkekeller** (`cellar`) – **Erweiterung umgesetzt** ✅ | Der Zufriedenheits-Zuschlag des Sommeliers greift nur mit gebautem Keller – die Wirkungsbasis steht seit dem V1-Paket (`11b`), der **Sommelier selbst ist noch offen**. |
+| **Caissier** (offen) | **Tresor/Kassenraum** (`vault`) | Senkung der Negativzinsen stapelt **additiv** mit der Erweiterung. |
+| **Lagerist** (V12) | **Kühlhaus/Kühlkette** (`coldRoom`) – **Erweiterung umgesetzt** ✅ | Mehr Kapazitäts-Basis für das aktive „Lagertetris“ – die Basis steht seit dem V1-Paket (`11b`); ohne Personal bleibt sie wirkungslos (`capacityOf` = 0). |
+| **Rechtsanwalt** (V11) | **Zertifizierung/Hygiene-Siegel** (`certification`) | Strafen-Minderung **setzt eine Strafenquelle** voraus (offen: Behörden/Inspektionen). |
+| **Sicherheitschef** (V13) | **Sicherheitstechnik/Alarmanlage** (`security`) | Entdeckung/Abschöpfung eingehender Sabotage. |
 
 ## Verwaltungsrollen (umgesetzt V11)
 
@@ -530,7 +543,11 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 - **Wöchentlicher Lohn statt Ankauf** (analog `0-Base.md`, Entscheidung Nr. 3); Abbuchung am Blockende, kein
   anteiliger Einzug.
 - **Binäre Wirkung** (Anwesenheit statt Anzahl/Stufen) – im Unterschied zu den stufenbasierten Erweiterungen
-  (`11b`).
+  (`11b`). Berührungspunkt **Teamarzt ↔ `firstAid`** (V1-Paket, umgesetzt): Der Arzt wirkt **binär über seine
+  Qualität** (`medicQualitySpecs[…].healTimePerStage` = 24 h/6 h/3 h/1 h, Rettungswurf-Bonus 10–30), die
+  Erweiterung **stufenweise prozentual** auf die resultierende Stufenzeit (−5 %/Stufe). Beide Hebel sind damit
+  sauber getrennt: die **Rolle setzt die Basis**, die **Erweiterung verkürzt** sie – kein zweiter Hebel auf den
+  Rettungswurf, der allein die Arzt-Domäne bleibt.
 - **Lohn fix ohne Thriftiness-Faktor** (Rollen ohne Persönlichkeit) – im Unterschied zu `staffWagePerWeek`/
   Teamarzt.
 - **Personal-Taxonomie-Details E3/E5 (Option C):** Der Social Media Manager ist ein **binärer
@@ -568,8 +585,12 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
   `SupportRoleService.has`).
 - Lohn-Thriftiness nachziehen, falls Rollen später Persönlichkeit erhalten.
 - Tournant wirkt nur auf Wochen-Proben im Restaurant, Kampf-Malus unberührt (dokumentierte V10-Abweichung).
-- Erweiterungsvorschläge in Abstimmung mit `11b` priorisieren (Schnittmenge Plongeur ↔ Erweiterungs-Unterhalt;
-  Caviste ↔ Erweiterungstyp „Weinkeller“).
+- Erweiterungsvorschläge in Abstimmung mit `11b` priorisieren – die Zuordnung steht (Tabelle „Zuordnung Rolle ↔
+  Erweiterung“): V1-Paket sind `cellar`, `coldRoom` **und** `firstAid` (**alle umgesetzt** ✅ – die
+  Zufriedenheits-Basis des **Sommeliers**, die Kapazitäts-Basis des **Lageristen** und die Heilzeit-Basis des
+  **Teamarztes** stehen),
+  als nächstes `vault` (macht **Caissier** wertvoll), dann `lounge`; **offen** bleibt die **Strafenquelle
+  Behörden/Inspektionen**, damit die **Zertifizierung** (Rechtsanwalt) wirkt.
 - **Balance-Check:** Rollen lohnen sich erst, wenn ihre Wirkungsbasis existiert (Plongeur nur mit Erweiterungen,
   Aboyeur nur mit Personal/Einkommen, Boucher hängt an der Gefechtsfrequenz) – Löhne bewusst gegenprüfen.
 - Entlassen ohne Rückerstattung ist bewusst (analog Charakter-Entlassung); Bestätigungs-Dialog prüfen (wie in

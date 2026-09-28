@@ -972,6 +972,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     }
     final perStage = GameClockService.healTimePerStageFor(
       quality: GameClockService.bestHiredQuality(_profile.hiredMedics),
+      upgrades: _profile.activeUpgrades,
     );
     final remaining = GameClockService.remainingHealingTime(
       status: character.status,
@@ -1105,6 +1106,12 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         return l10n.upgradeDecoration;
       case UpgradeType.jukebox:
         return l10n.upgradeJukebox;
+      case UpgradeType.cellar:
+        return l10n.upgradeCellar;
+      case UpgradeType.coldRoom:
+        return l10n.upgradeColdRoom;
+      case UpgradeType.firstAid:
+        return l10n.upgradeFirstAid;
     }
   }
 
@@ -1206,14 +1213,37 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     setState(() {});
   }
 
+  /// Verkauft [type] vollständig – nach Rückfrage, weil die Erstattung nur
+  /// `upgradeSellRefundRate` der investierten Summe beträgt.
   Future<void> _sellUpgrade(UpgradeType type) async {
     final l10n = AppLocalizations.of(context)!;
-    final refund = _profile.sellUpgrade(type);
-    if (refund <= 0) return;
+    final level = _profile.upgradeLevel(type);
+    if (level <= 0) return;
+    final refund = EconomyService.sellRefund(type, level);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.upgradeSell),
+        content: Text(l10n.upgradeSellConfirm(refund)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.upgradeSell),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final booked = _profile.sellUpgrade(type);
+    if (booked <= 0) return;
     await _saveState();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.upgradeSold(refund))),
+      SnackBar(content: Text(l10n.upgradeSold(booked))),
     );
     setState(() {});
   }

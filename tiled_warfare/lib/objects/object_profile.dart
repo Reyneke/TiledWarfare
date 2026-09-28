@@ -1425,12 +1425,11 @@ class ObjectProfile {
   ///
   /// Der Abzug der Chefsekretärin (`11a` E12) wirkt auf den Anschaffungspreis,
   /// nicht auf den Unterhalt; die UI zeigt denselben Wert an
-  /// (`ScreenRestaurant._buildUpgradeTile`).
+  /// (`ScreenRestaurant._buildUpgradeTile`). Das Brutto-Delta kommt zentral aus
+  /// `EconomyService.upgradeCostDelta`.
   int upgradePurchaseCost(UpgradeType type) {
     final level = upgradeLevel(type);
-    final gross =
-        EconomyService.upgradeCost(type, level + 1) -
-        EconomyService.upgradeCost(type, level);
+    final gross = EconomyService.upgradeCostDelta(type, level);
     return StaffRoleService.reduceByPercent(
       gross,
       StaffRoleService.chefSecretaryUpgradeCostReductionPercent(_staffEntries),

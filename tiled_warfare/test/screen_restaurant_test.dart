@@ -74,6 +74,144 @@ void main() {
     expect(find.text('Werbeplakate'), findsOneWidget);
   });
 
+  testWidgets('Keller-Kachel ist ausbaubar (V1-Paket, § 10)', (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final cellarCard = find.ancestor(
+      of: find.text('Wein-/Getränkekeller'),
+      matching: find.byType(Card),
+    );
+    expect(cellarCard, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: cellarCard,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.cellar), 1);
+    expect(profile.budget, 10000 - 180);
+  });
+
+  testWidgets('Kühlhaus-Kachel ist ausbaubar (V1-Paket, § 10)',
+      (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final coldRoomCard = find.ancestor(
+      of: find.text('Kühlhaus/Kühlkette'),
+      matching: find.byType(Card),
+    );
+    expect(coldRoomCard, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: coldRoomCard,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.coldRoom), 1);
+    expect(profile.budget, 10000 - 160);
+  });
+
+  testWidgets('Erste-Hilfe-Kachel ist ausbaubar (V1-Paket, § 10)',
+      (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final firstAidCard = find.ancestor(
+      of: find.text('Erste-Hilfe-Station'),
+      matching: find.byType(Card),
+    );
+    expect(firstAidCard, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: firstAidCard,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.firstAid), 1);
+    expect(profile.budget, 10000 - 250);
+  });
+
+  testWidgets('Verkaufen fragt nach und erstattet erst nach Bestätigung',
+      (tester) async {
+    loadProfile(upgrades: const {UpgradeType.signage: 1});
+    final profile = ObjectProfile();
+    final budgetBefore = profile.budget;
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    // „Verkaufen“-Button der Werbeplakate-Kachel (Stufe 1 → aktiv).
+    final sellButton = find.descendant(
+      of: find.ancestor(
+        of: find.text('Werbeplakate'),
+        matching: find.byType(Card),
+      ),
+      matching: find.widgetWithText(OutlinedButton, 'Verkaufen'),
+    );
+    expect(sellButton, findsOneWidget);
+
+    // Abbruch: nichts wird gebucht (signage Stufe 1: 50 % von 150 € = 75 €).
+    await tester.ensureVisible(sellButton);
+    await tester.pumpAndSettle();
+    await tester.tap(sellButton);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Rückerstattung: 75 €'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Abbrechen'));
+    await tester.pumpAndSettle();
+    expect(profile.upgradeLevel(UpgradeType.signage), 1);
+    expect(profile.budget, budgetBefore);
+
+    // Bestätigung: Stufe fällt weg, Erstattung wird gutgeschrieben.
+    await tester.ensureVisible(sellButton);
+    await tester.pumpAndSettle();
+    await tester.tap(sellButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Verkaufen'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.signage), 0);
+    expect(profile.budget, budgetBefore + 75);
+  });
+
   testWidgets('zeigt Permadeath-Dialog bei Bankrott', (tester) async {
     loadProfile(budget: -25000);
 

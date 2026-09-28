@@ -925,6 +925,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get upgradeJukebox => 'Jukebox';
 
   @override
+  String get upgradeCellar => 'Wine/drinks cellar';
+
+  @override
+  String get upgradeColdRoom => 'Cold storage/cold chain';
+
+  @override
+  String get upgradeFirstAid => 'First-aid station';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Level $level/$max';
   }
@@ -947,6 +956,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get upgradeSell => 'Sell';
+
+  @override
+  String upgradeSellConfirm(int refund) {
+    return 'Sell this upgrade? Refund: $refund € (all levels are gone).';
+  }
 
   @override
   String get upgradeMaxReached => 'Max level';

@@ -5,6 +5,7 @@ import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
@@ -226,9 +227,35 @@ class GameClockService {
       elapsed(from, now);
 
   /// Heilzeit pro Verletzungsstufe für [quality] (ohne Arzt: 24 h, § 4.3).
-  static Duration healTimePerStageFor({MedicQuality? quality}) => quality == null
-      ? EconomyBalance.healBasePerStage
-      : EconomyBalance.medicQualitySpecs[quality]!.healTimePerStage;
+  ///
+  /// **Erweiterungs-Hook `firstAid` (§ 10):** Die Basiszeit wird um die Summe
+  /// der Heilzeit-Verkürzungen aus [upgrades] prozentual gesenkt
+  /// (`−5 %/Stufe`, `EconomyBalance.upgrades[…].healTimeReductionPerLevel`).
+  /// Bewusst hier – an der **einzigen** Stelle, an der die Stufenzeit entsteht –
+  /// damit Rechnung (`advanceHealing`, `rollBackEmergencyShots`), UI-Countdown
+  /// (`remainingHealingTime`) und Idempotenz (`healedStatus` rechnet mit dem
+  /// übergebenen `perStage`) niemals auseinanderlaufen.
+  ///
+  /// Der Faktor verkürzt die vom Teamarzt **gesetzte** Basiszeit
+  /// (24 h / 6 h / 3 h / 1 h) und ist darum kein zweiter Hebel auf dieselbe
+  /// Rolle, sondern der einzige Hebel auf die Heilzeit selbst.
+  ///
+  /// Defensiv: Der Faktor ist auf `> 0` geklemmt und das Ergebnis auf mindestens
+  /// eine Sekunde – eine Verkürzung von 100 % oder mehr würde die Heilung
+  /// sonst einfrieren (`healedStatus` bricht bei `perStage <= 0` ab).
+  static Duration healTimePerStageFor({
+    MedicQuality? quality,
+    Map<UpgradeType, int> upgrades = const {},
+  }) {
+    final base = quality == null
+        ? EconomyBalance.healBasePerStage
+        : EconomyBalance.medicQualitySpecs[quality]!.healTimePerStage;
+    final reduction = EconomyService.upgradeEffects(upgrades).healTime;
+    if (reduction <= 0) return base;
+    final factor = reduction >= 1.0 ? 0.0 : 1.0 - reduction;
+    final seconds = (base.inSeconds * factor).round();
+    return Duration(seconds: seconds < 1 ? 1 : seconds);
+  }
 
   /// Kettenposition eines Status (höher = schwerer).
   static int chainPositionOf(CharacterStatus status) =>
@@ -343,6 +370,7 @@ class GameClockService {
   ) {
     final perStage = healTimePerStageFor(
       quality: bestMedicQuality(restaurant.medics),
+      upgrades: restaurant.upgrades,
     );
     final defaultAnchor = restaurant.lastSeenAt ?? now;
     var healed = 0;
@@ -387,6 +415,7 @@ class GameClockService {
   static int rollBackEmergencyShots(RestaurantData restaurant, DateTime now) {
     final perStage = healTimePerStageFor(
       quality: bestMedicQuality(restaurant.medics),
+      upgrades: restaurant.upgrades,
     );
     var rolledBack = 0;
 

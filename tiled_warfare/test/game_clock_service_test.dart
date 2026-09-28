@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 
@@ -91,6 +93,7 @@ void main() {
       List<StaffData>? staff,
       DateTime? lastSeenAt,
       DateTime? weekAnchorAt,
+      Map<UpgradeType, int>? upgrades,
     }) =>
         RestaurantData(
           name: 'Test',
@@ -99,6 +102,7 @@ void main() {
           weekAnchorAt: weekAnchorAt,
           medics: medics ?? const [],
           staff: staff ?? const [],
+          upgrades: upgrades ?? const {},
         );
 
     /// Wochenertrag eines Restaurants (gleiche Eingangswerte wie im Catch-up).
@@ -147,6 +151,165 @@ void main() {
       expect(r.budget, 10000 + perDay * 3);
       expect(r.lastSeenAt, base.add(const Duration(days: 3)));
       expect(r.weekAnchorAt, base);
+    });
+
+    test('Keller-Erweiterung wirkt auf Zufriedenheit & Attraktivität (§ 10)', () {
+      final withoutCellar = restaurant(staff: [cook()]);
+      final withCellar = restaurant(
+        staff: [cook()],
+        upgrades: const {UpgradeType.cellar: 5},
+      );
+
+      expect(
+        GameClockService.satisfactionOf(withCellar),
+        greaterThan(GameClockService.satisfactionOf(withoutCellar)),
+      );
+      expect(
+        GameClockService.attractivenessOf(withCellar),
+        greaterThan(GameClockService.attractivenessOf(withoutCellar)),
+      );
+      // Der Keller speist bewusst keinen Kapazitäts-Bonus.
+      expect(
+        GameClockService.capacityOf(withCellar),
+        GameClockService.capacityOf(withoutCellar),
+      );
+    });
+
+    test('Keller-Unterhalt wird im Wochenblock abgebucht (§ 10)', () {
+      final r = restaurant(
+        staff: [cook()],
+        upgrades: const {UpgradeType.cellar: 5},
+      );
+      final result = GameClockService.catchUp(
+        r,
+        base.add(const Duration(days: 7)),
+      );
+
+      expect(result.weeks, 1);
+      // Stufe 5 × 18 €/Woche, ohne Rollen-Rabatte.
+      expect(result.settlements.single.upgradeUpkeep, 90);
+    });
+
+    test('Kühlhaus hebt die Kapazität (§ 10)', () {
+      final withoutColdRoom = restaurant(staff: [cook()]);
+      final withColdRoom = restaurant(
+        staff: [cook()],
+        upgrades: const {UpgradeType.coldRoom: 5},
+      );
+
+      // Basis: Ø(moneyValue) / Norm = 100 / 100 = 1.0; Stufe 5 = +15 %.
+      expect(
+        GameClockService.capacityOf(withoutColdRoom),
+        closeTo(1.0, 1e-9),
+      );
+      expect(GameClockService.capacityOf(withColdRoom), closeTo(1.15, 1e-9));
+      // Das Kühlhaus speist bewusst weder Attraktivität noch Zufriedenheit.
+      expect(
+        GameClockService.attractivenessOf(withColdRoom),
+        GameClockService.attractivenessOf(withoutColdRoom),
+      );
+      expect(
+        GameClockService.satisfactionOf(withColdRoom),
+        GameClockService.satisfactionOf(withoutColdRoom),
+      );
+    });
+
+    test('Kühlhaus bleibt ohne Personal wirkungslos (§ 10)', () {
+      // capacityOf ist ohne Personal per Definition 0 – der Baustein erzeugt
+      // keine Kapazitäts-Basis, er skaliert nur eine vorhandene.
+      final empty = restaurant(upgrades: const {UpgradeType.coldRoom: 5});
+      expect(GameClockService.capacityOf(empty), 0.0);
+    });
+
+    test('Kühlhaus-Unterhalt wird im Wochenblock abgebucht (§ 10)', () {
+      final r = restaurant(
+        staff: [cook()],
+        upgrades: const {UpgradeType.coldRoom: 5},
+      );
+      final result = GameClockService.catchUp(
+        r,
+        base.add(const Duration(days: 7)),
+      );
+
+      expect(result.weeks, 1);
+      // Stufe 5 × 16 €/Woche, ohne Rollen-Rabatte.
+      expect(result.settlements.single.upgradeUpkeep, 80);
+    });
+
+    test('Erste-Hilfe-Station verkürzt die Heilzeit je Stufe (§ 10)', () {
+      // Ohne Arzt: 24 h/Stufe – Stufe 3 = −15 % = 20 h 24 min.
+      expect(
+        GameClockService.healTimePerStageFor(),
+        const Duration(hours: 24),
+      );
+      expect(
+        GameClockService.healTimePerStageFor(
+          upgrades: const {UpgradeType.firstAid: 3},
+        ),
+        const Duration(hours: 20, minutes: 24),
+      );
+      // Mit Arzt verkürzt der Faktor dessen Basiszeit (hoch = 1 h → 51 min).
+      expect(
+        GameClockService.healTimePerStageFor(
+          quality: MedicQuality.hoch,
+          upgrades: const {UpgradeType.firstAid: 3},
+        ),
+        const Duration(minutes: 51),
+      );
+      // Stufe 1 = −5 % (volle Granularität, linear mit der Stufe).
+      expect(
+        GameClockService.healTimePerStageFor(
+          upgrades: const {UpgradeType.firstAid: 1},
+        ),
+        const Duration(hours: 22, minutes: 48),
+      );
+    });
+
+    test('Erste-Hilfe-Station heilt im Zeitlauf schneller (§ 10)', () {
+      StaffData reeling() => StaffData(
+            name: 'Testkoch',
+            imagePath: 'x.png',
+            type: 'apprentice',
+            status: 'reeling',
+            injuryStartedAt: base,
+            injuryStartStatus: 'reeling',
+          );
+
+      final without = restaurant(staff: [reeling()]);
+      final withFirstAid = restaurant(
+        staff: [reeling()],
+        upgrades: const {UpgradeType.firstAid: 3},
+      );
+      // 20,5 h: knapp unter der 24-h-Stufe, aber über den 20 h 24 min mit
+      // Erweiterung – nur mit Station ist `reeling → ready` bereits geheilt.
+      final at = base.add(const Duration(minutes: 1230));
+
+      final plain = GameClockService.advanceHealing(without, at);
+      final helped = GameClockService.advanceHealing(withFirstAid, at);
+
+      expect(plain.healedCount, 0);
+      expect(without.staff.first.status, 'reeling');
+      expect(plain.perStage, const Duration(hours: 24));
+
+      expect(helped.healedCount, 1);
+      expect(withFirstAid.staff.first.status, 'ready');
+      expect(helped.perStage, const Duration(hours: 20, minutes: 24));
+    });
+
+    test('Erste-Hilfe-Station-Unterhalt wird im Wochenblock abgebucht (§ 10)',
+        () {
+      final r = restaurant(
+        staff: [cook()],
+        upgrades: const {UpgradeType.firstAid: 3},
+      );
+      final result = GameClockService.catchUp(
+        r,
+        base.add(const Duration(days: 7)),
+      );
+
+      expect(result.weeks, 1);
+      // Stufe 3 (Maximum) × 25 €/Woche, ohne Rollen-Rabatte.
+      expect(result.settlements.single.upgradeUpkeep, 75);
     });
 
     test('7 Tage = genau ein Block; Wochensumme exakt', () {

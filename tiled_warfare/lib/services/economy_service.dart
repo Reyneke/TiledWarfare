@@ -32,6 +32,11 @@ class EconomyService {
   ///
   /// Bei negativem Bestand: `budget − ceil(|budget| × negativeInterestRate)`,
   /// sonst unverändert.
+  ///
+  /// Rundung: bewusst `.ceil()` (aufrunden) statt kaufmännisch – der Zins wird
+  /// nie zu Gunsten des Schuldners abgerundet. Die Verkaufs-Erstattung
+  /// (`sellRefund`) rundet dagegen kaufmännisch, weil dort Geld an den Spieler
+  /// zurückfließt.
   static int applyNegativeInterest(int budget) {
     if (budget >= 0) return budget;
     final interest =
@@ -246,29 +251,45 @@ class EconomyService {
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
-  /// Fasst die relativen Boni aller [levels] zu drei Summenboni zusammen.
-  static ({double capacity, double attractiveness, double satisfaction})
-      upgradeEffects(Map<UpgradeType, int> levels) {
+  /// Fasst die relativen Boni aller [levels] zu vier Summenboni zusammen.
+  ///
+  /// `healTime` ist die Summe der Heilzeit-Verkürzungen (`firstAid`, § 10); sie
+  /// wird nicht auf einen der drei Eingangswerte addiert, sondern als Faktor auf
+  /// die Heilzeit pro Stufe angewendet (`GameClockService.healTimePerStageFor`).
+  static ({
+    double capacity,
+    double attractiveness,
+    double satisfaction,
+    double healTime,
+  }) upgradeEffects(Map<UpgradeType, int> levels) {
     var capacity = 0.0;
     var attractiveness = 0.0;
     var satisfaction = 0.0;
+    var healTime = 0.0;
     levels.forEach((type, level) {
       final spec = EconomyBalance.upgrades[type];
       if (spec == null || level <= 0) return;
       capacity += spec.capacityBonusPerLevel * level;
       attractiveness += spec.attractivenessBonusPerLevel * level;
       satisfaction += spec.satisfactionBonusPerLevel * level;
+      healTime += spec.healTimeReductionPerLevel * level;
     });
     return (
       capacity: capacity,
       attractiveness: attractiveness,
       satisfaction: satisfaction,
+      healTime: healTime,
     );
   }
 
   /// Kumulative Anschaffungskosten, um [type] auf [toLevel] zu bringen.
   ///
   /// `Σ Basis×k = Basis × N·(N+1)/2`.
+  ///
+  /// Vertrag: `toLevel` wird defensiv auf `0..spec.maxLevel` geklemmt – eine
+  /// reine Rechenfunktion wirft nicht und ist auch für überschießende Stufen
+  /// definiert. Die Einhaltung der Maximalstufe erzwingt die Mutationsebene
+  /// (`ObjectProfile.buyUpgrade`); das Clamp ist bewusst doppelt vorhanden.
   static int upgradeCost(UpgradeType type, int toLevel) {
     final spec = EconomyBalance.upgrades[type];
     if (spec == null || toLevel <= 0) return 0;
@@ -276,7 +297,24 @@ class EconomyService {
     return spec.buyBaseCost * level * (level + 1) ~/ 2;
   }
 
+  /// Anschaffungskosten-Delta der nächsten Stufe ([fromLevel] → `+1`).
+  ///
+  /// `upgradeCost(type, fromLevel + 1) − upgradeCost(type, fromLevel)`;
+  /// `0`, wenn [type] unbekannt, [fromLevel] negativ oder die Maximalstufe
+  /// bereits erreicht ist. Einzige Quelle für den Brutto-Kaufpreis der nächsten
+  /// Stufe (`ObjectProfile.upgradePurchaseCost`).
+  static int upgradeCostDelta(UpgradeType type, int fromLevel) {
+    final spec = EconomyBalance.upgrades[type];
+    if (spec == null || fromLevel < 0) return 0;
+    final level = fromLevel.clamp(0, spec.maxLevel);
+    if (level >= spec.maxLevel) return 0;
+    return upgradeCost(type, level + 1) - upgradeCost(type, level);
+  }
+
   /// Wöchentlicher Unterhalt von [type] auf Stufe [level].
+  ///
+  /// Vertrag wie [upgradeCost]: [level] wird defensiv auf `0..maxLevel`
+  /// geklemmt, die Grenze erzwingt `ObjectProfile.buyUpgrade`.
   static int upgradeUpkeepPerWeek(UpgradeType type, int level) {
     final spec = EconomyBalance.upgrades[type];
     if (spec == null || level <= 0) return 0;
@@ -294,6 +332,11 @@ class EconomyService {
   }
 
   /// Erstattung beim Verkauf von [type] auf Stufe [level].
+  ///
+  /// Kaufmännisch gerundet (`.round()`) – konsistent zur Lohn-/Unterhalts-
+  /// Minderung (`StaffRoleService.reduceByPercent`, Plongeur im Wochen-Tick).
+  /// Bei ganzzahligen Basispreisen ist `invested × upgradeSellRefundRate`
+  /// ohnehin ganzzahlig, das Runden ist ein Sicherheitsnetz.
   static int sellRefund(UpgradeType type, int level) {
     final invested = upgradeCost(type, level);
     return (invested * EconomyBalance.upgradeSellRefundRate).round();

@@ -932,6 +932,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get upgradeJukebox => 'Musikautomat';
 
   @override
+  String get upgradeCellar => 'Wein-/Getränkekeller';
+
+  @override
+  String get upgradeColdRoom => 'Kühlhaus/Kühlkette';
+
+  @override
+  String get upgradeFirstAid => 'Erste-Hilfe-Station';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Stufe $level/$max';
   }
@@ -954,6 +963,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get upgradeSell => 'Verkaufen';
+
+  @override
+  String upgradeSellConfirm(int refund) {
+    return 'Erweiterung verkaufen? Rückerstattung: $refund € (kein Rückbau, die Stufen verfallen).';
+  }
 
   @override
   String get upgradeMaxReached => 'Maximalstufe';

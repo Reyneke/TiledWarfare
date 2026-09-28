@@ -326,12 +326,25 @@ Als Browsergame-Annäherung soll das Restaurant mit **Erweiterungen** ausgebaut 
 | Werbeplakate | +5 % Attraktivität | 5 | 150 € | 15 € |
 | Dekorationen | +2 % Attraktivität, +2 % Kundenzufriedenheit | 5 | 120 € | 12 € |
 | Musikautomat | +20 % Attraktivität | 1 | 500 € | 50 € |
+| Wein-/Getränkekeller | +2 % Kundenzufriedenheit, +1 % Attraktivität | 5 | 180 € | 18 € |
+| Kühlhaus/Kühlkette | +3 % Kapazität | 5 | 160 € | 16 € |
+| Erste-Hilfe-Station | −5 % Heilzeit pro Verletzungsstufe | 3 | 250 € | 25 € |
+
+> **Ergänzung (11b, V1-Paket):** `cellar` (Gruppe A), `coldRoom` (Gruppe B) und `firstAid` (Gruppe B) sind die
+> ersten drei nachträglich gebauten Bausteine aus `11b_Restauranterweiterungen.md`. `cellar` schließt die
+> **Zufriedenheits-Lücke** und ist die Wirkungsbasis des **Sommeliers** (`11a`); `coldRoom` ist die
+> **Kapazitäts-Basis des Lageristen** (`11a`, V12) und wirkt **rein skalierend** (ohne Personal ist die
+> Kapazität ohnehin `0`); `firstAid` ist der **erste ⚙-Baustein** und speist **keinen** der drei Eingangswerte,
+> sondern verkürzt die Heilzeit pro Verletzungsstufe (`GameClockService.healTimePerStageFor`, entschieden:
+> −5 %/Stufe statt „+1 Rettungswurf-Zielwert“). Die weiteren Vorschläge (`lounge`, …)
+> stehen dort und werden erst nach ihrer Entscheidung hier eingetragen.
 
 - **Kostenmodell (linear mit der Stufe, Entscheidung: kumulativ):** Der Ausbau **auf** Stufe `N` kostet `Ankauf-Basis × N`; **kumulativ** bis Stufe `N` sind `Σ Basis×k = Basis × N·(N+1)/2` investiert. Der wöchentliche Unterhalt **auf** Stufe `N` beträgt `Erhalt-Basis × N`. Beispiel (Ankauf 100 €, Erhalt 10 €): Stufe 1 = 100 € / 10 €, Stufe 2 = 200 € / 20 € (insgesamt 300 € investiert), Stufe 3 = 300 € / 30 € usw.
 - **Downgrade & Verkauf (Entscheidung):** Erweiterungen lassen sich stufenweise **zurückbauen** und ganz **verkaufen**, um laufende Kosten zu senken. Ein Verkauf erstattet **50 %** der investierten Anschaffungssumme (Entscheidung; Wert in `EconomyBalance` justierbar); der Unterhalt sinkt entsprechend der neuen Stufe.
-- **Wirkung (multiplikativ):** Die § 8-Formeln werden vor dem Clamp mit dem Erweiterungsfaktor multipliziert: `Basiswert × (1 + Σ Bonus)`. Reine Funktion `upgradeEffects(levels)` in `EconomyService` liefert die drei Summenboni.
-- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Ankauf-Basis, Erhalt-Basis/Woche, MaxLevel, Boni) in `EconomyBalance.upgrades` (V7).
-- **Funktionen (`EconomyService`):** `upgradeEffects(levels)` (drei Summenboni), `upgradeCost(upgrade, toLevel)` (kumulativ), `upgradeUpkeepPerWeek(upgrade, level)`, `sellRefund(upgrade, level)`.
+- **Wirkung (multiplikativ):** Die § 8-Formeln werden vor dem Clamp mit dem Erweiterungsfaktor multipliziert: `Basiswert × (1 + Σ Bonus)`. Reine Funktion `upgradeEffects(levels)` in `EconomyService` liefert die drei Summenboni **plus** die Heilzeit-Verkürzung (`healTime`).
+- **Wirkung außerhalb der Eingangswerte (`firstAid`, ⚙):** Die Heilzeit-Verkürzung wird **nicht** auf Attraktivität/Zufriedenheit/Kapazität addiert, sondern als Faktor auf die Heilzeit pro Verletzungsstufe angewendet: `GameClockService.healTimePerStageFor({quality, upgrades})` = `Basiszeit × (1 − Σ healTime)` (ganze Sekunden, defensiv ≥ 1 s). Weil dort der **einzige** Entstehungsort der Stufenzeit liegt, wirkt der Baustein automatisch in `advanceHealing`, `rollBackEmergencyShots` und im UI-Countdown (`remainingHealingTime`).
+- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox, cellar, coldRoom, firstAid); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Ankauf-Basis, Erhalt-Basis/Woche, MaxLevel, Boni inkl. `healTimeReductionPerLevel`) in `EconomyBalance.upgrades` (V7).
+- **Funktionen (`EconomyService`):** `upgradeEffects(levels)` (vier Summenboni), `upgradeCost(upgrade, toLevel)` (kumulativ), `upgradeUpkeepPerWeek(upgrade, level)`, `sellRefund(upgrade, level)`.
 - **Kauf/Ausbau:** Budget-Check wie `hireApprentice` (nicht unter die Negativgrenze), Persistenz via `_saveState()`.
 - **Unterhalt:** wird im **Wochen-Tick (V8)** mit abgebucht; Reihenfolge: passives Einkommen → Teamarzt-Kosten → **Erweiterungs-Unterhalt** → Negativzinsen → Bankrott-Check.
 

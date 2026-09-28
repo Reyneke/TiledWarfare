@@ -101,6 +101,26 @@ void main() {
       expect(EconomyService.upgradeCost(UpgradeType.jukebox, 5), 500);
     });
 
+    test('Kosten-Delta der nächsten Stufe (linear wachsend)', () {
+      // tables: Basis 100 → nächste Stufe = 100 × (Stufe + 1)
+      expect(EconomyService.upgradeCostDelta(UpgradeType.tables, 0), 100);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.tables, 1), 200);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.tables, 3), 400);
+      // Delta = Differenz der kumulierten Kosten
+      expect(
+        EconomyService.upgradeCostDelta(UpgradeType.kitchen, 2),
+        EconomyService.upgradeCost(UpgradeType.kitchen, 3) -
+            EconomyService.upgradeCost(UpgradeType.kitchen, 2),
+      );
+    });
+
+    test('Kosten-Delta ist 0 auf MaxLevel und bei negativer Stufe', () {
+      // jukebox maxLevel 1 → kein weiterer Ausbau mehr möglich
+      expect(EconomyService.upgradeCostDelta(UpgradeType.jukebox, 1), 0);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.tables, 5), 0);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.tables, -1), 0);
+    });
+
     test('Unterhalt skaliert linear mit der Stufe', () {
       expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.tables, 2), 20);
       expect(EconomyService.totalUpgradeUpkeepPerWeek(
@@ -119,6 +139,56 @@ void main() {
       expect(effects.attractiveness, closeTo(0.10, 1e-9));
       expect(effects.capacity, closeTo(0.05, 1e-9));
       expect(effects.satisfaction, closeTo(0.0, 1e-9));
+    });
+
+    test('Keller (V1-Paket) speist Zufriedenheit vor Attraktivität', () {
+      // cellar: +2 % Zufriedenheit, +1 % Attraktivität je Stufe (Basis 180 €).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.cellar: 3},
+      );
+      expect(effects.satisfaction, closeTo(0.06, 1e-9));
+      expect(effects.attractiveness, closeTo(0.03, 1e-9));
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.cellar, 5), 2700);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.cellar, 0), 180);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.cellar, 5), 90);
+      expect(EconomyService.sellRefund(UpgradeType.cellar, 5), 1350);
+    });
+
+    test('Kühlhaus (V1-Paket) speist ausschließlich Kapazität', () {
+      // coldRoom: +3 % Kapazität je Stufe (Basis 160 €).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.coldRoom: 4},
+      );
+      expect(effects.capacity, closeTo(0.12, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.satisfaction, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.coldRoom, 5), 2400);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.coldRoom, 0), 160);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.coldRoom, 5), 80);
+      expect(EconomyService.sellRefund(UpgradeType.coldRoom, 5), 1200);
+    });
+
+    test('Erste-Hilfe-Station (V1-Paket) verkürzt ausschließlich die Heilzeit',
+        () {
+      // firstAid: −5 % Heilzeit je Stufe (Basis 250 €, max. 3 Stufen).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.firstAid: 3},
+      );
+      expect(effects.healTime, closeTo(0.15, 1e-9));
+      // Bewusst kein Zuwachs auf einen der drei Eingangswerte (§ 8).
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.satisfaction, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.firstAid, 3), 1500);
+      expect(EconomyService.upgradeCost(UpgradeType.firstAid, 5), 1500);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.firstAid, 0), 250);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.firstAid, 3), 0);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.firstAid, 3), 75);
+      expect(EconomyService.sellRefund(UpgradeType.firstAid, 3), 750);
     });
   });
 

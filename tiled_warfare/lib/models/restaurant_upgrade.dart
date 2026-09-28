@@ -17,6 +17,43 @@ enum UpgradeType {
 
   /// Musikautomat – Attraktivität (Einzelstufe).
   jukebox,
+
+  /// Wein-/Getränkekeller – Kundenzufriedenheit & Attraktivität.
+  ///
+  /// V1-Paket aus § 10 (`11b_Restauranterweiterungen.md`, Gruppe A): schließt die
+  /// Zufriedenheits-Lücke und ist die **Wirkungsbasis des Sommeliers** (`11a`,
+  /// Plongeur-Muster – die Rolle wird erst mit gebautem Keller wertvoll).
+  cellar,
+
+  /// Kühlhaus/Kühlkette – Kapazität.
+  ///
+  /// V1-Paket aus § 10 (`11b_Restauranterweiterungen.md`, Gruppe B): verbreitert
+  /// die **Kapazitäts-Basis**, die der **Lagerist** (`11a`, V12) bzw. ein aktives
+  /// „Lagertetris“ faktorbasiert vervielfacht („additiv statt Multiplikator“).
+  /// Wirkt **nur skalierend**: ohne Personal ist die Kapazität ohnehin `0`
+  /// (`GameClockService.capacityOf`) – der Baustein erzeugt keine Basis.
+  coldRoom,
+
+  /// Erste-Hilfe-Station – Heilzeit pro Verletzungsstufe.
+  ///
+  /// V1-Paket aus § 10 (`11b_Restauranterweiterungen.md`, Gruppe B, **⚙-Hook**):
+  /// verkürzt die Echtzeit-Heilung je Verletzungsstufe prozentual. Der Baustein
+  /// hängt an `GameClockService.healTimePerStageFor` und wirkt damit auf **alle**
+  /// Konsumenten gleichzeitig (`advanceHealing`, `rollBackEmergencyShots`,
+  /// `remainingHealingTime` der UI).
+  ///
+  /// **Entschiedene Wirkungs-Option:** −5 % Heilzeit je Stufe (nicht der
+  /// alternativ diskutierte „+1 Rettungswurf-Zielwert“): Der Rettungswurf ist
+  /// bereits das Alleinstellungsmerkmal des **Teamarztes**
+  /// (`EconomyBalance.medicQualitySpecs[…].survivalBonus`), während die Heilzeit
+  /// bis dahin **ungehebelt** war. Die Heilzeit wirkt zudem deterministisch,
+  /// ständig sichtbar (jede Verletzung, jeder Catch-up) und über die gesamte
+  /// Heilungskette (`dying → … → ready`), statt nur beim seltenen
+  /// Gefechts-Todeswurf. Die prozentuale Verkürzung **multipliziert** die vom
+  /// Teamarzt gesetzte Basiszeit (24 h ohne Arzt; 6 h/3 h/1 h nach Qualität) –
+  /// kein Doppel-Hebel, weil die Rolle die Basis *setzt* und die Erweiterung
+  /// sie nur verkürzt.
+  firstAid,
 }
 
 /// Balance-Definition einer Restaurant-Erweiterung (§ 10).
@@ -44,6 +81,12 @@ class UpgradeSpec {
   /// Kundenzufriedenheits-Bonus pro Stufe (relativ).
   final double satisfactionBonusPerLevel;
 
+  /// Verkürzung der Heilzeit pro Verletzungsstufe je Stufe (relativ, z. B.
+  /// `0.05` = −5 %). Anders als die drei Eingangswert-Boni wirkt sie **nicht**
+  /// über `upgradeEffects` auf Attraktivität/Zufriedenheit/Kapazität, sondern
+  /// als Faktor auf `GameClockService.healTimePerStageFor` (§ 10, `firstAid`).
+  final double healTimeReductionPerLevel;
+
   const UpgradeSpec({
     required this.maxLevel,
     required this.buyBaseCost,
@@ -51,5 +94,6 @@ class UpgradeSpec {
     this.capacityBonusPerLevel = 0.0,
     this.attractivenessBonusPerLevel = 0.0,
     this.satisfactionBonusPerLevel = 0.0,
+    this.healTimeReductionPerLevel = 0.0,
   });
 }

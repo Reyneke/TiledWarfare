@@ -1029,6 +1029,12 @@
   "@upgradeDecoration": { "description": "Erweiterung: Dekorationen" },
   "upgradeJukebox": "Musikautomat",
   "@upgradeJukebox": { "description": "Erweiterung: Musikautomat" },
+  "upgradeCellar": "Wein-/Getränkekeller",
+  "@upgradeCellar": { "description": "Erweiterung: Wein-/Getränkekeller" },
+  "upgradeColdRoom": "Kühlhaus/Kühlkette",
+  "@upgradeColdRoom": { "description": "Erweiterung: Kühlhaus/Kühlkette" },
+  "upgradeFirstAid": "Erste-Hilfe-Station",
+  "@upgradeFirstAid": { "description": "Erweiterung: Erste-Hilfe-Station" },
   "upgradeLevel": "Stufe {level}/{max}",
   "@upgradeLevel": {
     "description": "Ausbaustufe einer Erweiterung",
@@ -1050,6 +1056,11 @@
   "@upgradeDowngrade": { "description": "Button: Erweiterung zurückbauen" },
   "upgradeSell": "Verkaufen",
   "@upgradeSell": { "description": "Button: Erweiterung verkaufen" },
+  "upgradeSellConfirm": "Erweiterung verkaufen? Rückerstattung: {refund} € (kein Rückbau, die Stufen verfallen).",
+  "@upgradeSellConfirm": {
+    "description": "Rückfrage vor dem Verkauf einer Erweiterung",
+    "placeholders": { "refund": { "type": "int" } }
+  },
   "upgradeMaxReached": "Maximalstufe",
   "@upgradeMaxReached": { "description": "Maximalstufe erreicht" },
   "upgradeNotEnoughBudget": "Budget reicht nicht für den Ausbau!",

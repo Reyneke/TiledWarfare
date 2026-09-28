@@ -1029,6 +1029,12 @@
   "@upgradeDecoration": { "description": "Upgrade: decorations" },
   "upgradeJukebox": "Jukebox",
   "@upgradeJukebox": { "description": "Upgrade: jukebox" },
+  "upgradeCellar": "Wine/drinks cellar",
+  "@upgradeCellar": { "description": "Upgrade: wine/drinks cellar" },
+  "upgradeColdRoom": "Cold storage/cold chain",
+  "@upgradeColdRoom": { "description": "Upgrade: cold storage/cold chain" },
+  "upgradeFirstAid": "First-aid station",
+  "@upgradeFirstAid": { "description": "Upgrade: first-aid station" },
   "upgradeLevel": "Level {level}/{max}",
   "@upgradeLevel": {
     "description": "Upgrade level",
@@ -1050,6 +1056,11 @@
   "@upgradeDowngrade": { "description": "Button: downgrade" },
   "upgradeSell": "Sell",
   "@upgradeSell": { "description": "Button: sell" },
+  "upgradeSellConfirm": "Sell this upgrade? Refund: {refund} € (all levels are gone).",
+  "@upgradeSellConfirm": {
+    "description": "Confirmation before selling an upgrade",
+    "placeholders": { "refund": { "type": "int" } }
+  },
   "upgradeMaxReached": "Max level",
   "@upgradeMaxReached": { "description": "Max level reached" },
   "upgradeNotEnoughBudget": "Not enough budget for the upgrade!",

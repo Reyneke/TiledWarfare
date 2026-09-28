@@ -855,6 +855,37 @@ class EconomyBalance {
       upkeepBaseCostPerWeek: 50,
       attractivenessBonusPerLevel: 0.20,
     ),
+    // V1-Paket (`11b_Restauranterweiterungen.md`, Gruppe A): schließt die
+    // Zufriedenheits-Lücke ohne reinen Attraktivitäts-Bonus und schafft die
+    // Wirkungsbasis des Sommeliers (`11a`).
+    UpgradeType.cellar: UpgradeSpec(
+      maxLevel: 5,
+      buyBaseCost: 180,
+      upkeepBaseCostPerWeek: 18,
+      attractivenessBonusPerLevel: 0.01,
+      satisfactionBonusPerLevel: 0.02,
+    ),
+    // V1-Paket (`11b_Restauranterweiterungen.md`, Gruppe B): reiner
+    // Kapazitäts-Hebel (+3 %/Stufe) und die Wirkungsbasis des Lageristen
+    // (`11a`, V12). Speist bewusst weder Attraktivität noch Zufriedenheit.
+    UpgradeType.coldRoom: UpgradeSpec(
+      maxLevel: 5,
+      buyBaseCost: 160,
+      upkeepBaseCostPerWeek: 16,
+      capacityBonusPerLevel: 0.03,
+    ),
+    // V1-Paket (`11b_Restauranterweiterungen.md`, Gruppe B): ⚙-Hook auf die
+    // Heilzeit (`GameClockService.healTimePerStageFor`, −5 %/Stufe). Bewusst der
+    // **Heilzeit**-Hebel statt „+1 Rettungswurf-Zielwert“ – der Rettungswurf ist
+    // die Domäne des Teamarztes (`medicQualitySpecs[…].survivalBonus`), die
+    // Heilzeit war bis dahin ungehebelt. Speist darum **keinen** der drei
+    // Eingangswert-Boni (kein Attraktivitäts-/Zufriedenheits-/Kapazitäts-Zuwachs).
+    UpgradeType.firstAid: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 250,
+      upkeepBaseCostPerWeek: 25,
+      healTimeReductionPerLevel: 0.05,
+    ),
   };
 }
 

@@ -1653,6 +1653,24 @@ abstract class AppLocalizations {
   /// **'Musikautomat'**
   String get upgradeJukebox;
 
+  /// Erweiterung: Wein-/Getränkekeller
+  ///
+  /// In de, this message translates to:
+  /// **'Wein-/Getränkekeller'**
+  String get upgradeCellar;
+
+  /// Erweiterung: Kühlhaus/Kühlkette
+  ///
+  /// In de, this message translates to:
+  /// **'Kühlhaus/Kühlkette'**
+  String get upgradeColdRoom;
+
+  /// Erweiterung: Erste-Hilfe-Station
+  ///
+  /// In de, this message translates to:
+  /// **'Erste-Hilfe-Station'**
+  String get upgradeFirstAid;
+
   /// Ausbaustufe einer Erweiterung
   ///
   /// In de, this message translates to:
@@ -1688,6 +1706,12 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Verkaufen'**
   String get upgradeSell;
+
+  /// Rückfrage vor dem Verkauf einer Erweiterung
+  ///
+  /// In de, this message translates to:
+  /// **'Erweiterung verkaufen? Rückerstattung: {refund} € (kein Rückbau, die Stufen verfallen).'**
+  String upgradeSellConfirm(int refund);
 
   /// Maximalstufe erreicht
   ///

@@ -399,6 +399,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
     }
     final perStage = GameClockService.healTimePerStageFor(
       quality: GameClockService.bestHiredQuality(_profile.hiredMedics),
+      upgrades: _profile.activeUpgrades,
     );
     final remaining = GameClockService.remainingHealingTime(
       status: character.status,
