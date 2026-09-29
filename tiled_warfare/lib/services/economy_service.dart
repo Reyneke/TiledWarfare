@@ -251,21 +251,29 @@ class EconomyService {
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
-  /// Fasst die relativen Boni aller [levels] zu vier Summenboni zusammen.
+  /// Fasst die relativen Boni aller [levels] zu sechs Summenboni zusammen.
   ///
   /// `healTime` ist die Summe der Heilzeit-Verkürzungen (`firstAid`, § 10); sie
   /// wird nicht auf einen der drei Eingangswerte addiert, sondern als Faktor auf
   /// die Heilzeit pro Stufe angewendet (`GameClockService.healTimePerStageFor`).
+  /// `refill` und `dailySinkRelief` sind die Summen der Personal-Ressourcen-Boni
+  /// (`lounge`, § 10): Sie wirken ebenfalls **nicht** auf die drei Eingangswerte,
+  /// sondern am Blockende auf den Refill bzw. am Tagesschritt auf den Tages-Sink
+  /// (`GameClockService._refillStaffResources`/`_applyDailyResourceSink`).
   static ({
     double capacity,
     double attractiveness,
     double satisfaction,
     double healTime,
+    double refill,
+    double dailySinkRelief,
   }) upgradeEffects(Map<UpgradeType, int> levels) {
     var capacity = 0.0;
     var attractiveness = 0.0;
     var satisfaction = 0.0;
     var healTime = 0.0;
+    var refill = 0.0;
+    var dailySinkRelief = 0.0;
     levels.forEach((type, level) {
       final spec = EconomyBalance.upgrades[type];
       if (spec == null || level <= 0) return;
@@ -273,12 +281,16 @@ class EconomyService {
       attractiveness += spec.attractivenessBonusPerLevel * level;
       satisfaction += spec.satisfactionBonusPerLevel * level;
       healTime += spec.healTimeReductionPerLevel * level;
+      refill += spec.refillBonusPerLevel * level;
+      dailySinkRelief += spec.dailySinkReliefPerLevel * level;
     });
     return (
       capacity: capacity,
       attractiveness: attractiveness,
       satisfaction: satisfaction,
       healTime: healTime,
+      refill: refill,
+      dailySinkRelief: dailySinkRelief,
     );
   }
 

@@ -1035,6 +1035,8 @@
   "@upgradeColdRoom": { "description": "Erweiterung: Kühlhaus/Kühlkette" },
   "upgradeFirstAid": "Erste-Hilfe-Station",
   "@upgradeFirstAid": { "description": "Erweiterung: Erste-Hilfe-Station" },
+  "upgradeLounge": "Ruheraum/Lounge",
+  "@upgradeLounge": { "description": "Erweiterung: Ruheraum/Lounge" },
   "upgradeLevel": "Stufe {level}/{max}",
   "@upgradeLevel": {
     "description": "Ausbaustufe einer Erweiterung",

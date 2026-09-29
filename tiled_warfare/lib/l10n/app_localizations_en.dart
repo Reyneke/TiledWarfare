@@ -934,6 +934,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get upgradeFirstAid => 'First-aid station';
 
   @override
+  String get upgradeLounge => 'Rest lounge';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Level $level/$max';
   }

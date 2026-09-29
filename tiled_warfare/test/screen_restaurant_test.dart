@@ -166,6 +166,37 @@ void main() {
     expect(profile.budget, 10000 - 250);
   });
 
+  testWidgets('Ruheraum-Kachel ist ausbaubar (V1-Paket, § 10)',
+      (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final loungeCard = find.ancestor(
+      of: find.text('Ruheraum/Lounge'),
+      matching: find.byType(Card),
+    );
+    expect(loungeCard, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: loungeCard,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.lounge), 1);
+    expect(profile.budget, 10000 - 180);
+  });
+
   testWidgets('Verkaufen fragt nach und erstattet erst nach Bestätigung',
       (tester) async {
     loadProfile(upgrades: const {UpgradeType.signage: 1});

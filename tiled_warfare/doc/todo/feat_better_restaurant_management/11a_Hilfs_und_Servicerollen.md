@@ -239,6 +239,7 @@ Kategorie-Zuordnung (`support` vs. `management`) ist noch offen (E6):
 | **Sommelier** (offen) | **Wein-/Getränkekeller** (`cellar`) – **Erweiterung umgesetzt** ✅ | Der Zufriedenheits-Zuschlag des Sommeliers greift nur mit gebautem Keller – die Wirkungsbasis steht seit dem V1-Paket (`11b`), der **Sommelier selbst ist noch offen**. |
 | **Caissier** (offen) | **Tresor/Kassenraum** (`vault`) | Senkung der Negativzinsen stapelt **additiv** mit der Erweiterung. |
 | **Lagerist** (V12) | **Kühlhaus/Kühlkette** (`coldRoom`) – **Erweiterung umgesetzt** ✅ | Mehr Kapazitäts-Basis für das aktive „Lagertetris“ – die Basis steht seit dem V1-Paket (`11b`); ohne Personal bleibt sie wirkungslos (`capacityOf` = 0). |
+| **Communard / Pâtissier** (V10 umgesetzt) · **Gewerkschaftschef** (V12) · **Tournant** (V10) | **Ruheraum/Lounge** (`lounge`) – **Erweiterung umgesetzt** ✅ | Der Ruheraum hebt das **Refill-Ziel**, auf das Communard (+15 %) und Pâtissier (+10 %) additiv aufsetzen (und von dem der Pâtissier sich selbst ausnimmt – das Gebäude nicht); die **Sink-Erleichterung** stapelt **additiv** mit dem Gewerkschaftschef (−24 % bei Kompetenz 4) und wird auf 100 % gedeckelt. Der **Erschöpfungs-Malus der Nulltage** bleibt allein die Domäne des **Tournant**. |
 | **Rechtsanwalt** (V11) | **Zertifizierung/Hygiene-Siegel** (`certification`) | Strafen-Minderung **setzt eine Strafenquelle** voraus (offen: Behörden/Inspektionen). |
 | **Sicherheitschef** (V13) | **Sicherheitstechnik/Alarmanlage** (`security`) | Entdeckung/Abschöpfung eingehender Sabotage. |
 
@@ -586,10 +587,10 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 - Lohn-Thriftiness nachziehen, falls Rollen später Persönlichkeit erhalten.
 - Tournant wirkt nur auf Wochen-Proben im Restaurant, Kampf-Malus unberührt (dokumentierte V10-Abweichung).
 - Erweiterungsvorschläge in Abstimmung mit `11b` priorisieren – die Zuordnung steht (Tabelle „Zuordnung Rolle ↔
-  Erweiterung“): V1-Paket sind `cellar`, `coldRoom` **und** `firstAid` (**alle umgesetzt** ✅ – die
-  Zufriedenheits-Basis des **Sommeliers**, die Kapazitäts-Basis des **Lageristen** und die Heilzeit-Basis des
-  **Teamarztes** stehen),
-  als nächstes `vault` (macht **Caissier** wertvoll), dann `lounge`; **offen** bleibt die **Strafenquelle
+  Erweiterung“): V1-Paket sind `cellar`, `coldRoom`, `firstAid` **und** `lounge` (**alle umgesetzt** ✅ – die
+  Zufriedenheits-Basis des **Sommeliers**, die Kapazitäts-Basis des **Lageristen**, die Heilzeit-Basis des
+  **Teamarztes** und der Personal-Ressourcen-Hebel für **Communard/Pâtissier/Gewerkschaftschef/Tournant** stehen),
+  als nächstes `vault` (macht **Caissier** wertvoll); **offen** bleibt die **Strafenquelle
   Behörden/Inspektionen**, damit die **Zertifizierung** (Rechtsanwalt) wirkt.
 - **Balance-Check:** Rollen lohnen sich erst, wenn ihre Wirkungsbasis existiert (Plongeur nur mit Erweiterungen,
   Aboyeur nur mit Personal/Einkommen, Boucher hängt an der Gefechtsfrequenz) – Löhne bewusst gegenprüfen.

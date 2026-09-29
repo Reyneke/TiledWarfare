@@ -190,6 +190,42 @@ void main() {
       expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.firstAid, 3), 75);
       expect(EconomyService.sellRefund(UpgradeType.firstAid, 3), 750);
     });
+
+    test('Ruheraum (V1-Paket) speist Refill und Sink-Erleichterung', () {
+      // lounge: +3 % Wochen-Refill und −3 % Tages-Sink je Stufe
+      // (Basis 180 €, max. 3 Stufen) – entschiedene Wirkungs-Option „und“.
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.lounge: 3},
+      );
+      expect(effects.refill, closeTo(0.09, 1e-9));
+      expect(effects.dailySinkRelief, closeTo(0.09, 1e-9));
+      // Bewusst kein Zuwachs auf einen der drei Eingangswerte oder die Heilzeit.
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.satisfaction, closeTo(0.0, 1e-9));
+      expect(effects.healTime, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.lounge, 3), 1080);
+      expect(EconomyService.upgradeCost(UpgradeType.lounge, 5), 1080);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.lounge, 0), 180);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.lounge, 3), 0);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.lounge, 3), 54);
+      expect(EconomyService.sellRefund(UpgradeType.lounge, 3), 540);
+    });
+
+    test('nur der Ruheraum speist die Personal-Ressourcen-Summen (§ 10)', () {
+      final effects = EconomyService.upgradeEffects(
+        const {
+          UpgradeType.tables: 3,
+          UpgradeType.cellar: 3,
+          UpgradeType.coldRoom: 3,
+          UpgradeType.firstAid: 3,
+          UpgradeType.lounge: 3,
+        },
+      );
+      expect(effects.refill, closeTo(0.09, 1e-9));
+      expect(effects.dailySinkRelief, closeTo(0.09, 1e-9));
+    });
   });
 
   group('EconomyService V7-Helfer', () {

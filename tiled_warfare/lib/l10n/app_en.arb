@@ -1035,6 +1035,8 @@
   "@upgradeColdRoom": { "description": "Upgrade: cold storage/cold chain" },
   "upgradeFirstAid": "First-aid station",
   "@upgradeFirstAid": { "description": "Upgrade: first-aid station" },
+  "upgradeLounge": "Rest lounge",
+  "@upgradeLounge": { "description": "Upgrade: rest lounge" },
   "upgradeLevel": "Level {level}/{max}",
   "@upgradeLevel": {
     "description": "Upgrade level",

@@ -1112,6 +1112,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         return l10n.upgradeColdRoom;
       case UpgradeType.firstAid:
         return l10n.upgradeFirstAid;
+      case UpgradeType.lounge:
+        return l10n.upgradeLounge;
     }
   }
 

@@ -886,6 +886,20 @@ class EconomyBalance {
       upkeepBaseCostPerWeek: 25,
       healTimeReductionPerLevel: 0.05,
     ),
+    // V1-Paket (`11b_Restauranterweiterungen.md`, Gruppe B): ⚙-Hook auf die
+    // **Personal-Ressourcen** – hebt den Wochen-Refill (+3 %/Stufe) und senkt
+    // den Tages-Sink (−3 %/Stufe). Speist darum **keinen** der drei
+    // Eingangswert-Boni. Die Sink-Seite ist ein bewusster Stacking-Hebel
+    // (wirkt sichtbar mit dem Gewerkschaftschef bzw. in der Nachteilphase
+    // eines Features); der Erschöpfungs-Malus der Nulltage bleibt
+    // dem Tournant vorbehalten.
+    UpgradeType.lounge: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 180,
+      upkeepBaseCostPerWeek: 18,
+      refillBonusPerLevel: 0.03,
+      dailySinkReliefPerLevel: 0.03,
+    ),
   };
 }
 

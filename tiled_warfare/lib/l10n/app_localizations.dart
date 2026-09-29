@@ -1671,6 +1671,12 @@ abstract class AppLocalizations {
   /// **'Erste-Hilfe-Station'**
   String get upgradeFirstAid;
 
+  /// Erweiterung: Ruheraum/Lounge
+  ///
+  /// In de, this message translates to:
+  /// **'Ruheraum/Lounge'**
+  String get upgradeLounge;
+
   /// Ausbaustufe einer Erweiterung
   ///
   /// In de, this message translates to:

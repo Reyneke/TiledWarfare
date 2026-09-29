@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
@@ -232,7 +233,10 @@ void main() {
   group('Wochen-Refill (V10 § 2)', () {
     final start = DateTime(2026, 1, 1);
 
-    RestaurantData refillRestaurant({required bool withPatissier}) =>
+    RestaurantData refillRestaurant({
+      required bool withPatissier,
+      Map<UpgradeType, int> upgrades = const {},
+    }) =>
         RestaurantData(
           id: 1,
           name: 'R',
@@ -240,6 +244,7 @@ void main() {
           district: 'Harlem',
           lastSeenAt: start,
           weekAnchorAt: start,
+          upgrades: upgrades,
           staff: [
             if (withPatissier)
               StaffData(
@@ -290,6 +295,45 @@ void main() {
       final traits = PersonalityTraits.forProfile(2, 4251);
       expect(restaurant.staff.single.vitalityCurrent, traits.vitality);
       expect(restaurant.staff.single.moraleCurrent, traits.morale);
+    });
+
+    test('Ruheraum hebt den Refill für alle – auch den Pâtissier (§ 10)', () {
+      // Der Ruheraum ist ein **Gebäude**-Effekt und nimmt – anders als der
+      // Pâtissier – keinen Charakter von seiner eigenen Wirkung aus.
+      final restaurant = refillRestaurant(
+        withPatissier: true,
+        upgrades: const {UpgradeType.lounge: 3},
+      );
+      GameClockService.catchUp(restaurant, start.add(const Duration(days: 7)));
+
+      int boosted(int value, int percent) => (value * (100 + percent) / 100)
+          .round()
+          .clamp(EconomyBalance.resourceMin, EconomyBalance.resourceMax);
+
+      const lounge = 9; // Stufe 3 × 3 %.
+      final patissierBonus = EconomyBalance.patissierRefillBonusPercent;
+
+      // Der Koch stapelt Pâtissier-Bonus (+10 %) und Ruheraum (+9 %) additiv.
+      final cookTraits = PersonalityTraits.forProfile(2, 4251);
+      expect(
+        restaurant.staff.last.vitalityCurrent,
+        boosted(cookTraits.vitality, patissierBonus + lounge),
+      );
+      expect(
+        restaurant.staff.last.moraleCurrent,
+        boosted(cookTraits.morale, patissierBonus + lounge),
+      );
+
+      // Der Pâtissier selbst bekommt nur den Ruheraum-Anteil.
+      final patissierTraits = PersonalityTraits.forProfile(2, 111);
+      expect(
+        restaurant.staff.first.vitalityCurrent,
+        boosted(patissierTraits.vitality, lounge),
+      );
+      expect(
+        restaurant.staff.first.moraleCurrent,
+        boosted(patissierTraits.morale, lounge),
+      );
     });
   });
 }

@@ -54,6 +54,29 @@ enum UpgradeType {
   /// kein Doppel-Hebel, weil die Rolle die Basis *setzt* und die Erweiterung
   /// sie nur verkürzt.
   firstAid,
+
+  /// Ruheraum/Lounge – Wochen-Refill & Tages-Sink der Personal-Ressourcen.
+  ///
+  /// V1-Paket aus § 10 (`11b_Restauranterweiterungen.md`, Gruppe B, **⚙-Hook**):
+  /// entlastet das Personal doppelt – er hebt den **Wochen-Refill** von
+  /// Vitalität/Moral (+3 %/Stufe) und senkt den **Tages-Sink** (−3 %/Stufe).
+  ///
+  /// **Entschiedene Wirkungs-Option:** beide Effekte („und“, wie in der
+  /// Tabellen-Zeile). Die Hooks liegen an den beiden bestehenden Stellen im
+  /// Catch-up: `_refillStaffResources` (Blockende) und `_applyDailyResourceSink`
+  /// (Tagesschritt). Der Refill-Bonus ist ein **Gebäude-Effekt** und gilt darum
+  /// **allen** Charakteren (anders als der Pâtissier, der sich von seiner eigenen
+  /// Wirkung ausnimmt).
+  ///
+  /// **Abgrenzung:** Die Sink-Seite senkt ausschließlich den **Tages-Sink**; der
+  /// **Erschöpfungs-Malus** der Nulltage (`_probeResources`) bleibt dem
+  /// **Tournant** vorbehalten. Der Sink-Hebel ist zudem bewusst ein
+  /// **Stacking-/Situations-Hebel**: Bei einem Tages-Sink von `5` und Rundung
+  /// pro Tag wird eine reine „−3 %/Stufe“ erst in Kombination sichtbar (mit dem
+  /// Gewerkschaftschef additiv, oder in der Nachteilphase eines Features mit
+  /// Sink-Faktor `2`). Das Plongeur-Muster – „der Baustein wird erst mit der
+  /// Rolle wertvoll“ – ist hier bewusst gewollt.
+  lounge,
 }
 
 /// Balance-Definition einer Restaurant-Erweiterung (§ 10).
@@ -87,6 +110,18 @@ class UpgradeSpec {
   /// als Faktor auf `GameClockService.healTimePerStageFor` (§ 10, `firstAid`).
   final double healTimeReductionPerLevel;
 
+  /// Erhöhung des Wochen-Refill-Ziels für Vitalität/Moral je Stufe (relativ,
+  /// z. B. `0.03` = +3 %). Wirkt **nicht** über die drei Eingangswerte, sondern
+  /// am Blockende auf den Refill (`GameClockService._refillStaffResources`,
+  /// § 10, `lounge`).
+  final double refillBonusPerLevel;
+
+  /// Senkung des **Tages-Sinks** (Vitalität/Moral) je Stufe (relativ, z. B.
+  /// `0.03` = −3 %). Wirkt am Tagesschritt (`GameClockService`
+  /// `_applyDailyResourceSink`, § 10, `lounge`); der Erschöpfungs-Malus der
+  /// Nulltage bleibt unberührt.
+  final double dailySinkReliefPerLevel;
+
   const UpgradeSpec({
     required this.maxLevel,
     required this.buyBaseCost,
@@ -95,5 +130,7 @@ class UpgradeSpec {
     this.attractivenessBonusPerLevel = 0.0,
     this.satisfactionBonusPerLevel = 0.0,
     this.healTimeReductionPerLevel = 0.0,
+    this.refillBonusPerLevel = 0.0,
+    this.dailySinkReliefPerLevel = 0.0,
   });
 }

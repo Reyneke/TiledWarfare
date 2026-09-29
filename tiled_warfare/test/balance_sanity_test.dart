@@ -90,9 +90,39 @@ void main() {
           expect(spec!.maxLevel, greaterThanOrEqualTo(1));
           expect(spec.buyBaseCost, greaterThan(0));
           expect(spec.upkeepBaseCostPerWeek, greaterThan(0));
+          // Alle Boni sind Zuschläge – nie negativ, nie entwertend.
+          for (final percent in [
+            spec.capacityBonusPerLevel,
+            spec.attractivenessBonusPerLevel,
+            spec.satisfactionBonusPerLevel,
+            spec.healTimeReductionPerLevel,
+            spec.refillBonusPerLevel,
+            spec.dailySinkReliefPerLevel,
+          ]) {
+            expect(
+              percent,
+              inInclusiveRange(0.0, 1.0),
+              reason: 'Unsinniger Bonus in $type',
+            );
+          }
         }
       },
     );
+
+    test('Ruheraum (V1-Paket) ist der einzige Personal-Ressourcen-Baustein', () {
+      final spec = EconomyBalance.upgrades[UpgradeType.lounge]!;
+      expect(spec.maxLevel, 3);
+      expect(spec.buyBaseCost, 180);
+      expect(spec.upkeepBaseCostPerWeek, 18);
+      // Entschiedene Wirkungs-Option: beide Effekte, je 3 % pro Stufe.
+      expect(spec.refillBonusPerLevel, 0.03);
+      expect(spec.dailySinkReliefPerLevel, 0.03);
+      // Kein Beitrag zu den drei Eingangswerten oder zur Heilzeit (§ 8).
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.healTimeReductionPerLevel, 0.0);
+    });
   });
 
   group('Balance-Tuning: Einkommen & Zufriedenheit', () {

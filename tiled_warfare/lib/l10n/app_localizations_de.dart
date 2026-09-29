@@ -941,6 +941,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get upgradeFirstAid => 'Erste-Hilfe-Station';
 
   @override
+  String get upgradeLounge => 'Ruheraum/Lounge';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Stufe $level/$max';
   }

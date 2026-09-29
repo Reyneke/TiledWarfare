@@ -861,13 +861,25 @@ class GameClockService {
       restaurant.staffEntries,
       now,
     );
+    // § 10 (`lounge`): Der Ruheraum senkt den Tages-Sink **additiv** zur
+    // Rolle/den Features. Die Summe wird auf 100 % gedeckelt, damit der Sink
+    // nicht negativ wird (die Feature-Reliefs setzen bereits auf 100 an).
+    final loungeReliefPercent =
+        (EconomyService.upgradeEffects(restaurant.upgrades).dailySinkRelief *
+                100)
+            .round();
+    final combinedReliefPercent = (reliefPercent + loungeReliefPercent).clamp(
+      0,
+      100,
+    );
     // V12: Zusatzlast der „Rush Hour“, ranggewichtet verteilt.
     final extraSink = _rushHourExhaustionShares(restaurant, now);
     for (final s in restaurant.staff) {
       final multiplier = multipliers[s.id] ?? 1;
       var sinkAmount = EconomyBalance.resourceSinkPerDay * multiplier;
-      if (reliefPercent > 0) {
-        sinkAmount = (sinkAmount * (100 - reliefPercent) / 100).round();
+      if (combinedReliefPercent > 0) {
+        sinkAmount =
+            (sinkAmount * (100 - combinedReliefPercent) / 100).round();
       }
       sinkAmount += extraSink[s.id] ?? 0;
       if (sinkAmount <= 0) continue;
@@ -945,6 +957,9 @@ class GameClockService {
   /// Zusätzlich wirkt die Support-Station `Pâtissier` (V10 § 2): Ist sie im
   /// Restaurant vertreten, erhalten die **übrigen** Charaktere einen Bonus auf
   /// den Refill (`EconomyBalance.patissierRefillBonusPercent`).
+  ///
+  /// § 10 (`lounge`): Der Ruheraum hebt den Refill als **Gebäude-Effekt** für
+  /// **alle** Charaktere – auch den Pâtissier (kein Selbst-Effekt einer Rolle).
   static void _refillStaffResources(RestaurantData restaurant, DateTime now) {
     final hasPatissier = restaurant.staff.any(
       (s) => s.station == kStationPatissier,
@@ -953,13 +968,21 @@ class GameClockService {
     final bonusPercent =
         (hasPatissier ? EconomyBalance.patissierRefillBonusPercent : 0) +
             SupportRoleService.refillBonusPercent(restaurant.supportStaff);
+    // § 10 (`lounge`): Ruheraum-Bonus getrennt vom Rollen-Topf und für alle.
+    final loungeBonusPercent =
+        (EconomyService.upgradeEffects(restaurant.upgrades).refill * 100)
+            .round();
 
     for (final s in restaurant.staff) {
       if (s.personalityId < 0) continue;
       final base = PersonalityTraits.forProfile(s.personalityId, s.id);
-      // Der Pâtissier ist Support und profitiert nicht von seiner eigenen Wirkung.
+      // Der Pâtissier ist Support und profitiert nicht von seiner eigenen
+      // Wirkung; der Ruheraum-Bonus gilt dagegen allen.
       final ownBonus =
-          bonusPercent > 0 && s.station != kStationPatissier ? bonusPercent : 0;
+          (bonusPercent > 0 && s.station != kStationPatissier
+              ? bonusPercent
+              : 0) +
+          loungeBonusPercent;
       // `11a`: In der Nachteilphase regeneriert das Kampagnen-Ziel nur halb.
       final fraction = ManagementFeatureService.refillFractionFor(
         restaurant.staffEntries,

@@ -22,8 +22,8 @@ stufenweise ausbaubar, kosten **Ankauf** und **wöchentlichen Unterhalt** und we
 **Status:** vollständig umgesetzt (Phase 8 in `2-Wirtschaftsschleife.md`, Commit `a723ad5`
 „Wirtschaftsschleife schließen (V2/V7/V8)“; die Unterhaltsschnittstelle zum Plongeur kam mit V10/`7939be4`).
 Der erste Baustein des **V1-Pakets** aus diesem Dokument (`cellar`, Gruppe A) ist ebenfalls umgesetzt, ebenso der
-zweite (`coldRoom`, Gruppe B) und der dritte (`firstAid`, Gruppe B, erster ⚙-Baustein) – Beleg und
-Checklisten-Abarbeitung unter „Abgeschlossene Klärungen“.
+zweite (`coldRoom`, Gruppe B), der dritte (`firstAid`, Gruppe B, erster ⚙-Baustein) und der vierte (`lounge`,
+Gruppe B, zweiter ⚙-Baustein) – Beleg und Checklisten-Abarbeitung unter „Abgeschlossene Klärungen“.
 Werte verbindlich nur in `EconomyBalance` (V7); Auswertung in `EconomyService` (reine Funktionen),
 Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 (`kProfileSchemaVersion = 5`, additiv/tolerant).
@@ -40,6 +40,7 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 | Wein-/Getränkekeller | `UpgradeType.cellar` | +2 % Kundenzufriedenheit, +1 % Attraktivität | 5 | 180 € | 18 € |
 | Kühlhaus/Kühlkette | `UpgradeType.coldRoom` | +3 % Kapazität | 5 | 160 € | 16 € |
 | Erste-Hilfe-Station | `UpgradeType.firstAid` | −5 % Heilzeit pro Verletzungsstufe | 3 | 250 € | 25 € |
+| Ruheraum/Lounge | `UpgradeType.lounge` | +3 % Wochen-Refill, −3 % Tages-Sink (Vitalität/Moral) | 3 | 180 € | 18 € |
 
 > Quelle: `EconomyBalance.upgrades` (V7). Bei Abweichung gilt der **Code**, nicht die Tabelle.
 > `test/balance_sanity_test.dart` erzwingt, dass **jeder** `UpgradeType`-Wert einen Spec besitzt.
@@ -47,6 +48,9 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 > `coldRoom` ist der zweite (Gruppe B) und die Kapazitäts-Basis des **Lageristen** (`11a`, V12);
 > `firstAid` ist der dritte (Gruppe B) und der erste **⚙-Baustein** – er speist **keinen** der drei
 > Eingangswerte, sondern verkürzt die Heilzeit (`healTimePerStageFor`, § 10).
+> `lounge` ist der vierte (Gruppe B) und der zweite **⚙-Baustein**: Auch er speist **keinen** der drei
+> Eingangswerte und **keine** Heilzeit, sondern hängt sich an die Personal-Ressourcen
+> (`_refillStaffResources` **und** `_applyDailyResourceSink`, § 10).
 
 ### Kosten- & Wirkungsmodell
 
@@ -114,9 +118,10 @@ schließen diese Lücke, docken an vorhandene Hebel an und bleiben Tuning in `Ec
   kein Multiplikator-auf-Multiplikator.
 - **Hook-Typ trennen:** ▶ = reines `UpgradeSpec` (Bonus auf die drei Eingangswerte, automatisch über
   `EconomyService.upgradeEffects`); ⚙ = **neuer Hook** („Zusatzbuchung“ laut Checkliste Punkt 4). Muster für
-  einen ⚙-Hook mit Balance-Feld: eigener `UpgradeSpec`-Wert (Beispiel `healTimeReductionPerLevel`), den
-  `upgradeEffects` als zusätzliche Summe mitliefert und der **an der Wirkungsstelle** als Faktor greift
-  (`firstAid` → `healTimePerStageFor`).
+  einen ⚙-Hook mit Balance-Feld: eigener `UpgradeSpec`-Wert (Beispiele `healTimeReductionPerLevel` für
+  `firstAid`, `refillBonusPerLevel`/`dailySinkReliefPerLevel` für `lounge`), den `upgradeEffects` als
+  zusätzliche Summe mitliefert und der **an der Wirkungsstelle** als Faktor greift
+  (`firstAid` → `healTimePerStageFor`; `lounge` → `_refillStaffResources`/`_applyDailyResourceSink`).
 
 > **Bereits aufgegangen (11a/V12):** „Maître d'hôtel“ ist der **Oberkellner** (+5 % Kapazität),
 > „Caviste/Magasinier“ der **Lagerist** (+20 % Kapazität, Feature „Lagertetris“); die alten Zeilen
@@ -136,7 +141,7 @@ schließen diese Lücke, docken an vorhandene Hebel an und bleiben Tuning in `Ec
 |---|---|---:|---:|---:|---|---|
 | Kühlhaus/Kühlkette (`coldRoom`) ▶ **umgesetzt** ✅ | +3 % Kapazität | 5 | 160 € | 16 € | `capacityOf` | **Lagerist** (V12): verbreitert die Basis, die „Lagertetris“ faktorbasiert vervielfacht (additiv, kein Doppel-Multiplikator); wirkt nur **skalierend** – ohne Personal ist die Kapazität ohnehin `0` |
 | Erste-Hilfe-Station (`firstAid`) ⚙ **umgesetzt** ✅ | **−5 % Heilzeit je Stufe** (entschieden; die Alternative „+1 Rettungswurf-Zielwert“ wurde **verworfen**) | 3 | 250 € | 25 € | `GameClockService.healTimePerStageFor` (von `advanceHealing`, `rollBackEmergencyShots` **und** dem UI-Countdown genutzt) | **Teamarzt** (Behandlung, `healTimePerStage`): verkürzt die vom Arzt **gesetzte** Basiszeit (24 h/6 h/3 h/1 h) prozentual – kein zweiter Hebel auf den Rettungswurf, der die Domäne des Arztes bleibt |
-| Ruheraum/Lounge (`lounge`) ⚙ | +3 % Wochen-Refill **und** −3 % Tages-Sink | 3 | 180 € | 18 € | `_refillStaffResources`/`_applyDailyResourceSink` | **Communard + Pâtissier** (Refill), **Gewerkschaftschef** (Sink, additiv), **Tournant** (Nulltag-Malus) |
+| Ruheraum/Lounge (`lounge`) ⚙ **umgesetzt** ✅ | **+3 % Wochen-Refill und −3 % Tages-Sink** (entschieden: **beide** Effekte) | 3 | 180 € | 18 € | `GameClockService._refillStaffResources` **und** `_applyDailyResourceSink` (additiv zum Gewerkschaftschef, auf 100 % gedeckelt) | **Communard + Pâtissier** (Refill, additiv – der Ruheraum gilt als Gebäude-Effekt auch dem Pâtissier), **Gewerkschaftschef** (Sink, additiv), **Tournant** (Nulltag-Malus – bewusst **nicht** berührt) |
 | Schulungsraum/Trainingsküche (`school`) ⚙ | −5 % Fortbildungskosten **oder** Sieg-XP +2 % | 3 | 300 € | 30 € | `upgradeToLineCook`/Karriereaufstiege bzw. `ScreenBattleResult` | **Karrierepfade (10)** und **PR-Kampagne** des Social Media Managers (beide XP, additiv) – verbindet Wirtschafts- und Kampf-Loop |
 | Sicherheitstechnik/Alarmanlage (`security`) ⚙ | Entdeckung eingehender Sabotage +5 % (alternativ Abschöpfung −5 %) | 3 | 220 € | 22 € | `RivalService.incomingDetectionPercent` bzw. Einkommens-Abschöpfung im `catchUp` | **Sicherheitschef** (V13, additiv), Kapitel 13 – macht Erweiterungen **defensiv** relevant |
 
@@ -159,13 +164,13 @@ je Stufe – löst die dokumentierte „Einzelstufe“-Entscheidung ab).
 | Zertifizierung/Hygiene-Siegel (`certification`) ⚙ | erlittene Strafen −5 % | 3 | 200 € | 20 € | Strafbuchung im Tick (`penaltyCosts`) | **Rechtsanwalt** (additiv, bis 100 % kappbar) – wirkungslos ohne eigene Strafenquelle → **gekoppelt** mit der offenen `11a`-Position „Behörden/Inspektionen“ als neuer Strafenquelle |
 | Sterneküche/Auszeichnung (`stars`) ⚙ | +Prestige-Beitrag/Ranglisten-Position; optional seltener Sabotage-Ziel | 5 | 400 € | 40 € | `districtPrestigeFor`/`RivalService`-Zielauswahl | Vorbereitend für **12** (Mini-PP, „Platz X von Y“) und **13** (Rivalen) – erst nach deren offenen Punkten |
 
-**Priorisierung („V1-Paket“):** `cellar` ✅ **umgesetzt** → `coldRoom` ✅ **umgesetzt** → `firstAid` ✅ **umgesetzt** → `lounge`;
+**Priorisierung („V1-Paket“):** `cellar` ✅ **umgesetzt** → `coldRoom` ✅ **umgesetzt** → `firstAid` ✅ **umgesetzt** → `lounge` ✅ **umgesetzt**;
 danach `school`/`security`,
 zuletzt die Zeitfenster-/Prestige-Bausteine (`weeklyMenu`, `terrace`, `delivery`, `certification`, `stars`).
 Vor dem Bau der Folge-Bausteine sind deren offene Wirkungs-Optionen zu entscheiden (`school`: −5 %
 Fortbildungskosten **oder** +2 % Sieg-XP; `security`: +5 %
-Entdeckung **oder** −5 % Abschöpfung). Bei `firstAid` ist die Option **entschieden** (Heilzeit, siehe
-Entscheidungen) und der Hook gebaut.
+Entdeckung **oder** −5 % Abschöpfung). Bei `firstAid` **und** `lounge` sind die Optionen **entschieden**
+(Heilzeit bzw. „beide Effekte“, siehe Entscheidungen) und die Hooks gebaut.
 
 **Bewusst nicht vorgeschlagen:** weitere reine Attraktivitäts-%-Boni (Clamp 0–4), eine „Bar“ neben dem Keller
 (Doppel-Hebel Zufriedenheit), Einkommens-Multiplikatoren auf bestehende Einkommens-%-Boni (verletzt das
@@ -215,6 +220,23 @@ analog zum bestehenden `rebrandingPenaltyUntil`-Fenster (z. B. Saison-Terrasse, 
     der Faktor ist defensiv auf `> 0` und das Ergebnis auf ≥ 1 s geklemmt (sonst fiele die Heilung ein).
   - Der in der Synergie-Spalte angedachte **Unterhebel `revivalCost`** bleibt bewusst **ungebaut** („Wahl
     einer** Wirkungs-Option“, kein Doppel-Effekt).
+- **`lounge`: beide Effekte (entschieden).** Aus den beiden diskutierten Wirkungs-Optionen („+3 % Wochen-Refill
+  **oder** −3 % Tages-Sink“) wird bewusst die **Tabellen-Zeile** „und“ gebaut:
+  - Der **Refill** ist der **sichtbare** Träger: Der Wochen-Refill springt auf `Trait-Basis × (1 + Σ Bonus)`,
+    Stufe 3 also **+9 %** auf Vitalität **und** Moral – additiv zum Pâtissier/Communard, aber als
+    **Gebäude-Effekt** auch für den Pâtissier selbst (die Rolle nimmt sich von ihrer **eigenen** Wirkung aus,
+    das Gebäude nicht).
+  - Der **Sink** ist der **günstige** zweite Effekt und gleichzeitig ein **Stacking-Hebel**: Bei
+    `resourceSinkPerDay = 5` und Rundung **pro Tag** ist „−3 %/Stufe“ allein unsichtbar (5 × 0,91 → 5). Er wird
+    erst additiv mit dem **Gewerkschaftschef** sichtbar (−24 % → 4/Tag; mit Ruheraum Stufe 3: −33 % → 3/Tag)
+    oder in der **Nachteilphase** eines Features (Sink-Faktor 2, also 10/Tag → 9/Tag). Das ist die bewusste
+    Fortschreibung des **Plongeur-Musters** („der Baustein wird erst mit der Rolle wertvoll“) – und deshalb
+    **kein** Retune-Grund.
+  - Die **Summe** beider Erleichterungen wird auf **100 %** gedeckelt: „Mali entfallen“ (Rush Hour/Lagertetris)
+    setzt die Relief bereits auf 100; der Ruheraum darf den Sink nicht ins Negative drehen (sonst „heilte“ die
+    Erweiterung).
+  - **Abgrenzung:** Der **Erschöpfungs-Malus** der Nulltage (`GameClockService._probeResources`) bleibt dem
+    **Tournant** (`11a`) vorbehalten – der Ruheraum senkt nur den Tages-Sink.
 
 ### Balance-Runde: Gegenwert je Erweiterung (Vergleich)
 
@@ -251,6 +273,15 @@ Kandidat. Der `cellar`-Preis (180 €/18 €) wird in derselben Datenlage-Runde 
 im Mittelfeld, sein €/%-Wert ist bewusst der höchste (Zufriedenheit ist der knappste Kanal). Gleiches gilt für
 `coldRoom` (160 €/16 €): günstiger Einstieg, aber der zweithöchste €/%-Wert des Sets (Kapazitäts-Schiene mit
 Lageristen-Perspektive).
+
+**`lounge` steht wie `firstAid` außerhalb der €/%-Punkt-Logik:** Er speist **keinen** der drei Eingangswerte und
+**keine** Heilzeit. Mit 180 € je Stufe (540 € kumuliert auf Stufe 3, Unterhalt 54 €/Woche) teilt er sich den
+Preis-Anker mit `cellar` – trägt aber statt eines Eingangswert-Bonus einen **Personal-Ressourcen-Hebel**, dessen
+Wirkung nicht gegen Attraktivitäts-/Zufriedenheits-Prozentpunkte verrechenbar ist (deshalb keine Einordnung in
+die Rangfolge). Bewusst nur **3 Stufen**: Der Refill-Bonus darf die Erholung nicht beliebig weit über die
+Trait-Basis heben, sonst würden die Rollen-Schiene (Pâtissier +10 %, Communard +15 %) und der
+Erschöpfungs-Hebel des **Tournant** entwertet; die Sink-Seite bleibt ein Situations-/Stacking-Hebel (siehe
+Entscheidungen).
 
 **`firstAid` steht außerhalb dieser €/%-Punkt-Logik:** Der Baustein speist **keinen** der drei Eingangswerte,
 sondern verkürzt die Heilzeit. Sein Verhältnis ist 250 € pro Stufe für **−5 % Heilzeit** (also 1.500 €
@@ -314,9 +345,40 @@ bleibt die Heilung immer noch spürbar lang (Kette `dying → ready` = 5 Stufen 
   schneller“ → `reeling → ready` nach 20,5 h **nur** mit Station; „Erste-Hilfe-Station-Unterhalt wird im
   Wochenblock abgebucht“ → 75 €/Woche auf Stufe 3),
   `test/screen_restaurant_test.dart` („Erste-Hilfe-Kachel ist ausbaubar“, Budget −250 €),
-  `test/balance_sanity_test.dart` erzwingt die Spec. **Nächster Baustein: `lounge`** – dessen
-  Wirkungs-Optionen (+3 % Wochen-Refill **und/oder** −3 % Tages-Sink) sind vorher zu entscheiden, weil sie den
-  Hook festlegen.
+  `test/balance_sanity_test.dart` erzwingt die Spec.
+- **V1-Paket fortgesetzt – `lounge` umgesetzt (Checkliste 1–7 abgearbeitet, zweiter ⚙-Baustein):**
+  Wirkungs-Option **entschieden**: **beide** Effekte („+3 % Wochen-Refill **und** −3 % Tages-Sink“) – genau die
+  Tabellen-Zeile (siehe Entscheidungen). `UpgradeType.lounge` + `UpgradeSpec` (max. 3 Stufen, 180 €/18 €,
+  `refillBonusPerLevel = 0.03`, `dailySinkReliefPerLevel = 0.03`).
+  Das **Hook-Muster** ist das aus `firstAid`, nur mit **zwei** Feldern: `UpgradeSpec` hat die optionalen Felder
+  `refillBonusPerLevel`/`dailySinkReliefPerLevel`, `EconomyService.upgradeEffects` liefert sie als **fünfte und
+  sechste** Summe (`refill`, `dailySinkRelief`) des Records, und die Wirkung sitzt an den beiden **bestehenden**
+  Stellen im Catch-up:
+  `GameClockService._refillStaffResources` (Blockende) erhöht das Refill-Ziel für **alle** Charaktere,
+  `GameClockService._applyDailyResourceSink` (Tagesschritt) senkt den Sink **additiv** zur Rolle/den Features
+  mit Deckel auf **100 %**.
+  **Abgrenzungen (bewusst):** Der Refill-Bonus ist ein **Gebäude-Effekt** und nimmt – anders als der Pâtissier –
+  **niemanden** aus (auch nicht den Pâtissier selbst); der **Erschöpfungs-Malus** der Nulltage
+  (`_probeResources`) bleibt dem **Tournant** vorbehalten; die Sink-Seite ist ein **Stacking-/Situations-Hebel**
+  (bei `resourceSinkPerDay = 5` bleibt „−3 %/Stufe“ allein unter dem Rundungs-Radar, sichtbar wird sie mit dem
+  Gewerkschaftschef bzw. in der Nachteilphase eines Features). Das Plongeur-Muster ist hier gewollt – der
+  **Refill** trägt den Baustein aber auch allein.
+  l10n `upgradeLounge` (DE „Ruheraum/Lounge“ / EN „Rest lounge“) + Kachel im Reiter „Erweiterungen“ (wieder nur
+  `_upgradeName` brauchte einen Fall; Kachel und Spec-Test sind `UpgradeType.values`-getrieben).
+  Tests: `test/economy_service_test.dart` („Ruheraum (V1-Paket) speist Refill und Sink-Erleichterung“ →
+  `refill`/`dailySinkRelief` je `0,09` auf Stufe 3, alle übrigen Summen `0`; Kosten 1.080 € kumuliert (Clamp auf
+  max. 3 Stufen), Delta 180 €, Unterhalt 54 €, Refund 540 €; „nur der Ruheraum speist die
+  Personal-Ressourcen-Summen“),
+  `test/resource_state_test.dart` (neue Gruppe „Ruheraum/Lounge (V1-Paket, § 10)“: Refill je Stufe +3/+6/+9 %,
+  additiver Sink neben dem Gewerkschaftschef 4 → 3 pro Tag, dokumentierte Rundungs-Unsichtbarkeit **allein**,
+  Deckel bei „Mali entfallen“ (keine „Heilung“), keine Wirkung auf die drei Eingangswerte, Unterhalt 54 €/Woche),
+  `test/station_test.dart` („Ruheraum hebt den Refill für alle – auch den Pâtissier“: Koch +19 %, Pâtissier +9 %),
+  `test/screen_restaurant_test.dart` („Ruheraum-Kachel ist ausbaubar“, Budget −180 €),
+  `test/balance_sanity_test.dart` erzwingt die Spec und prüft alle Bonus-Felder auf `0…1` sowie die
+  Ruheraum-Spec (`3` Stufen, `180`/`18` €, beide Effekte `0,03`).
+  **Nächster Baustein: `school`** bzw. `security` – deren Wirkungs-Optionen (−5 % Fortbildungskosten **oder**
+  +2 % Sieg-XP bzw. +5 % Entdeckung **oder** −5 % Abschöpfung) sind vorher zu entscheiden, weil sie den Hook
+  festlegen.
 - **DRY – erledigt:** Das Brutto-Delta ist als reine Funktion `EconomyService.upgradeCostDelta(type, fromLevel)`
   zentralisiert (`0` bei unbekanntem Typ, negativer Stufe oder Maximalstufe); `ObjectProfile.upgradePurchaseCost`
   nutzt sie. Die frühere Beschreibung „doppelt in `buyUpgrade` **und** UI-Tile“ war bereits überholt – beide
@@ -381,7 +443,8 @@ bleibt die Heilung immer noch spürbar lang (Kette `dying → ready` = 5 Stufen 
   Mutation/UI: `lib/objects/object_profile.dart` (`upgradeLevel`/`buyUpgrade`/`downgradeUpgrade`/`sellUpgrade`),
   `lib/screens/screen_restaurant.dart` (`_buildUpgradesSection`/`_buildUpgradeTile`)
 - l10n: `lib/l10n/app_de.arb`/`app_en.arb` (`upgradesSection`, `upgradeTables`/`upgradeKitchen`/
-  `upgradeSignage`/`upgradeDecoration`/`upgradeJukebox`/`upgradeCellar`/`upgradeColdRoom`/`upgradeFirstAid`, `upgradeBuy`/`upgradeDowngrade`/`upgradeSell`,
+  `upgradeSignage`/`upgradeDecoration`/`upgradeJukebox`/`upgradeCellar`/`upgradeColdRoom`/`upgradeFirstAid`/
+  `upgradeLounge`, `upgradeBuy`/`upgradeDowngrade`/`upgradeSell`,
   `upgradeSellConfirm`, `upgradeSold`, `upgradeUpkeepCost`, `upgradeBuyCost`, `upgradeMaxReached`,
   `upgradeNotEnoughBudget`, `tabUpgrades`)
 - Tests: `test/economy_service_test.dart`, `test/game_clock_service_test.dart`, `test/screen_restaurant_test.dart`,

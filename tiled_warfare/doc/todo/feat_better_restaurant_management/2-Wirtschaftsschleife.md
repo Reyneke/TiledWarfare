@@ -329,22 +329,28 @@ Als Browsergame-Annäherung soll das Restaurant mit **Erweiterungen** ausgebaut 
 | Wein-/Getränkekeller | +2 % Kundenzufriedenheit, +1 % Attraktivität | 5 | 180 € | 18 € |
 | Kühlhaus/Kühlkette | +3 % Kapazität | 5 | 160 € | 16 € |
 | Erste-Hilfe-Station | −5 % Heilzeit pro Verletzungsstufe | 3 | 250 € | 25 € |
+| Ruheraum/Lounge | +3 % Wochen-Refill (Vitalität/Moral), −3 % Tages-Sink | 3 | 180 € | 18 € |
 
-> **Ergänzung (11b, V1-Paket):** `cellar` (Gruppe A), `coldRoom` (Gruppe B) und `firstAid` (Gruppe B) sind die
-> ersten drei nachträglich gebauten Bausteine aus `11b_Restauranterweiterungen.md`. `cellar` schließt die
+> **Ergänzung (11b, V1-Paket):** `cellar` (Gruppe A), `coldRoom` (Gruppe B), `firstAid` (Gruppe B) und `lounge`
+> (Gruppe B) sind die vier nachträglich gebauten Bausteine aus `11b_Restauranterweiterungen.md` (**alle
+> umgesetzt** ✅). `cellar` schließt die
 > **Zufriedenheits-Lücke** und ist die Wirkungsbasis des **Sommeliers** (`11a`); `coldRoom` ist die
 > **Kapazitäts-Basis des Lageristen** (`11a`, V12) und wirkt **rein skalierend** (ohne Personal ist die
 > Kapazität ohnehin `0`); `firstAid` ist der **erste ⚙-Baustein** und speist **keinen** der drei Eingangswerte,
 > sondern verkürzt die Heilzeit pro Verletzungsstufe (`GameClockService.healTimePerStageFor`, entschieden:
-> −5 %/Stufe statt „+1 Rettungswurf-Zielwert“). Die weiteren Vorschläge (`lounge`, …)
+> −5 %/Stufe statt „+1 Rettungswurf-Zielwert“); `lounge` ist der **zweite ⚙-Baustein** und wirkt ebenfalls
+> außerhalb der drei Eingangswerte – auf die **Personal-Ressourcen** (entschieden: **beide** Effekte,
+> `_refillStaffResources` **und** `_applyDailyResourceSink`). Die weiteren Vorschläge (`school`, `vault`,
+> `security`, …)
 > stehen dort und werden erst nach ihrer Entscheidung hier eingetragen.
 
 - **Kostenmodell (linear mit der Stufe, Entscheidung: kumulativ):** Der Ausbau **auf** Stufe `N` kostet `Ankauf-Basis × N`; **kumulativ** bis Stufe `N` sind `Σ Basis×k = Basis × N·(N+1)/2` investiert. Der wöchentliche Unterhalt **auf** Stufe `N` beträgt `Erhalt-Basis × N`. Beispiel (Ankauf 100 €, Erhalt 10 €): Stufe 1 = 100 € / 10 €, Stufe 2 = 200 € / 20 € (insgesamt 300 € investiert), Stufe 3 = 300 € / 30 € usw.
 - **Downgrade & Verkauf (Entscheidung):** Erweiterungen lassen sich stufenweise **zurückbauen** und ganz **verkaufen**, um laufende Kosten zu senken. Ein Verkauf erstattet **50 %** der investierten Anschaffungssumme (Entscheidung; Wert in `EconomyBalance` justierbar); der Unterhalt sinkt entsprechend der neuen Stufe.
-- **Wirkung (multiplikativ):** Die § 8-Formeln werden vor dem Clamp mit dem Erweiterungsfaktor multipliziert: `Basiswert × (1 + Σ Bonus)`. Reine Funktion `upgradeEffects(levels)` in `EconomyService` liefert die drei Summenboni **plus** die Heilzeit-Verkürzung (`healTime`).
+- **Wirkung (multiplikativ):** Die § 8-Formeln werden vor dem Clamp mit dem Erweiterungsfaktor multipliziert: `Basiswert × (1 + Σ Bonus)`. Reine Funktion `upgradeEffects(levels)` in `EconomyService` liefert die drei Summenboni **plus** die drei Hook-Summen (`healTime`, `refill`, `dailySinkRelief`, § 10).
 - **Wirkung außerhalb der Eingangswerte (`firstAid`, ⚙):** Die Heilzeit-Verkürzung wird **nicht** auf Attraktivität/Zufriedenheit/Kapazität addiert, sondern als Faktor auf die Heilzeit pro Verletzungsstufe angewendet: `GameClockService.healTimePerStageFor({quality, upgrades})` = `Basiszeit × (1 − Σ healTime)` (ganze Sekunden, defensiv ≥ 1 s). Weil dort der **einzige** Entstehungsort der Stufenzeit liegt, wirkt der Baustein automatisch in `advanceHealing`, `rollBackEmergencyShots` und im UI-Countdown (`remainingHealingTime`).
-- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox, cellar, coldRoom, firstAid); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Ankauf-Basis, Erhalt-Basis/Woche, MaxLevel, Boni inkl. `healTimeReductionPerLevel`) in `EconomyBalance.upgrades` (V7).
-- **Funktionen (`EconomyService`):** `upgradeEffects(levels)` (vier Summenboni), `upgradeCost(upgrade, toLevel)` (kumulativ), `upgradeUpkeepPerWeek(upgrade, level)`, `sellRefund(upgrade, level)`.
+- **Wirkung auf die Personal-Ressourcen (`lounge`, ⚙):** Der Ruheraum senkt **nicht** den Einkommenspfad, sondern hängt sich an die beiden bestehenden Stellen des Catch-ups: `_refillStaffResources` (Blockende) erhöht das Refill-Ziel um `Σ refill` (Stufe 3 = +9 % auf Vitalität **und** Moral, für **alle** Charaktere – der Pâtissier ist nur von seiner **eigenen** Rolle ausgenommen), `_applyDailyResourceSink` (Tagesschritt) senkt den Tages-Sink um `Σ dailySinkRelief` **additiv** zu Gewerkschaftschef/Features mit Deckel auf **100 %**. Der **Erschöpfungs-Malus** der Nulltage (`_probeResources`) bleibt unberührt (Domäne des **Tournant**, `11a`). Bei `resourceSinkPerDay = 5` ist der Sink-Anteil allein unter dem Rundungs-Radar – er ist ein bewusster **Stacking-Hebel** (mit dem Gewerkschaftschef bzw. in der Nachteilphase eines Features).
+- **Daten:** `enum UpgradeType` (tables, kitchen, signage, decoration, jukebox, cellar, coldRoom, firstAid, lounge); `RestaurantData.upgrades` (`Map<UpgradeType, int>` = Stufe); Definitionen (Ankauf-Basis, Erhalt-Basis/Woche, MaxLevel, Boni inkl. `healTimeReductionPerLevel`, `refillBonusPerLevel`, `dailySinkReliefPerLevel`) in `EconomyBalance.upgrades` (V7).
+- **Funktionen (`EconomyService`):** `upgradeEffects(levels)` (sechs Summenboni), `upgradeCost(upgrade, toLevel)` (kumulativ), `upgradeUpkeepPerWeek(upgrade, level)`, `sellRefund(upgrade, level)`.
 - **Kauf/Ausbau:** Budget-Check wie `hireApprentice` (nicht unter die Negativgrenze), Persistenz via `_saveState()`.
 - **Unterhalt:** wird im **Wochen-Tick (V8)** mit abgebucht; Reihenfolge: passives Einkommen → Teamarzt-Kosten → **Erweiterungs-Unterhalt** → Negativzinsen → Bankrott-Check.
 
