@@ -5,12 +5,15 @@ import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/rival_restaurant.dart';
 import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/power_projection_service.dart';
+import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 
 /// Balance-Sanity-Tests (V7): schreiben die gewünschten Eigenschaften der
@@ -680,6 +683,257 @@ void main() {
           ),
         );
       }
+    });
+  });
+
+  group('Power Projection & Rivalen (Kapitel 12/13)', () {
+    RestaurantData restaurant({List<StaffData>? staff, MatchResult? result}) =>
+        RestaurantData(
+          name: 'Balance',
+          district: 'Harlem',
+          staff: staff ?? [],
+          lastMatchResult: result,
+        );
+
+    StaffData staff({String status = 'ready', int moneyValue = 100}) =>
+        StaffData(
+          name: 'Testkoch',
+          imagePath: 'assets/images/token/token_cook_basic.png',
+          type: 'apprentice',
+          status: status,
+          moneyValue: moneyValue,
+        );
+
+    RivalRestaurant rival({required int id, required double prestige}) =>
+        RivalRestaurant(
+          id: id,
+          name: 'Rivale $id',
+          district: 'Harlem',
+          personalityId: 1,
+          basePrestige: prestige,
+        );
+
+    test('PP-Peaks, Faktor-Spannen und Stance-Schwellen sind geordnet', () {
+      expect(EconomyBalance.powerProjectionDomainMax, 100);
+      expect(
+        EconomyBalance.powerProjectionLowRepresentative,
+        lessThan(EconomyBalance.powerProjectionLowCeiling),
+      );
+      expect(
+        EconomyBalance.powerProjectionLowCeiling,
+        lessThanOrEqualTo(EconomyBalance.powerProjectionMidPeak),
+      );
+      expect(
+        EconomyBalance.powerProjectionMidPeak,
+        lessThanOrEqualTo(EconomyBalance.powerProjectionHighFloor),
+      );
+      expect(
+        EconomyBalance.powerProjectionHighFloor,
+        lessThan(EconomyBalance.powerProjectionHighRepresentative),
+      );
+      expect(
+        EconomyBalance.powerProjectionHighRepresentative,
+        lessThan(EconomyBalance.powerProjectionDomainMax),
+      );
+      expect(EconomyBalance.powerProjectionIncomeFactorMin, lessThan(1.0));
+      expect(EconomyBalance.powerProjectionIncomeFactorMax, greaterThan(1.0));
+      expect(EconomyBalance.competitionPressureFactorMin, lessThan(1.0));
+      expect(EconomyBalance.competitionPressureFactorMax, greaterThan(1.0));
+      expect(
+        EconomyBalance.stanceAllyGap,
+        lessThan(EconomyBalance.stanceNeutralGap),
+      );
+      expect(
+        EconomyBalance.stanceNeutralGap,
+        lessThan(EconomyBalance.stanceEnemyGap),
+      );
+      expect(EconomyBalance.rivalPpMin, lessThan(EconomyBalance.rivalPpMax));
+    });
+
+    test('PP wächst mit den Treibern und bleibt in der Domäne', () {
+      int pp(double comp, double ratio, double quality) =>
+          PowerProjectionService.powerProjection(
+            competition: comp,
+            ratio: ratio,
+            staffQuality: quality,
+          );
+      // Wenig Konkurrenz + gute Bilanz + starkes Team ⇒ hohe PP.
+      final strong = pp(0.0, 1.0, EconomyBalance.inputDomainMax);
+      // Harte Konkurrenz + schlechte Bilanz + schwaches Team ⇒ niedrige PP.
+      final weak = pp(1.0, 0.0, 0.0);
+      expect(strong, greaterThan(weak));
+      for (final value in [strong, weak]) {
+        expect(
+          value,
+          inInclusiveRange(0, EconomyBalance.powerProjectionDomainMax),
+        );
+      }
+    });
+
+    test('Bilanz-Eingang ist neutral ohne Gefecht (P6)', () {
+      expect(PowerProjectionService.ratioFromResult(MatchResult.win), 1.0);
+      expect(PowerProjectionService.ratioFromResult(MatchResult.loss), 0.0);
+      expect(
+        PowerProjectionService.ratioFromResult(null),
+        EconomyBalance.powerProjectionNeutralInput,
+      );
+      expect(
+        PowerProjectionService.ratioFromResult(MatchResult.draw),
+        EconomyBalance.powerProjectionNeutralInput,
+      );
+    });
+
+    test('Einkommensfaktor liegt in der Spanne und steigt mit PP', () {
+      final low = PowerProjectionService.incomeFactor(0);
+      final high = PowerProjectionService.incomeFactor(
+        EconomyBalance.powerProjectionDomainMax,
+      );
+      for (final value in [low, high]) {
+        expect(
+          value,
+          inInclusiveRange(
+            EconomyBalance.powerProjectionIncomeFactorMin - 0.01,
+            EconomyBalance.powerProjectionIncomeFactorMax + 0.01,
+          ),
+        );
+      }
+      expect(high, greaterThan(low));
+    });
+
+    test('Konkurrenzdruck belohnt Rückstand und bremst die Spitze (Q10)', () {
+      final leading = PowerProjectionService.competitionPressureFactor(
+        playerPp: EconomyBalance.powerProjectionDomainMax,
+        rivalAveragePp: 5,
+      );
+      final trailing = PowerProjectionService.competitionPressureFactor(
+        playerPp: 5,
+        rivalAveragePp: 95,
+      );
+      expect(trailing, greaterThan(leading));
+      for (final value in [leading, trailing]) {
+        expect(
+          value,
+          inInclusiveRange(
+            EconomyBalance.competitionPressureFactorMin - 0.01,
+            EconomyBalance.competitionPressureFactorMax + 0.01,
+          ),
+        );
+      }
+    });
+
+    test(
+      'Rivalen-Mini-PP ist deterministisch, domänentreu und prestige-monoton',
+      () {
+        final low = RivalService.rivalPowerProjection(
+          rival(id: 7, prestige: 0.7),
+          playerPp: 50,
+        );
+        final high = RivalService.rivalPowerProjection(
+          rival(id: 7, prestige: 1.6),
+          playerPp: 50,
+        );
+        expect(high, greaterThan(low));
+        expect(
+          low,
+          inInclusiveRange(
+            EconomyBalance.rivalPpMin,
+            EconomyBalance.rivalPpMax,
+          ),
+        );
+        // Gleiche Eingaben ⇒ gleiches Ergebnis (idempotent, V8).
+        expect(
+          RivalService.rivalPowerProjection(
+            rival(id: 7, prestige: 0.7),
+            playerPp: 50,
+          ),
+          low,
+        );
+      },
+    );
+
+    test('Stance folgt dem relativen PP-Abstand (Q9)', () {
+      expect(
+        RivalService.stanceForRival(rivalPp: 50, playerPp: 50),
+        RivalStance.ally,
+      );
+      expect(
+        RivalService.stanceForRival(rivalPp: 100, playerPp: 50),
+        RivalStance.neutral,
+      );
+      expect(
+        RivalService.stanceForRival(rivalPp: 100, playerPp: 20),
+        RivalStance.enemy,
+      );
+    });
+
+    test('Rangliste ist lückenlos und absteigend sortiert (Kap. 12)', () {
+      final r = restaurant(staff: [staff()]);
+      final standings = RivalService.standings(r, playerPp: 50);
+      final rivalCount = RivalService.rosterOf(r.district).length;
+      expect(standings.total, rivalCount + 1);
+      expect(standings.playerRank, inInclusiveRange(1, standings.total));
+      for (var i = 0; i < standings.entries.length; i++) {
+        expect(standings.entries[i].rank, i + 1);
+        if (i > 0) {
+          expect(
+            standings.entries[i].powerProjection,
+            lessThanOrEqualTo(standings.entries[i - 1].powerProjection),
+          );
+        }
+      }
+    });
+
+    test('Gefechtsteilnahme: 1–4 Rivalen, deterministisch, verteilt (Q8)', () {
+      final r = restaurant(staff: [staff()]);
+      final rosterIds =
+          RivalService.rosterOf(r.district).map((e) => e.id).toSet();
+      final count = RivalService.battleParticipantCount(r);
+      expect(
+        count,
+        inInclusiveRange(
+          EconomyBalance.rivalBattleMinParticipants,
+          EconomyBalance.rivalBattleMaxParticipants,
+        ),
+      );
+      expect(count, lessThanOrEqualTo(rosterIds.length));
+      final ids = RivalService.battleParticipantIds(r, playerPp: 50);
+      expect(ids.length, count);
+      for (final id in ids) {
+        expect(rosterIds.contains(id), isTrue);
+      }
+      expect(RivalService.battleParticipantIds(r, playerPp: 50), ids);
+      expect(
+        RivalService.distributeBattleSpawns(
+          participantCount: 4,
+          availableSpawns: 2,
+        ),
+        [0, 1, 0, 1],
+      );
+      expect(
+        RivalService.distributeBattleSpawns(
+          participantCount: 2,
+          availableSpawns: 0,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('Wochen-Tick liefert PP, Rang, Rivalenzahl und Einkommensfaktor', () {
+      final r = restaurant(staff: [staff()]);
+      final start = DateTime(2026, 1, 1);
+      r.lastSeenAt = start;
+      r.weekAnchorAt = start;
+      final result = GameClockService.catchUp(
+        r,
+        start.add(const Duration(days: 7)),
+      );
+      expect(
+        result.powerProjection,
+        inInclusiveRange(0, EconomyBalance.powerProjectionDomainMax),
+      );
+      expect(result.playerRank, greaterThanOrEqualTo(1));
+      expect(result.rivalCount, greaterThanOrEqualTo(1));
+      expect(result.incomeFactor, greaterThan(0.0));
     });
   });
 }

@@ -105,13 +105,18 @@ void main() {
           upgrades: upgrades ?? const {},
         );
 
-    /// Wochenertrag eines Restaurants (gleiche Eingangswerte wie im Catch-up).
-    int weeklyIncome(RestaurantData r) =>
-        PassiveIncomeService.passiveIncomePerWeek(
-          attractiveness: GameClockService.attractivenessOf(r),
-          satisfaction: GameClockService.satisfactionOf(r),
-          capacity: GameClockService.capacityOf(r),
-        );
+    /// Wochenertrag eines Restaurants (gleiche Eingangswerte wie im Catch-up),
+    /// inklusive des Kapitel-12-Einkommensfaktors aus der Power Projection.
+    int weeklyIncome(RestaurantData r) {
+      final gross = PassiveIncomeService.passiveIncomePerWeek(
+        attractiveness: GameClockService.attractivenessOf(r),
+        satisfaction: GameClockService.satisfactionOf(r),
+        capacity: GameClockService.capacityOf(r),
+      );
+      final factor =
+          GameClockService.powerProjectionState(r, now: base).incomeFactor;
+      return (gross * factor).round();
+    }
 
     test('kein voller Tag = No-op (Anker unverändert, Rest bleibt)', () {
       final r = restaurant(staff: [cook()]);

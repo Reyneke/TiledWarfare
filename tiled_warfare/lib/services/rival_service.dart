@@ -147,7 +147,8 @@ class RivalService {
           id: CRC32.compute('rival:$key:$index'),
           name: RandomNames(zone).fullName(),
           district: key,
-          personalityId: CRC32.compute('rival-personality:$key:$index') %
+          personalityId:
+              CRC32.compute('rival-personality:$key:$index') %
               EnneagramProfile.all.length,
           basePrestige: prestige,
         ),
@@ -589,4 +590,263 @@ class RivalService {
       counter: counter,
     );
   }
+
+  // ── Mini-PP-Modell, Rangliste, Stance & Gefechtsteilnahme (Kap. 12/13) ──
+
+  /// Signierter, deterministischer Hash-Wert in `[−amplitude, amplitude]`.
+  static double _signedHash(String key, int amplitude) {
+    if (amplitude <= 0) return 0.0;
+    final span = 2 * amplitude + 1;
+    return (CRC32.compute(key).abs() % span) - amplitude.toDouble();
+  }
+
+  /// Simulierte Power Projection eines Rivalen (Domäne 0–100, deterministisch).
+  ///
+  /// Grund-PP aus dem Stadtteil-Prestige, deterministische Streuung je Rivale und
+  /// ein Rubber-Band zur Spieler-PP (Q6: skalierendes Feld **ohne Zufall**,
+  /// idempotent über [RestaurantData] + Rivalen-ID, V8).
+  static double rivalPowerProjection(
+    RivalRestaurant rival, {
+    required int playerPp,
+  }) {
+    final base =
+        EconomyBalance.rivalPpPrestigeBase +
+        (rival.basePrestige - EconomyBalance.rivalPpPrestigeOrigin) *
+            EconomyBalance.rivalPpPrestigeScale;
+    final jitter = _signedHash(
+      'rival-pp:${rival.id}',
+      EconomyBalance.rivalPpJitterAmplitude,
+    );
+    final rubber = _signedHash(
+      'rival-rubber:${rival.id}',
+      EconomyBalance.rivalPpRubberBandAmplitude,
+    );
+    final w = EconomyBalance.rivalPpRubberBandWeight;
+    final value = (base + jitter) * (1 - w) + (playerPp + rubber) * w;
+    return value.clamp(EconomyBalance.rivalPpMin, EconomyBalance.rivalPpMax);
+  }
+
+  /// Relative Stance eines Rivalen zur Spieler-PP (Q9).
+  ///
+  /// Relativer Abstand `|ΔPP| / max(PP)`; die Schwellen sind die Zentren
+  /// „Verbündet“ (≤ 20 %), „Neutral“ (≈ 50 %) und „Feind“ (≥ 80 %), die
+  /// dazwischen per Mittelpunkt getrennt werden.
+  static RivalStance stanceForRival({
+    required int rivalPp,
+    required int playerPp,
+  }) {
+    final hi = rivalPp > playerPp ? rivalPp : playerPp;
+    final gap = hi == 0 ? 0.0 : (rivalPp - playerPp).abs() / hi;
+    final allyBoundary =
+        (EconomyBalance.stanceAllyGap + EconomyBalance.stanceNeutralGap) / 2;
+    final enemyBoundary =
+        (EconomyBalance.stanceNeutralGap + EconomyBalance.stanceEnemyGap) / 2;
+    if (gap < allyBoundary) return RivalStance.ally;
+    if (gap < enemyBoundary) return RivalStance.neutral;
+    return RivalStance.enemy;
+  }
+
+  /// Rangliste (Spieler **und** Rivalen) des Stadtteils, absteigend nach PP.
+  ///
+  /// Deterministisch: gleiche [playerPp] und [RestaurantData] ⇒ gleiche Liste
+  /// (Tie-Break: Spieler zuerst, dann kleinere ID).
+  static DistrictStandings standings(
+    RestaurantData restaurant, {
+    required int playerPp,
+  }) {
+    final roster = rosterOf(restaurant.district);
+    final pps = <int, double>{
+      for (final r in roster) r.id: rivalPowerProjection(r, playerPp: playerPp),
+    };
+    final rows = <RivalStanding>[
+      RivalStanding(
+        id: kPlayerStandingId,
+        name: restaurant.name,
+        powerProjection: playerPp.clamp(
+          0,
+          EconomyBalance.powerProjectionDomainMax,
+        ),
+        isPlayer: true,
+        stance: null,
+        insolvent: false,
+        rank: 0,
+      ),
+    ];
+    for (final r in roster) {
+      final rawPp = pps[r.id]!;
+      final rivalPp = rawPp.round();
+      rows.add(
+        RivalStanding(
+          id: r.id,
+          name: r.name,
+          powerProjection: rivalPp.clamp(
+            0,
+            EconomyBalance.powerProjectionDomainMax,
+          ),
+          isPlayer: false,
+          stance: stanceForRival(rivalPp: rivalPp, playerPp: playerPp),
+          insolvent: rawPp < EconomyBalance.rivalPpBankruptThreshold,
+          rank: 0,
+        ),
+      );
+    }
+    rows.sort((a, b) {
+      final byPp = b.powerProjection.compareTo(a.powerProjection);
+      if (byPp != 0) return byPp;
+      if (a.isPlayer != b.isPlayer) return a.isPlayer ? -1 : 1;
+      return a.id.compareTo(b.id);
+    });
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].rank = i + 1;
+    }
+    final rivalPps = pps.values.toList();
+    final average = rivalPps.isEmpty
+        ? 0.0
+        : rivalPps.reduce((a, b) => a + b) / rivalPps.length;
+    final playerRank = rows.firstWhere((e) => e.isPlayer).rank;
+    return DistrictStandings(
+      entries: rows,
+      playerRank: playerRank,
+      rivalAveragePp: average,
+    );
+  }
+
+  /// Anzahl der Gefechtsteilnehmer (1–4 bzw. gedeckelt durch die Roster-Größe).
+  static int battleParticipantCount(RestaurantData restaurant, {int? seed}) {
+    final roster = rosterOf(restaurant.district);
+    if (roster.isEmpty) return 0;
+    final base = seed ?? restaurant.id;
+    final span =
+        EconomyBalance.rivalBattleMaxParticipants -
+        EconomyBalance.rivalBattleMinParticipants +
+        1;
+    final raw =
+        (CRC32.compute('battle-participants:$base').abs() % span) +
+        EconomyBalance.rivalBattleMinParticipants;
+    return raw
+        .clamp(
+          EconomyBalance.rivalBattleMinParticipants,
+          EconomyBalance.rivalBattleMaxParticipants,
+        )
+        .clamp(0, roster.length);
+  }
+
+  /// Deterministische Gefechtsteilnehmer (Rivalen-IDs) des Stadtteils (Q8).
+  ///
+  /// Die stärksten Rivalen (PP absteigend, Tie-Break kleinere ID) nehmen teil.
+  static List<int> battleParticipantIds(
+    RestaurantData restaurant, {
+    required int playerPp,
+    int? seed,
+  }) {
+    final roster = rosterOf(restaurant.district);
+    if (roster.isEmpty) return const [];
+    final desired = battleParticipantCount(restaurant, seed: seed);
+    final pps = <int, double>{
+      for (final r in roster) r.id: rivalPowerProjection(r, playerPp: playerPp),
+    };
+    final ordered = [...roster]
+      ..sort((a, b) {
+        final byPp = pps[b.id]!.compareTo(pps[a.id]!);
+        if (byPp != 0) return byPp;
+        return a.id.compareTo(b.id);
+      });
+    return [for (final r in ordered.take(desired)) r.id];
+  }
+
+  /// Verteilt [participantCount] Teilnehmer auf [availableSpawns]
+  /// `spawn_player*`-Punkte (Frage 8 ⇒ „Verteilung“).
+  ///
+  /// Reicht die Kartenzahl nicht, werden die Teilnehmer **round-robin** auf die
+  /// vorhandenen Punkte verteilt (mehrere Teilnehmer dürfen sich einen Punkt
+  /// teilen); das Ergebnis ist der Punkt-Index je Teilnehmer.
+  static List<int> distributeBattleSpawns({
+    required int participantCount,
+    required int availableSpawns,
+  }) {
+    if (availableSpawns <= 0 || participantCount <= 0) return const [];
+    return [for (var i = 0; i < participantCount; i++) i % availableSpawns];
+  }
+}
+
+/// Sentinel-ID des Spielers in der Stadtteil-Rangliste.
+const int kPlayerStandingId = -1;
+
+/// Haltung eines Rivalen zum Spieler (Kapitel 13, Q9).
+enum RivalStance {
+  /// PP nahezu gleich (≤ 20 % Abstand) – Chance auf Verbündete hoch.
+  ally,
+
+  /// Mittlerer Abstand (≈ 50 %) – Chance auf Neutralität hoch.
+  neutral,
+
+  /// Großer Abstand (≥ 80 %) – Chance auf Feindschaft hoch.
+  enemy,
+}
+
+/// Ein Eintrag der Stadtteil-Rangliste (Spieler **oder** Rivale).
+///
+/// Rein abgeleiteter Zustand (Q3: keine Persistenz) – wird je Catch-up aus dem
+/// Restaurant-Snapshot und dem deterministischen Rivalen-Mini-Modell erzeugt.
+class RivalStanding {
+  /// Rivalen-ID oder [kPlayerStandingId] für den Spieler.
+  final int id;
+
+  /// Anzeigename.
+  final String name;
+
+  /// Power Projection (0–100).
+  final int powerProjection;
+
+  /// `true` für den Eintrag des Spielers.
+  final bool isPlayer;
+
+  /// Haltung zum Spieler (nur für Rivalen gesetzt, sonst `null`).
+  final RivalStance? stance;
+
+  /// `true`, wenn die Rivalen-PP unter [EconomyBalance.rivalPpBankruptThreshold]
+  /// liegt (Pleite-Kennzeichnung in der Rangliste).
+  final bool insolvent;
+
+  /// Platzierung (1-basiert), absteigend nach [powerProjection].
+  int rank;
+
+  RivalStanding({
+    required this.id,
+    required this.name,
+    required this.powerProjection,
+    required this.isPlayer,
+    required this.stance,
+    required this.insolvent,
+    required this.rank,
+  });
+
+  @override
+  String toString() =>
+      'RivalStanding(#$rank, $name, pp=$powerProjection, '
+      'player=$isPlayer, stance=$stance)';
+}
+
+/// Ergebnis der Stadtteil-Rangliste eines Catch-ups (Spieler + Rivalen).
+class DistrictStandings {
+  /// Alle Einträge, absteigend nach PP (Index 0 = Platz 1).
+  final List<RivalStanding> entries;
+
+  /// Platzierung des Spielers (1-basiert).
+  final int playerRank;
+
+  /// Durchschnittliche PP der Rivalen (für den Konkurrenzdruck, Q10).
+  final double rivalAveragePp;
+
+  const DistrictStandings({
+    required this.entries,
+    required this.playerRank,
+    required this.rivalAveragePp,
+  });
+
+  /// Anzahl aller Beteiligten (Spieler + Rivalen).
+  int get total => entries.length;
+
+  /// Der Eintrag des Spielers.
+  RivalStanding get player => entries.firstWhere((e) => e.isPlayer);
 }

@@ -750,6 +750,116 @@ class EconomyBalance {
   /// Namens-Zone der Rivalen (Manhattan-Nachbarschaften → US-Namensstamm).
   static Zone get rivalNameZone => Zone.us;
 
+  // ── Power Projection (Kapitel 12) ─────────────────────────────────────
+  //
+  // PP ist ein Crisp-Wert 0–100 aus einer eigenen Fuzzy-Inferenz (Treiber:
+  // Konkurrenzdichte, Bilanz, Teamqualität). Er wirkt **nicht** als vierter
+  // Eingang der Kunden-Fuzzy (§ 8, P2), sondern über einen Faktor auf das
+  // passive Einkommen (zweite Mini-Fuzzy-Stufe, Q2). Alle Peaks/Sätze hier (V7).
+
+  /// Obere Grenze der Domäne „Power Projection“ (0–100).
+  static const int powerProjectionDomainMax = 100;
+
+  /// Peaks/Repräsentanten der Ausgangsmenge PP (Domäne 0–100).
+  static const int powerProjectionLowRepresentative = 20;
+  static const int powerProjectionLowCeiling = 50;
+  static const int powerProjectionMidPeak = 50;
+  static const int powerProjectionHighFloor = 50;
+  static const int powerProjectionHighRepresentative = 80;
+
+  /// Neutralwert der Eingänge Konkurrenzdichte/Bilanz ohne Historie (P6).
+  static const double powerProjectionNeutralInput = 0.5;
+
+  // Peaks der Eingangsmenge „Konkurrenzdichte“ (Domäne 0–1). „Schwach“ = wenig
+  // Konkurrenz (Spieler weit oben), „Stark“ = harte Konkurrenz.
+  static const double ppCompetitionWeakPeak = 0.0;
+  static const double ppCompetitionWeakCeiling = 0.5;
+  static const double ppCompetitionMidFloor = 0.3;
+  static const double ppCompetitionMidPeak = 0.5;
+  static const double ppCompetitionMidCeiling = 0.7;
+  static const double ppCompetitionStrongFloor = 0.5;
+  static const double ppCompetitionStrongPeak = 0.7;
+  static const double ppCompetitionStrongRepresentative = 1.0;
+
+  // Peaks der Eingangsmenge „Gewinn-/Verlust-Bilanz“ (Domäne 0–1).
+  static const double ppRatioBadCeiling = 0.45;
+  static const double ppRatioBalancedFloor = 0.15;
+  static const double ppRatioBalancedPeak = 0.5;
+  static const double ppRatioBalancedCeiling = 0.85;
+  static const double ppRatioGoodFloor = 0.55;
+
+  // Teamqualität nutzt dieselben Peaks wie die §-8-Eingänge (Domäne 0–4).
+
+  /// Spanne des PP-Einkommensfaktors (lineare Ableitung aus PP 0–100 → 0.75–1.25).
+  static const double powerProjectionIncomeFactorMin = 0.75;
+  static const double powerProjectionIncomeFactorMax = 1.25;
+
+  /// Spanne des **Konkurrenzdruck-Faktors** (Gegenwirkung an der Spitze, Q10).
+  /// Zweite Mini-Fuzzy-Stufe (Q2): relativiert die Aggressivität des Feldes.
+  static const double competitionPressureFactorMin = 0.85;
+  static const double competitionPressureFactorMax = 1.15;
+
+  /// Untere/obere Grenze des aus dem Konkurrenzdruck abgeleiteten Faktors.
+  static const double competitionPressureLowPeak = -1.0;
+  static const double competitionPressureHighPeak = 1.0;
+
+  /// Halbbreite des „Gleichauf“-Bandes des Konkurrenzdrucks (relativer PP-Abstand).
+  static const double competitionPressureNeutralHalfWidth = 0.3;
+
+  // ── Rivalen-Mini-PP-Modell (Kapitel 13) ───────────────────────────────
+
+  /// Untere/obere Grenze der simulierten Rivalen-PP (Domäne 0–100).
+  static const double rivalPpMin = 5.0;
+  static const double rivalPpMax = 95.0;
+
+  /// Grund-PP aus dem Stadtteil-Prestige: `base = rivalPpPrestigeBase +
+  /// (prestige − rivalPpPrestigeOrigin) × rivalPpPrestigeScale`.
+  static const double rivalPpPrestigeBase = 30.0;
+  static const double rivalPpPrestigeOrigin = 0.70;
+  static const double rivalPpPrestigeScale = 40.0;
+
+  /// Deterministische Streuung der Rivalen-PP um die Grund-PP (je Rivale, ±).
+  static const int rivalPpJitterAmplitude = 10;
+
+  /// Band, in dem die Rivalen-PP der Spieler-PP folgt (Rubber-Band, ±).
+  static const int rivalPpRubberBandAmplitude = 20;
+
+  /// Gewicht des Rubber-Bands (0 = starr, 1 = voll am Spieler).
+  static const double rivalPpRubberBandWeight = 0.5;
+
+  /// Ab dieser PP gilt ein Rivale als **Pleite** (Ranglisten-Kennzeichnung).
+  static const double rivalPpBankruptThreshold = 15.0;
+
+  // ── Stance (Kapitel 13, Q9) ───────────────────────────────────────────
+  //
+  // Ableitung aus dem **relativen PP-Abstand** zwischen zwei Fraktionen:
+  // kleiner Abstand ⇒ Chance „Verbündet“ hoch, mittlerer ⇒ „Neutral“, großer
+  // ⇒ „Feind“. Die Schwellen sind die Abstände, ab denen die jeweilige Haltung
+  // dominiert.
+
+  /// Bis zu diesem relativen PP-Abstand überwiegt „Verbündet“ (≤ 20 %).
+  static const double stanceAllyGap = 0.20;
+
+  /// Bis zu diesem relativen PP-Abstand (ausschließlich) überwiegt „Neutral“.
+  static const double stanceNeutralGap = 0.50;
+
+  /// Ab diesem relativen PP-Abstand überwiegt „Feind“ (≥ 80 %).
+  static const double stanceEnemyGap = 0.80;
+
+  /// Stance-Verlust je Schadensereignis (Stufen) und Erholung je Runde (Stufen).
+  static const int stanceLossPerHit = 1;
+  static const int stanceRecoveryPerRound = 1;
+
+  // ── Gefechtsteilnahme (Kapitel 13, Q8) ────────────────────────────────
+
+  /// Untere/obere Grenze der teilnehmenden Rivalen je Gefecht (1–4).
+  static const int rivalBattleMinParticipants = 1;
+  static const int rivalBattleMaxParticipants = 4;
+
+  /// Deterministische Reduktion, falls die Karte weniger `spawn_player*`-Punkte
+  /// bietet als Teilnehmer gewünscht sind (Frage 8 ⇒ „Verteilung“).
+  static const int rivalBattlePlayerSpawnCount = 4;
+
   // ── Zinsen ────────────────────────────────────────────────────────────
 
   static const double negativeInterestRate = 0.10;
@@ -777,37 +887,79 @@ class EconomyBalance {
 
   /// Kampf-/Belohnungsprofil eines Spieler-Lehrlings (§ 2.3).
   static const UnitStats apprenticeStats = UnitStats(
-    attack: 40, defense: 20, movement: 6, damage: 2, range: 3, money: 100, xp: 25,
+    attack: 40,
+    defense: 20,
+    movement: 6,
+    damage: 2,
+    range: 3,
+    money: 100,
+    xp: 25,
   );
 
   /// Kampf-/Belohnungsprofil eines Line Cooks (§ 2.3).
   static const UnitStats lineCookStats = UnitStats(
-    attack: 80, defense: 40, movement: 3, damage: 2, range: 3, money: 1000, xp: 100,
+    attack: 80,
+    defense: 40,
+    movement: 3,
+    damage: 2,
+    range: 3,
+    money: 1000,
+    xp: 100,
   );
 
   /// Kampfprofil der höheren Karriere-Ränge (V10, Tuning-Vorschläge).
   static const UnitStats chefDePartieStats = UnitStats(
-    attack: 110, defense: 55, movement: 3, damage: 3, range: 3, money: 1000, xp: 150,
+    attack: 110,
+    defense: 55,
+    movement: 3,
+    damage: 3,
+    range: 3,
+    money: 1000,
+    xp: 150,
   );
   static const UnitStats sousChefStats = UnitStats(
-    attack: 140, defense: 70, movement: 3, damage: 4, range: 3, money: 1000, xp: 200,
+    attack: 140,
+    defense: 70,
+    movement: 3,
+    damage: 4,
+    range: 3,
+    money: 1000,
+    xp: 200,
   );
 
   /// Kampfprofil des **formellen** `Chef de cuisine`. Der aktive Rang kämpft
   /// nicht, sondern wirkt als Management-Rolle (Karrierepfade, V10).
   static const UnitStats headChefFormalStats = UnitStats(
-    attack: 160, defense: 80, movement: 2, damage: 5, range: 3, money: 1000, xp: 250,
+    attack: 160,
+    defense: 80,
+    movement: 2,
+    damage: 5,
+    range: 3,
+    money: 1000,
+    xp: 250,
   );
 
   /// Kampf-/Belohnungsprofil eines Dough Zombie.
   static const UnitStats doughZombieStats = UnitStats(
-    attack: 40, defense: 40, movement: 1, damage: 1, range: 0, money: 100, xp: 25,
+    attack: 40,
+    defense: 40,
+    movement: 1,
+    damage: 1,
+    range: 0,
+    money: 100,
+    xp: 25,
   );
 
   /// Kampf-/Belohnungsprofil des Dough Dumpster (Boss).
   static const UnitStats doughDumpsterStats = UnitStats(
-    attack: 0, defense: 0, movement: 0, damage: 0, range: 0,
-    money: 1000, xp: 1000, wound: 50,
+    attack: 0,
+    defense: 0,
+    movement: 0,
+    damage: 0,
+    range: 0,
+    money: 1000,
+    xp: 1000,
+    wound: 50,
   );
 
   /// Prozentualer Angriffs-/Verteidigungs-Modifikator je Treffer pro Runde (§ 7).
@@ -952,20 +1104,20 @@ class StationSpec {
 
   /// Prozent-Bonus (Selbstwirkung) für [stat].
   int selfBonusPercent(StationStat stat) => switch (stat) {
-        StationStat.attack => attackBonusPercent,
-        StationStat.defense => defenseBonusPercent,
-        StationStat.damage => damageBonusPercent,
-        StationStat.range => rangeBonusPercent,
-      };
+    StationStat.attack => attackBonusPercent,
+    StationStat.defense => defenseBonusPercent,
+    StationStat.damage => damageBonusPercent,
+    StationStat.range => rangeBonusPercent,
+  };
 
   /// Prozent-Bonus (Aura) für [stat].
   int auraBonusPercent(StationStat stat) => switch (stat) {
-        StationStat.attack => auraAttackPercent,
-        StationStat.defense => auraDefensePercent,
-        StationStat.damage => auraDamagePercent,
-        // Für die Reichweite gibt es (bewusst) keine Aura – Tuning-Entscheidung.
-        StationStat.range => 0,
-      };
+    StationStat.attack => auraAttackPercent,
+    StationStat.defense => auraDefensePercent,
+    StationStat.damage => auraDamagePercent,
+    // Für die Reichweite gibt es (bewusst) keine Aura – Tuning-Entscheidung.
+    StationStat.range => 0,
+  };
 }
 
 /// Balance-Definition einer Teamarzt-Qualität (V7/L2).

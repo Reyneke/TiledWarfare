@@ -13,6 +13,7 @@ import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
+import 'package:tiled_warfare/services/power_projection_service.dart';
 import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
@@ -99,6 +100,18 @@ class WeeklyTickResult {
   /// (V13) – bereits in [passiveIncome] enthalten und dort abgezogen.
   final int rivalSabotageLosses;
 
+  /// **Power Projection** des Restaurants am Ende dieses Ticks (0–100, Kap. 12).
+  final int powerProjection;
+
+  /// Platzierung des Restaurants im Stadtteil (1-basiert, Kap. 12).
+  final int playerRank;
+
+  /// Anzahl der Rivalen-Restaurants im Stadtteil (Kap. 13).
+  final int rivalCount;
+
+  /// Effektiver Einkommensfaktor aus PP × Konkurrenzdruck (Q10); `1.0` = neutral.
+  final double incomeFactor;
+
   /// Budget nach der Abrechnung.
   final int budgetAfter;
 
@@ -124,6 +137,10 @@ class WeeklyTickResult {
     this.penaltyCosts = 0,
     this.featureCosts = 0,
     this.rivalSabotageLosses = 0,
+    this.powerProjection = 0,
+    this.playerRank = 0,
+    this.rivalCount = 0,
+    this.incomeFactor = 1.0,
     required this.budgetAfter,
     required this.bankrupt,
     this.settlements = const [],
@@ -142,6 +159,25 @@ class WeeklyTickResult {
         budgetAfter: budget,
         bankrupt: EconomyService.isBankrupt(budget),
       );
+}
+
+/// Ergebnis der PP-/Ranking-Auswertung eines Catch-ups (Kapitel 12/13).
+class PowerProjectionState {
+  final int powerProjection;
+  final DistrictStandings standings;
+  final double incomeFactor;
+
+  const PowerProjectionState({
+    required this.powerProjection,
+    required this.standings,
+    required this.incomeFactor,
+  });
+
+  /// Anzahl der Rivalen im Stadtteil.
+  int get rivalCount => standings.total - 1;
+
+  /// Platzierung des Spielers (1-basiert).
+  int get playerRank => standings.playerRank;
 }
 
 /// Ergebnis eines Heilungs-Ticks (V3).
@@ -551,6 +587,13 @@ class GameClockService {
       incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100)
           .round();
     }
+    // Kapitel 12/13 (Frage 8/9): Treiber → PP → Ranking → Einkommensfaktor.
+    // Der effektive Faktor (PP × Konkurrenzdruck) skaliert das passive
+    // Wocheneinkommen (§ 8, P2) und wird über die ganze Lücke konstant gehalten.
+    final ppState = powerProjectionState(restaurant, now: now);
+    if (ppState.incomeFactor != 1.0) {
+      incomePerWeek = (incomePerWeek * ppState.incomeFactor).round();
+    }
     // Tagesertrag; der 7. Tag eines Blocks trägt den Rundungsrest.
     final incomePerDay = incomePerWeek ~/ 7;
     final incomeLastDayOfBlock = incomePerWeek - incomePerDay * 6;
@@ -800,6 +843,10 @@ class GameClockService {
       penaltyCosts: totalPenalty,
       featureCosts: totalFeature,
       rivalSabotageLosses: totalRivalLoss,
+      powerProjection: ppState.powerProjection,
+      playerRank: ppState.standings.playerRank,
+      rivalCount: ppState.standings.total - 1,
+      incomeFactor: ppState.incomeFactor,
       budgetAfter: budget,
       bankrupt: EconomyService.isBankrupt(budget),
       settlements: settlements,
@@ -1287,5 +1334,66 @@ class GameClockService {
       default:
         return 0.0;
     }
+  }
+
+  /// Teamqualität als PP-Eingang (Domäne `0–inputDomainMax`): kombinierter Index
+  /// aus Leistungsfähigkeit (`capacityOf`) und Zustand (`teamHealthOf`, P4).
+  /// Ohne Personal: 0.
+  static double _staffQualityOf(RestaurantData restaurant, {DateTime? now}) {
+    if (restaurant.staff.isEmpty) return 0.0;
+    final capacityRatio =
+        capacityOf(restaurant, now: now) / EconomyBalance.capacityMax;
+    final health = teamHealthOf(restaurant);
+    return (capacityRatio * health * EconomyBalance.inputDomainMax)
+        .clamp(0.0, EconomyBalance.inputDomainMax);
+  }
+
+  /// Kapitel 12/13: Treiber sammeln → PP → Ranking → Einkommensfaktor (Frage 8/9).
+  ///
+  /// Die Konkurrenzdichte stammt aus der Platzierung einer **vorläufigen** PP mit
+  /// neutraler Konkurrenz (persistenzfreie 1-Tick-Näherung, P1/Q3); so bleibt die
+  /// Auswertung sequentiell, deterministisch und idempotent.
+  ///
+  /// [now] steuert ausschließlich zeitabhängige Eingänge (z. B. aktive Buffs);
+  /// ohne Angabe wird der letzte bekannte Zeitpunkt des Restaurants genutzt.
+  /// Damit eignet sich die Methode auch für die UI-Anzeige (Platz X von Y) ohne
+  /// fälligen Tick.
+  static PowerProjectionState powerProjectionState(
+    RestaurantData restaurant, {
+    DateTime? now,
+  }) {
+    final at = now ?? restaurant.lastSeenAt ?? DateTime.now();
+    final ratio = PowerProjectionService.ratioFromResult(
+      restaurant.lastMatchResult,
+    );
+    final staffQuality = _staffQualityOf(restaurant, now: at);
+    final provisional = PowerProjectionService.powerProjection(
+      competition: EconomyBalance.powerProjectionNeutralInput,
+      ratio: ratio,
+      staffQuality: staffQuality,
+    );
+    final provisionalStandings = RivalService.standings(
+      restaurant,
+      playerPp: provisional,
+    );
+    final competition = PowerProjectionService.competitionFromRank(
+      provisionalStandings.playerRank,
+      provisionalStandings.total - 1,
+    );
+    final pp = PowerProjectionService.powerProjection(
+      competition: competition,
+      ratio: ratio,
+      staffQuality: staffQuality,
+    );
+    final standings = RivalService.standings(restaurant, playerPp: pp);
+    final factor = PowerProjectionService.effectiveIncomeFactor(
+      playerPp: pp,
+      rivalAveragePp: standings.rivalAveragePp,
+    );
+    return PowerProjectionState(
+      powerProjection: pp,
+      standings: standings,
+      incomeFactor: factor,
+    );
   }
 }
