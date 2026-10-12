@@ -320,9 +320,15 @@ class _ScreenStartState extends State<ScreenStart> {
     final l10n = AppLocalizations.of(context)!;
 
     // Guard: at most one restaurant per district and profile.
-    if (_findRestaurantByDistrict(_selectedProfile!, district) != null) {
+    final existing = _findRestaurantByDistrict(_selectedProfile!, district);
+    if (existing != null) {
+      // Kapitel 14 (Q4): Ein verlorener Stadtteil wird gesondert gemeldet – die
+      // Aufgelöst-Mechanik hält ihn faktisch bereits besetzt (Aufgelöst = belegt).
+      final message = existing.districtLost
+          ? l10n.districtLostMessage(district)
+          : l10n.districtOccupied(district);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.districtOccupied(district))),
+        SnackBar(content: Text(message)),
       );
       return;
     }

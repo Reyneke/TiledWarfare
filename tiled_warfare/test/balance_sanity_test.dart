@@ -10,6 +10,7 @@ import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/power_projection_service.dart';
@@ -934,6 +935,75 @@ void main() {
       expect(result.playerRank, greaterThanOrEqualTo(1));
       expect(result.rivalCount, greaterThanOrEqualTo(1));
       expect(result.incomeFactor, greaterThan(0.0));
+    });
+  });
+
+  group('FRT-Korruption: Balance ist konsistent (Kapitel 14)', () {
+    test('alle frt*-Werte sind zentral und nicht-negativ (V7)', () {
+      expect(EconomyBalance.frtCorruptionPerWeekPercent, greaterThan(0));
+      expect(EconomyBalance.frtCorruptionPerSabotagePercent, greaterThan(0));
+      expect(
+        EconomyBalance.frtCorruptionPerEliminationPercent,
+        greaterThan(0),
+      );
+      expect(EconomyBalance.frtCorruptionReducePerMonsterPercent, greaterThan(0));
+      expect(EconomyBalance.frtCorruptionReducePerVictoryPercent, greaterThan(0));
+      expect(EconomyBalance.frtMonsterStrengthScalePercent, greaterThan(0));
+      expect(EconomyBalance.frtCorruptionIncomePenaltyMaxPercent, greaterThan(0));
+      expect(
+        EconomyBalance.frtPowerProjectionPenaltyPercent,
+        inInclusiveRange(0, 100),
+      );
+      // Q6: Anteil der eingehenden Angriffe, die FRT-Fehl-Attributionen sind.
+      expect(EconomyBalance.frtSabotageSharePercent, inInclusiveRange(0, 100));
+    });
+
+    test('Floor < Ceiling und Verlustschwelle im gültigen Bereich', () {
+      expect(
+        EconomyBalance.frtCorruptionFloorPercent,
+        lessThan(EconomyBalance.frtCorruptionCeilingPercent),
+      );
+      expect(
+        EconomyBalance.frtCorruptionLostThresholdPercent,
+        inInclusiveRange(
+          EconomyBalance.frtCorruptionFloorPercent,
+          EconomyBalance.frtCorruptionCeilingPercent,
+        ),
+      );
+    });
+
+    test('Malus-Prozente bleiben im zulässigen Rahmen', () {
+      expect(FrtService.incomeMalusPercent(0), 0);
+      expect(
+        FrtService.incomeMalusPercent(EconomyBalance.frtCorruptionCeilingPercent),
+        closeTo(EconomyBalance.frtCorruptionIncomePenaltyMaxPercent, 1e-9),
+      );
+      expect(
+        FrtService.monsterStrengthFactor(0),
+        1.0,
+        reason: 'Ohne Korruption darf es keinen Monster-Bonus geben',
+      );
+      expect(
+        FrtService.monsterStrengthFactor(EconomyBalance.frtCorruptionCeilingPercent),
+        closeTo(
+          1 + EconomyBalance.frtMonsterStrengthScalePercent / 100,
+          1e-9,
+        ),
+      );
+    });
+
+    test('Korruption bleibt stets auf 0–100 geklemmt', () {
+      final max = EconomyBalance.frtCorruptionCeilingPercent;
+      var value = 0.0;
+      for (var week = 0; week < 500; week++) {
+        value = FrtService.afterBlock(value);
+        expect(value, greaterThanOrEqualTo(EconomyBalance.frtCorruptionFloorPercent));
+        expect(value, lessThanOrEqualTo(max));
+      }
+      expect(
+        FrtService.reduce(0, monstersKilled: 100, victory: true),
+        EconomyBalance.frtCorruptionFloorPercent,
+      );
     });
   });
 }

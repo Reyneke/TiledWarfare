@@ -68,6 +68,60 @@ class EconomyBalance {
   /// (`dailyTick * 7 == weeklyTick`).
   static const Duration dailyTick = Duration(days: 1);
 
+  /// Sicherheits-Cap des Wochen-Catch-ups (L6): Mehr als diese Zahl fälliger
+  /// Wochen wird nicht mehr abgerechnet – die restliche Abwesenheit wird ohne
+  /// Buchung übersprungen (ganze Wochen), damit ein versehentlich vorgestellter
+  /// Systemtimer den Spielstand nicht in den Bankrott rechnet.
+  ///
+  /// `52` = ein Echtzeitjahr (Vorschlag aus `8_Echtzeit-Zeitsystem.md` → L6).
+  static const int maxCatchUpWeeks = 52;
+
+  // ── FRT / Korruption (Kapitel 14, V7: keine magischen Zahlen) ─────────
+
+  /// Korruptions-Anstieg je **vollendetem** 7-Tage-Block (Wochen-Tick, V8).
+  static const double frtCorruptionPerWeekPercent = 1.0;
+
+  /// Zusätzlicher Anstieg je **unbemerkt gebliebener** FRT-Sabotage
+  /// (erfolgreiche Fehl-Attribution, Q8).
+  static const double frtCorruptionPerSabotagePercent = 2.0;
+
+  /// Zusätzlicher Anstieg je **eliminiertem** Rivalen (Q8).
+  static const double frtCorruptionPerEliminationPercent = 3.0;
+
+  /// Senkung je getötetem Monster (im Gefechtsergebnis gebucht).
+  static const double frtCorruptionReducePerMonsterPercent = 0.5;
+
+  /// Senkung je erfolgreichem Gefecht (Sieg).
+  static const double frtCorruptionReducePerVictoryPercent = 1.0;
+
+  /// Untere Grenze der Korruption (keine negativen Werte).
+  static const double frtCorruptionFloorPercent = 0.0;
+
+  /// Obere Grenze der Korruption (100 %).
+  static const double frtCorruptionCeilingPercent = 100.0;
+
+  /// Ab dieser Korruption gilt der Stadtteil als **verloren** (Hysterese: die
+  /// Regel löst sich erst wieder, wenn der Wert **echt unter** die Schwelle
+  /// fällt).
+  static const double frtCorruptionLostThresholdPercent = 100.0;
+
+  /// Zuschlag auf die Monsterstärke bei **100 %** Korruption (als Prozent).
+  /// `monsterFaktor = 1 + f × (frtMonsterStrengthScalePercent / 100)`.
+  static const double frtMonsterStrengthScalePercent = 100.0;
+
+  /// Maximaler Einkommens-Malus bei **100 %** Korruption (als Prozent).
+  /// `malusProzent = f × frtCorruptionIncomePenaltyMaxPercent`.
+  static const double frtCorruptionIncomePenaltyMaxPercent = 30.0;
+
+  /// Maximaler Abzug auf den Power-Projection-Einkommensfaktor bei **100 %**
+  /// Korruption (als Prozent).
+  static const double frtPowerProjectionPenaltyPercent = 30.0;
+
+  /// Anteil der eingehenden Rivalen-Sabotagen, die in Wahrheit **FRT-Angriffe**
+  /// mit Fehl-Attribution sind (Q6; deterministisch je Angriff/Block). Der
+  /// behauptete Rivale wird deterministisch aus dem Stadtteil-Roster gewählt.
+  static const int frtSabotageSharePercent = 30;
+
   // ── Einmalige Kosten ──────────────────────────────────────────────────
 
   static const int hireApprenticeCost = 100;
@@ -859,6 +913,14 @@ class EconomyBalance {
   /// Deterministische Reduktion, falls die Karte weniger `spawn_player*`-Punkte
   /// bietet als Teilnehmer gewünscht sind (Frage 8 ⇒ „Verteilung“).
   static const int rivalBattlePlayerSpawnCount = 4;
+
+  /// Truppenstärke je teilnehmendem Rivalen (Fairness, Q8): 1 bis
+  /// [rivalBattleMaxTeamSize], abgeleitet aus der simulierten Rivalen-PP –
+  /// Rivalen bringen nur Truppen mit, die ihr Zustand hergibt.
+  static const int rivalBattleMaxTeamSize = 4;
+
+  /// PP-Spanne je zusätzlicher Einheit über der Grundstärke (1 Einheit).
+  static const double rivalBattleTeamSizePpStep = 25.0;
 
   // ── Zinsen ────────────────────────────────────────────────────────────
 

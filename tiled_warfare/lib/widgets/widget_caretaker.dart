@@ -56,9 +56,10 @@ class WidgetCaretaker extends StatefulWidget {
   final List<({String name, double x, double y})> spawnPoints;
 
   /// Callback, der aufgerufen wird, wenn das Spiel vorbei ist (Sieg oder Niederlage).
-  /// Der Boolean ist `true` bei Sieg, `false` bei Niederlage; der Integer ist
-  /// die Beute (`moneyValue`-Summe) der besiegten Gegner (§ 2.2).
-  final void Function(bool playerWon, int loot)? onGameOver;
+  /// Der Boolean ist `true` bei Sieg, `false` bei Niederlage; die erste Zahl ist
+  /// die Beute (`moneyValue`-Summe) der besiegten Gegner (§ 2.2), die zweite die
+  /// Anzahl der im Gefecht getöteten Monster (Kapitel 14: FRT-Korruptions-Senkung).
+  final void Function(bool playerWon, int loot, int monstersKilled)? onGameOver;
 
   /// Menge blockierter Hex-Felder aus dem Kollisions-Layer der TMX-Karte.
   ///
@@ -81,6 +82,11 @@ class WidgetCaretaker extends StatefulWidget {
   /// für gebiets-basierte Spielmechaniken verwendet werden.
   final List<Sector> sectors;
 
+  /// Kapitel 14 (FRT, Q3): Monsterstärke-Faktor des Stadtteils zum
+  /// Gefechtsbeginn. Wird auf [ObjectHost.monsterStrengthFactor] gesetzt und
+  /// skaliert alle im Gefecht erschaffenen Monster; `1.0` = unverändert.
+  final double monsterStrengthFactor;
+
   const WidgetCaretaker({
     super.key,
     required this.hexGrid,
@@ -92,6 +98,7 @@ class WidgetCaretaker extends StatefulWidget {
     this.fogOfWarService,
     this.terrainMap,
     this.sectors = const [],
+    this.monsterStrengthFactor = 1.0,
   });
 
   @override
@@ -156,6 +163,11 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   /// Aufsummierte Beute (`moneyValue`) bereits entfernter besiegen Gegner (§ 2.2).
   int _lootCollected = 0;
 
+  /// Kapitel 14: Anzahl der im Gefecht getöteten Monster (Dough Zombies und
+  /// Dough Dumpster). Wird an das Gefechtsergebnis gemeldet und senkt dort die
+  /// Stadtteil-Korruption.
+  int _monstersKilled = 0;
+
   /// Ob das Spiel beendet ist (eine Seite hat verloren).
   bool _isGameOver = false;
 
@@ -189,6 +201,9 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
   @override
   void initState() {
     super.initState();
+    // Kapitel 14 (FRT): Monsterstärke-Faktor vor dem Aufbau des Gefechts
+    // übernehmen, damit Start-Dumpster/-Zombies bereits korrekt skalieren.
+    _host.monsterStrengthFactor = widget.monsterStrengthFactor;
     _initializeGameObjects();
     // Auf Änderungen der Transformation (Zoom/Scroll) lauschen,
     // um die Token-Positionen zu aktualisieren
@@ -369,7 +384,8 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
         .toList();
 
     // Gegnerische Dough Dumpster am Monster-Spawnpunkt platzieren
-    final dumpster = ObjectDoughDumpster();
+    final dumpster =
+        ObjectDoughDumpster(strengthFactor: _host.monsterStrengthFactor);
     if (monsterSpawns.isNotEmpty) {
       dumpster.position = Offset(monsterSpawns[0].x, monsterSpawns[0].y);
     } else {
@@ -1389,13 +1405,20 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // Das Rendering filtert sie bereits über _buildAllTokens().
 
     // Beute der besiegten Gegner erfassen, bevor sie entfernt werden (§ 2.2).
+    // Kapitel 14: Dabei zugleich die getöteten Monster zählen (Korruptions-Senkung).
     for (final dumpster in _host.doughDumpsterList) {
       for (final zombie in dumpster.zombieList) {
-        if (zombie.woundValue <= 0) _lootCollected += zombie.moneyValue;
+        if (zombie.woundValue <= 0) {
+          _lootCollected += zombie.moneyValue;
+          _monstersKilled++;
+        }
       }
     }
     for (final dumpster in _host.doughDumpsterList) {
-      if (dumpster.woundValue <= 0) _lootCollected += dumpster.moneyValue;
+      if (dumpster.woundValue <= 0) {
+        _lootCollected += dumpster.moneyValue;
+        _monstersKilled++;
+      }
     }
 
     // Tote Zombies aus allen Dumpstern entfernen
@@ -1434,13 +1457,20 @@ class _WidgetCaretakerState extends State<WidgetCaretaker> with TickerProviderSt
     // auslesen kann.
     // Noch nicht entfernte, bereits besiegte Gegner dieser Runde mitzählen.
     var loot = _lootCollected;
+    var kills = _monstersKilled;
     for (final dumpster in _host.doughDumpsterList) {
-      if (dumpster.woundValue <= 0) loot += dumpster.moneyValue;
+      if (dumpster.woundValue <= 0) {
+        loot += dumpster.moneyValue;
+        kills++;
+      }
       for (final zombie in dumpster.zombieList) {
-        if (zombie.woundValue <= 0) loot += zombie.moneyValue;
+        if (zombie.woundValue <= 0) {
+          loot += zombie.moneyValue;
+          kills++;
+        }
       }
     }
-    widget.onGameOver?.call(hasAliveUnits, loot);
+    widget.onGameOver?.call(hasAliveUnits, loot, kills);
   }
 
   /// Prüft, ob alle Spieler-Tokens ihre Aktionen und Bewegung verbraucht haben.

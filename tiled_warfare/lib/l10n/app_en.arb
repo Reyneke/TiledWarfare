@@ -123,6 +123,16 @@
     "description": "Error when founding in an already occupied district",
     "placeholders": { "district": { "type": "String" } }
   },
+  "districtLostMessage": "The district {district} is lost (corruption). Until it is liberated, no restaurant can be founded there.",
+  "@districtLostMessage": {
+    "description": "Error when founding in a corrupted (lost) district",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "corruptionLabel": "Corruption: {percent} %",
+  "@corruptionLabel": {
+    "description": "Label showing the FRT corruption of the district",
+    "placeholders": { "percent": { "type": "int" } }
+  },
   "noOtherSavegames": "No other save games available.",
   "@noOtherSavegames": {
     "description": "Snackbar when there are no other savegames to switch to"
@@ -269,6 +279,10 @@
   "hire": "Hire",
   "@hire": {
     "description": "Button to hire personnel"
+  },
+  "roleAlreadyHired": "Already hired",
+  "@roleAlreadyHired": {
+    "description": "State of a support/management role that is already employed (single employment)"
   },
 
   "restaurant": "Restaurant",
@@ -1118,6 +1132,52 @@
   "@catchUpRivalSabotageLoss": {
     "description": "Undetected rival sabotage skims block income (V13, chapter 13)",
     "placeholders": { "loss": { "type": "int" } }
+  },
+  "rankingBadge": "Rank {rank} of {total} in {district}",
+  "@rankingBadge": {
+    "description": "Restaurant's placement in its district (chapter 12)",
+    "placeholders": {
+      "rank": { "type": "int" },
+      "total": { "type": "int" },
+      "district": { "type": "String" }
+    }
+  },
+  "weekReportTitle": "Weekly report",
+  "@weekReportTitle": {
+    "description": "Title of the weekly report with the ranking (chapter 12/13)"
+  },
+  "rankingSectionTitle": "District ranking",
+  "@rankingSectionTitle": {
+    "description": "Heading of the district ranking in the weekly report"
+  },
+  "rankingYou": "You",
+  "@rankingYou": { "description": "Marker for the player in the ranking" },
+  "stanceAlly": "Ally",
+  "@stanceAlly": { "description": "Rival stance: ally (chapter 13, Q9)" },
+  "stanceNeutral": "Neutral",
+  "@stanceNeutral": { "description": "Rival stance: neutral (chapter 13, Q9)" },
+  "stanceEnemy": "Enemy",
+  "@stanceEnemy": { "description": "Rival stance: enemy (chapter 13, Q9)" },
+  "rivalInsolvent": "Bankrupt",
+  "@rivalInsolvent": {
+    "description": "Marker for a bankrupt rival in the ranking"
+  },
+  "battleRivalsTitle": "Rivals in this battle",
+  "@battleRivalsTitle": {
+    "description": "Heading of the rival participant list in the map tab (chapter 13, Q8)"
+  },
+  "battleRivalsNone": "No rivals in the district.",
+  "@battleRivalsNone": {
+    "description": "Hint when no rivals join the battle"
+  },
+  "battleRivalRow": "{name} — {stance}, {count, plural, =1{1 unit} other{{count} units}}",
+  "@battleRivalRow": {
+    "description": "Row of a rival battle participant",
+    "placeholders": {
+      "name": { "type": "String" },
+      "stance": { "type": "String" },
+      "count": { "type": "int" }
+    }
   },
   "healingComplete": "Fully fit for duty",
   "@healingComplete": { "description": "Character is fully healed (V3)" },

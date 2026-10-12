@@ -24,9 +24,12 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 9 = zweite Rollen-Erweiterung (V12): `StaffEntryData.featureTeamIds`
 /// (Mannschaft des Features „Alle Räder …“, additiv/tolerant – `null` bei
 /// Alt-Beständen).
+/// Version 10 = FRT/Korruption (Kapitel 14): `RestaurantData.corruptionPercent`,
+/// `districtLost` und `districtLostAt` (additiv/tolerant – fehlende Felder
+/// ergeben `0`/`false`/`null`).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 9;
+const int kProfileSchemaVersion = 10;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -551,6 +554,24 @@ class RestaurantData {
   /// Prestige-Malus des Rivalen im Roster).
   DateTime? sabotageAppliedUntil;
 
+  /// Korruption des Stadtteils in Prozent (Skala 0–100, Kapitel 14).
+  ///
+  /// Wächst langsam mit jedem vollendeten Wochen-Block (V8) und durch
+  /// FRT-Sabotagen/Eliminierungen; sinkt durch gewonnene Gefechte. Intern als
+  /// `double` geführt (deterministisch, keine Rundungsdrift im Catch-up);
+  /// gerundet nur an der Anzeige.
+  double corruptionPercent;
+
+  /// `true`, wenn der Stadtteil durch Korruption **verloren** ist (Q4).
+  ///
+  /// Bestehende Restaurants werden entschädigungslos geschlossen; neue können
+  /// dort nicht gegründet werden. Der Zustand bleibt **über** eine
+  /// Restaurant-Auflösung hinweg erhalten (persistiert).
+  bool districtLost;
+
+  /// Zeitpunkt, an dem der Stadtteil verloren ging (optional, für Anzeige).
+  DateTime? districtLostAt;
+
   RestaurantData({
     this.id = -1,
     required this.name,
@@ -571,6 +592,9 @@ class RestaurantData {
     Map<UpgradeType, int>? upgrades,
     this.sabotageTargetId,
     this.sabotageAppliedUntil,
+    this.corruptionPercent = 0,
+    this.districtLost = false,
+    this.districtLostAt,
   }) : staff = staff ?? [],
        medics = medics ?? [],
        supportStaff = supportStaff ?? [],
@@ -622,6 +646,10 @@ class RestaurantData {
     if (sabotageTargetId != null) 'sabotageTargetId': sabotageTargetId,
     if (sabotageAppliedUntil != null)
       'sabotageAppliedUntil': sabotageAppliedUntil!.toIso8601String(),
+    'corruptionPercent': corruptionPercent,
+    'districtLost': districtLost,
+    if (districtLostAt != null)
+      'districtLostAt': districtLostAt!.toIso8601String(),
   };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -647,7 +675,16 @@ class RestaurantData {
     upgrades: _upgradesFromJson(json['upgrades']),
     sabotageTargetId: readInt(json['sabotageTargetId']),
     sabotageAppliedUntil: readDateTime(json['sabotageAppliedUntil']),
+    corruptionPercent: _clampCorruption(readDouble(json['corruptionPercent'])),
+    districtLost: readBool(json['districtLost']) ?? false,
+    districtLostAt: readDateTime(json['districtLostAt']),
   );
+
+  /// Klemmt einen (tolerant gelesenen) Korruptionswert auf 0–100 (V6).
+  static double _clampCorruption(double? value) {
+    if (value == null) return 0;
+    return value.clamp(0.0, 100.0);
+  }
 
   /// Liest die Erweiterungs-Stufen aus dem JSON (unbekannte Typen werden
   /// ignoriert – abwärtskompatibel).
@@ -695,6 +732,9 @@ class RestaurantData {
         upgrades: upgrades,
         sabotageTargetId: sabotageTargetId,
         sabotageAppliedUntil: sabotageAppliedUntil,
+        corruptionPercent: corruptionPercent,
+        districtLost: districtLost,
+        districtLostAt: districtLostAt,
       );
 
   @override

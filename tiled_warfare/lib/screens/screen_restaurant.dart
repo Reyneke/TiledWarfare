@@ -14,8 +14,10 @@ import 'package:tiled_warfare/screens/screen_main.dart';
 import 'package:tiled_warfare/services/map_registry.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
@@ -171,19 +173,17 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
   }
 
   /// Zeigt die fälligen Buchungen eines Catch-up als SnackBar (L2/§ 6).
+  ///
+  /// Volle abgerechnete Blöcke öffnen den **Wochenbericht** als Dialog (inkl.
+  /// Stadtteil-Rangliste, Kapitel 12/13); reine Resttage bleiben eine SnackBar.
   void _showCatchUpResult(WeeklyTickResult result) {
     if (result.weeks <= 0 && result.leftoverDays <= 0) return;
     final l10n = AppLocalizations.of(context)!;
-    final parts = <String>[];
     if (result.weeks > 0) {
-      parts.add(l10n.catchUpSummary(
-        result.weeks,
-        result.passiveIncome - result.leftoverIncome,
-        result.medicCosts,
-        result.upgradeUpkeep,
-        result.negativeInterest,
-      ));
+      _showWeekReport(result);
+      return;
     }
+    final parts = <String>[];
     if (result.leftoverDays > 0 && result.leftoverIncome > 0) {
       parts.add(
           l10n.catchUpLeftover(result.leftoverDays, result.leftoverIncome));
@@ -198,6 +198,94 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(parts.join('\n'))));
   }
+
+  /// Wochenbericht (Kapitel 12/13): Buchungen des Blocks plus Rangliste.
+  ///
+  /// Die 4.1/4-Entscheidung „Platzierung als Liste im Wochenbericht, ‚Platz X
+  /// von Y‘ im Restaurant-Screen“ wird hier umgesetzt.
+  Future<void> _showWeekReport(WeeklyTickResult result) async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final standings = result.standings;
+    final lines = <String>[
+      l10n.catchUpSummary(
+        result.weeks,
+        result.passiveIncome - result.leftoverIncome,
+        result.medicCosts,
+        result.upgradeUpkeep,
+        result.negativeInterest,
+      ),
+    ];
+    if (result.leftoverDays > 0 && result.leftoverIncome > 0) {
+      lines.add(
+          l10n.catchUpLeftover(result.leftoverDays, result.leftoverIncome));
+    }
+    if (result.rivalSabotageLosses > 0) {
+      lines.add(l10n.catchUpRivalSabotageLoss(result.rivalSabotageLosses));
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          title: Text(l10n.weekReportTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(lines.join('\n')),
+                if (standings != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.rankingSectionTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  for (final row in standings.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        _standingLabel(l10n, row),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: row.isPlayer ? FontWeight.bold : null,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.close),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Eine Zeile der Rangliste: „1. Name — PP 63 (Verbündet) · Sie“.
+  String _standingLabel(AppLocalizations l10n, RivalStanding row) {
+    final buffer = StringBuffer(
+      '${row.rank}. ${row.name} — PP ${row.powerProjection}',
+    );
+    final stance = row.stance;
+    if (stance != null) buffer.write(' (${_stanceLabel(l10n, stance)})');
+    if (row.insolvent) buffer.write(' · ${l10n.rivalInsolvent}');
+    if (row.isPlayer) buffer.write(' · ${l10n.rankingYou}');
+    return buffer.toString();
+  }
+
+  /// l10n-Label der Rivalen-Stance (Kapitel 13, Q9).
+  String _stanceLabel(AppLocalizations l10n, RivalStance stance) =>
+      switch (stance) {
+        RivalStance.ally => l10n.stanceAlly,
+        RivalStance.neutral => l10n.stanceNeutral,
+        RivalStance.enemy => l10n.stanceEnemy,
+      };
 
   void _onThemeChanged() {
     setState(() {});
@@ -381,7 +469,13 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ScreenMain(mapPath: selectedEntry.tmxPath),
+        builder: (_) => ScreenMain(
+          mapPath: selectedEntry.tmxPath,
+          // Kapitel 14 (FRT): Die Monsterstärke folgt der Korruption des
+          // Stadtteils zum Gefechtsbeginn (Q3).
+          monsterStrengthFactor:
+              FrtService.monsterStrengthFactor(_profile.corruptionPercent),
+        ),
       ),
     );
     setState(() {});
@@ -1307,6 +1401,36 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     );
   }
 
+  /// „Platz X von Y in `<Stadtteil>`“ (Kapitel 12, 4.1/4).
+  ///
+  /// Wird ohne fälligen Tick aus dem aktuellen Snapshot abgeleitet (idempotent,
+  /// `PowerProjectionState`) und nur angezeigt, wenn ein Stadtteil bekannt ist.
+  Widget _buildRankingBadge(ThemeData theme, AppLocalizations l10n) {
+    final district = _profile.activeDistrict;
+    if (district == null || district.isEmpty) return const SizedBox.shrink();
+    final pp = GameClockService.powerProjectionState(
+      _profile.activeRestaurantSnapshot(),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(Icons.emoji_events,
+              size: 16, color: theme.colorScheme.secondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              l10n.rankingBadge(pp.playerRank, pp.standings.total, district),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1433,8 +1557,24 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                   ),
                 ),
               ),
+            // Kapitel 14 (FRT): Korruptionsanzeige des Stadtteils. Bei einem
+            // verlorenen Stadtteil als Warnung eingefärbt.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                l10n.corruptionLabel(_profile.corruptionPercent.round()),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _profile.districtLost
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight:
+                      _profile.districtLost ? FontWeight.bold : null,
+                ),
+              ),
+            ),
             _buildEconomyInfo(theme),
             _buildCuisineRow(theme, l10n),
+            _buildRankingBadge(theme, l10n),
               ],
             ),
           ),
@@ -1573,6 +1713,54 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     );
   }
 
+  /// Karte „Rivalen in diesem Gefecht" (Kapitel 13, Q8/Q9).
+  ///
+  /// Zeigt deterministisch, welche Rivalen mit welcher Stance und Truppenstärke
+  /// antreten (identisch zur späteren Gefechtsverteilung, V8/P4).
+  Widget _buildBattleRivalsCard(ThemeData theme, AppLocalizations l10n) {
+    final district = _profile.activeDistrict;
+    if (district == null || district.isEmpty) return const SizedBox.shrink();
+    final snapshot = _profile.activeRestaurantSnapshot();
+    final pp = GameClockService.powerProjectionState(snapshot);
+    final participants = RivalService.battleParticipants(
+      snapshot,
+      playerPp: pp.powerProjection,
+      availableSpawns: EconomyBalance.rivalBattlePlayerSpawnCount,
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.battleRivalsTitle, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (participants.isEmpty)
+              Text(
+                l10n.battleRivalsNone,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              for (final p in participants)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    l10n.battleRivalRow(
+                      p.name,
+                      _stanceLabel(l10n, p.stance),
+                      p.teamSize,
+                    ),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Reiter „Karte & Gefecht": Karten-Auswahl + Gefechtsbutton.
   Widget _buildBattleTab(ThemeData theme, AppLocalizations l10n) {
     return SingleChildScrollView(
@@ -1626,6 +1814,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                   return _buildMapTile(index, _mapEntries[index], theme);
                 },
               ),
+            const SizedBox(height: 8),
+            _buildBattleRivalsCard(theme, l10n),
             const SizedBox(height: 8),
             FilledButton.tonalIcon(
               icon: const Icon(Icons.play_arrow),

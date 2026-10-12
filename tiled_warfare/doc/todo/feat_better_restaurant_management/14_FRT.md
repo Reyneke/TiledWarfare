@@ -1,9 +1,17 @@
 # Die FRT (Kapitel 14)
 
-> **Status:** Entwurf. Die Entscheidungen aus den „Offenen Fragen“ sind eingearbeitet
-> (Q1, Q3–Q7; Q2/Q8 als Tuning bzw. Detail offen). Dieses Dokument spezifiziert die **FRT**
-> als übergeordnete Gegner-Fraktion („der wahre Gegner des Spiels“): Zusammensetzung, das
-> **Korruptionsmeter** und ihre **Sabotagen**.
+> **Status:** Kern **und Laufzeit-Verdrahtung umgesetzt** (Paket B + C). `FrtService`, die
+> `frt*`-Parameter in `EconomyBalance`, die `RestaurantData`-Felder (`corruptionPercent` /
+> `districtLost` / `districtLostAt`, Schema 10), die Integration im Wochen-Tick
+> (`GameClockService`: Anstieg, Einkommens-Malus, PP-Malus Q8, Verlustregel,
+> `WeeklyTickResult`) **sowie die Laufzeit-Pfade** (Monster-Skalierung in `object_host.dart`,
+> Senkung durch Gefechte über `ScreenBattleResult`/`WidgetCaretaker`, FRT-Fehl-Attribution in
+> `rival_service.dart`, Gründungs-Sperrhinweis + Korruptionsanzeige in `screen_start.dart`/
+> `screen_restaurant.dart`) sind implementiert und getestet. Die Entscheidungen aus den
+> „Offenen Fragen“ sind eingearbeitet (Q1, Q3–Q8; Q2-Werte als Tuning in `EconomyBalance`
+> verankert). Dieses Dokument spezifiziert die **FRT** als übergeordnete Gegner-Fraktion
+> („der wahre Gegner des Spiels“): Zusammensetzung, das **Korruptionsmeter** und ihre
+> **Sabotagen**.
 > Es baut auf `13_Gegner_Restaurants.md` (V13-Sabotagemodul, Sicherheitschef),
 > `8_Echtzeit-Zeitsystem.md` (V8, Wochen-Tick/Catch-up) und `2-Wirtschaftsschleife.md`
 > (§ 8, passives Einkommen) auf.
@@ -152,73 +160,91 @@ Technisch ist das eine **Erweiterung von `RivalService`** (Q6):
 
 ## Offene Fragen (verbleibend)
 
-1. **Werte-Tuning (Q2):** Konkrete Beträge für `frtCorruptionPerWeekPercent` (Vorschlag `1`),
-   `frtCorruptionReducePerMonsterPercent`, `frtCorruptionReducePerVictoryPercent`,
-   `frtMonsterStrengthScalePercent`, `frtCorruptionIncomePenaltyMaxPercent`,
-   `frtPowerProjectionPenaltyPercent` sowie die Sabotage-/Eliminierungs-Anstiege – alle
-   zentral in `EconomyBalance` (V7: keine magischen Zahlen).
-2. **Erholung verlorener Stadtteile (Q4b):** Ohne eigenes Restaurant gibt es im verlorenen
+> **Entschieden und umgesetzt:** **Q2** (Werte-Tuning) – die konkreten Beträge stehen final in
+> `EconomyBalance` (`frtCorruptionPerWeekPercent = 1`, `frtCorruptionPerSabotagePercent = 2`,
+> `frtCorruptionPerEliminationPercent = 3`, `frtCorruptionReducePerMonsterPercent = 0.5`,
+> `frtCorruptionReducePerVictoryPercent = 1`, `frtMonsterStrengthScalePercent = 100`,
+> `frtCorruptionIncomePenaltyMaxPercent = 30`, `frtPowerProjectionPenaltyPercent = 30`,
+> `frtSabotageSharePercent = 30`). **Q8** (PP-Formel) – der Korruptions-Abzug auf den
+> PP-Einkommensfaktor läuft im Wochen-Tick **vor** der Einkommensbuchung
+> (`FrtService.powerProjectionIncomeFactor`).
+
+1. **Erholung verlorener Stadtteile (Q4b):** Ohne eigenes Restaurant gibt es im verlorenen
    Stadtteil keine eigenen Gefechte ⇒ keine Senkungs-Quelle. **Vorschlag:** „Befreiungs-Gefechte“
    in verlorenen Stadtteilen erlauben (Monster spawnen dort weiter mit maximaler Skalierung);
    alternativ langsamer natürlicher Verfall.
-3. **Monster-Skalierung im Detail (Q3b):** Skalieren auch Bewegungs- und LP-/Wound-Werte
-   (`UnitStats`) oder nur Angriff/Verteidigung/Schaden? Rundung je Stat
-   (`(wert × faktor).round()`) deterministisch festzuhalten.
-4. **Power-Projection-Formel (Q8):** Exakte Formel und Berechnungsort des Korruptions-Abzugs
-   am PP-Einkommensfaktor (Vorschlag: im Wochen-Tick, vor der Einkommensbuchung – analog
-   `12_Power_Projection.md` → „Effekte“).
-5. **Fehl-Attribution im Detail (Q6b):** Deterministische Wahl der „behaupteten“ Rivalen-ID,
-   Entdeckungswahrscheinlichkeit; ob FRT-Sabotage zusätzlich die V13-Einkommens-Abschöpfung
-   auslöst oder vollständig in Korruption mündet.
-6. **Stance/Angriffsziel (Q7b):** Wie genau Rivalen eine **ranglose** Fraktion angreifen
+2. **Monster-Skalierung im Detail (Q3b):** **Entschieden** – es skalieren **alle** `UnitStats`
+   (Angriff/Verteidigung/Schaden/**LP/Wound/Movement**/Range/Money/XP), je Stat deterministisch
+   gerundet (`(wert × faktor).round()`). Umgesetzt in `ObjectDoughZombie`/`ObjectDoughDumpster`.
+3. **Fehl-Attribution im Detail (Q6b):** Deterministische Wahl der „behaupteten“ Rivalen-ID ist
+   umgesetzt (`attributedRivalId`, Roster-Index per CRC32) – **offen** bleiben die Entdeckungs-
+   wahrscheinlichkeit über Sicherheitstechnik (`11b`, `security`) sowie die Frage, ob eine FRT-Sabotage
+   zusätzlich die V13-Einkommens-Abschöpfung auslöst (aktuell: ja, sie zählt wie jede unentdeckte
+   Rivalen-Sabotage) oder vollständig in Korruption mündet.
+4. **Stance/Angriffsziel (Q7b):** Wie genau Rivalen eine **ranglose** Fraktion angreifen
    (Gefechts-Teilnahme gegen FRT-Monster, Gegensabotage) und welche Stance-Schwellen und
-   -Parameter dazu in `EconomyBalance` kommen.
+   -Parameter dazu in `EconomyBalance` kommen. Die Fehl-Attribution als solche ist verdrahtet;
+   die persistente „Fehde“ (Stance-Verschiebung) braucht noch ein Zustandsfeld (C2).
 
 ## Betroffene Dateien
 
-| Datei | Änderung |
-|---|---|
-| `lib/services/frt_service.dart` | **Neu:** reine, deterministisch testbare Korruptions-Simulation (analog `RivalService`): `advanceCorruption`, `reduceCorruption`, `afterBlock`, `isDistrictLost`, `monsterStrengthFactor`, `incomeMalusPercent`. |
-| `lib/models/profile_data.dart` | `RestaurantData.corruptionPercent`, `districtLost`, `districtLostAt`; tolerante Serialisierung; `kProfileSchemaVersion` 9 → 10. |
-| `lib/services/economy_balance.dart` | Alle `frt*`-Parameter (V7: keine magischen Zahlen). |
-| `lib/services/game_clock_service.dart` | Korruptions-Update im Wochen-Tick; Einkommens-Malus vor der Tages-Aufteilung; `WeeklyTickResult.corruptionByDistrict` / `lostDistricts`. |
-| `lib/objects/object_host.dart` | Monster-Skalierung je Stadtteil-Korruption zum Spawn (deterministischer Faktor, `.round()`). |
-| `lib/services/rival_service.dart` | FRT-Fehl-Attribution in der V13-Auflösung (dritte Partei: `trueAttacker` / `attributedToRivalId`). |
-| `lib/l10n/app_de.arb`, `app_en.arb` | Strings für Korruptionsanzeige, „Stadtteil verloren“, Catch-up-Hinweise (optional, analog Kapitel 13). |
+| Datei | Änderung | Status |
+|---|---|---|
+| `lib/services/frt_service.dart` | **Neu:** reine, deterministisch testbare Korruptions-Simulation (analog `RivalService`): `afterBlock`, `addSabotage`, `addElimination`, `reduce`, `isDistrictLost`, `monsterStrengthFactor`, `scaleStat`, `incomeMalusPercent`, `applyIncomeMalus`, `powerProjectionIncomeFactor`. | ✅ |
+| `lib/models/profile_data.dart` | `RestaurantData.corruptionPercent`, `districtLost`, `districtLostAt`; tolerante Serialisierung; `kProfileSchemaVersion` 9 → 10. | ✅ |
+| `lib/services/economy_balance.dart` | Alle `frt*`-Parameter (V7: keine magischen Zahlen). | ✅ |
+| `lib/services/game_clock_service.dart` | Korruptions-Update im Wochen-Tick; Einkommens-Malus vor der Tages-Aufteilung; `WeeklyTickResult.corruptionPercent` (gerundet) / `lostDistricts`. Abweichung zur ursprünglichen Planung: je Restaurant statt Stadtteil-`Map`, da `RestaurantData` den Stadtteil bereits kapselt. | ✅ |
+| `lib/objects/object_host.dart` | Monster-Skalierung je Stadtteil-Korruption zum Spawn (`monsterStrengthFactor`, deterministischer Faktor, `.round()`); reicht den Faktor an Dough Dumpster/Zombies weiter. | ✅ |
+| `lib/services/rival_service.dart` | FRT-Fehl-Attribution in der V13-Auflösung (dritte Partei): `isFrtAttack` (CRC32, `frtSabotageSharePercent`), `frtAttackerIds`, `attributedRivalId`; `IncomingSabotageOutcome.frtAttackerIds` + `undetectedFrtCount`. Stance-/Fehde-Störungen bleiben C2. | ✅ |
+| `lib/objects/object_profile.dart` | Laufzeit-Zustand `corruptionPercent`/`districtLost`/`districtLostAt` **und** `isDissolved`/`dissolvedAt`; Snapshots/Catch-up/Save-Merge (A0) und `reduceCorruption` (Gefechts-Senkung). | ✅ |
+| `lib/objects/monsters/object_dough_zombie.dart`, `lib/objects/boss_monsters/object_dough_dumpster.dart` | `strengthFactor` skaliert alle `UnitStats` (Zombies **und** Spawner); Spawner gibt den Faktor an gespawnte Zombies weiter. | ✅ |
+| `lib/widgets/widget_caretaker.dart` | Zählt getötete Monster und meldet sie (3. Callback-Parameter); setzt `ObjectHost.monsterStrengthFactor`. | ✅ |
+| `lib/screens/screen_main.dart` | Nimmt `monsterStrengthFactor` entgegen und leitet Kills + Faktor weiter. | ✅ |
+| `lib/screens/screen_battle_result.dart` | `enemyKills` → `ObjectProfile.reduceCorruption` **vor** `saveToStorage`. | ✅ |
+| `lib/screens/screen_restaurant.dart` | Gefechtsstart übergibt `FrtService.monsterStrengthFactor(corruption)`; Korruptionsanzeige im Kopfbereich. | ✅ |
+| `lib/screens/screen_start.dart` | Gründungs-Sperrhinweis für einen verlorenen Stadtteil (distinkte Meldung). | ✅ |
+| `lib/l10n/app_de.arb`, `app_en.arb` | Strings `districtLostMessage` und `corruptionLabel` (via `flutter gen-l10n`). | ✅ |
 
 ## Tests (neu)
 
-- `test/frt_service_test.dart` – Anstieg (Tick, Sabotage, Eliminierung), Clamps (Floor 0 /
-  Cap 100), Reduktion durch Monster/Siege, 100-%-Schwelle inkl. Hysterese,
+- `test/frt_service_test.dart` – ✅ neu: Anstieg (Wochen-Tick, Sabotage, Eliminierung),
+  Clamps (Floor 0 / Cap 100), Reduktion durch Monster/Siege, 100-%-Schwelle inkl. Hysterese,
   Determinismus/Idempotenz im Catch-up (zwei Teil-Catch-ups ergeben einen Catch-up),
-  Rundungs-Stabilität der Formeln.
-- `test/game_clock_service_test.dart` (Erweiterung) – Einkommens-Malus in vollen Wochen
-  **und** Resttagen, Verlustregel + Wiederöffnung (Q4), neue `WeeklyTickResult`-Felder,
-  Reihenfolge relativ zur V13-Abschöpfung.
-- `test/rival_service_test.dart` (Erweiterung) – FRT-Fehl-Attribution: behauptete ID,
-  Entdeckung deckt die Wahrheit, Stance-/Fehde-Konsequenzen (Q7/Q8), Gegensabotage gegen die FRT.
-- `test/object_host_test.dart` (Erweiterung) – Monsterwerte skalieren deterministisch je
-  Stadtteil-Korruption (Zombies **und** Spawner).
-- `test/balance_sanity_test.dart` (Erweiterung) – alle `frt*`-Werte zentral in
-  `EconomyBalance`, nicht-negativ, Schwellen/Faktoren in gültigem Bereich.
-- `test/profile_data_test.dart` (Erweiterung) – tolerante Deserialisierung
+  Einkommens-Malus und Rundungs-Stabilität; enthält auch die Integrationsfälle
+  `GameClockService.catchUp` (Anstieg je Block, Resttage, Schwelle/verloren, Einkommens-Drop)
+  und die tolerante `RestaurantData`-Persistenz (Schema 10).
+- `test/balance_sanity_test.dart` – ✅ erweitert: alle `frt*`-Werte zentral in `EconomyBalance`,
+  nicht-negativ, Schwellen/Faktoren im gültigen Bereich (Floor < Cap, Verlustschwelle,
+  Malus-/Monster-Faktoren, Klamm-Invariante).
+- `test/profile_data_test.dart` – ✅ erweitert: tolerante Deserialisierung
   (`corruptionPercent` / `districtLost`), Schema-Migration 9 → 10.
+- `test/rival_service_test.dart` / `test/frt_runtime_test.dart` – ✅ erweitert: FRT-Fehl-Attribution
+  (`isFrtAttack`/`frtAttackerIds`/`attributedRivalId` deterministisch, Teilmenge der Angreifer,
+  Korruptions-Anstieg im Wochen-Tick) sowie die A0-Persistenz (`ObjectProfile`-Roundtrip,
+  `reduceCorruption`) und Q8 (`incomeFactor` sinkt mit der Korruption).
+- `test/object_host_test.dart` – ✅ neu: Monsterwerte skalieren deterministisch je
+  Stadtteil-Korruption (Zombies **und** Spawner; Zombies erben den Spawner-Faktor).
 
 ## Definition of Done / Abnahmekriterien
 
-- [ ] Alle `frt*`-Werte existieren genau einmal – in `EconomyBalance` (V7); keine magischen
+- [x] Alle `frt*`-Werte existieren genau einmal – in `EconomyBalance` (V7); keine magischen
   Zahlen in Services/Objekten.
-- [ ] `FrtService` ist rein und deterministisch (injizierte Zeit, kein Zufall); jede Formel
+- [x] `FrtService` ist rein und deterministisch (injizierte Zeit, kein Zufall); jede Formel
   aus „Korruption“ ist einzeln testbar.
-- [ ] Korruption wird tolerant persistiert (V6), auf 0–100 geklemmt und im Catch-up
+- [x] Korruption wird tolerant persistiert (V6), auf 0–100 geklemmt und im Catch-up
   **monoton** fortgeschrieben (V8-Idempotenz bleibt erhalten).
-- [ ] Der Einkommens-Malus ist für volle Wochen **und** Resttage identisch berechnet;
-  `WeeklyTickResult` stellt `corruptionByDistrict` bereit.
-- [ ] Monster (inkl. Spawner) skalieren deterministisch aus der Stadtteil-Korruption zum
-  Spawn-Zeitpunkt.
-- [ ] Die „Verlorener Stadtteil“-Regel entspricht Q4 (Schließen entschädigungslos, Gründung
-  gesperrt, Erholung unterhalb der Schwelle).
-- [ ] `flutter analyze` ohne neue Warnungen; `flutter test` grün (inkl. der neuen Tests).
+- [x] Der Einkommens-Malus ist für volle Wochen **und** Resttage identisch berechnet;
+  `WeeklyTickResult` stellt `corruptionPercent` (gerundet) und `districtLost` bereit.
+- [x] Monster (inkl. Spawner) skalieren deterministisch aus der Stadtteil-Korruption zum
+  Spawn-Zeitpunkt (`FrtService.monsterStrengthFactor`/`scaleStat` → `ObjectHost.monsterStrengthFactor`,
+  Dough Zombies **und** Dough Dumpster; gespawnte Zombies erben den Spawner-Faktor).
+- [x] Die „Verlorener Stadtteil“-Regel entspricht Q4: Das **entschädigungslose Schließen** ist
+  umgesetzt (Korruption ≥ Schwelle setzt `districtLost` + `isDissolved`, die bestehenden
+  Aufgelöst-Mechaniken greifen); die **Gründungssperre** meldet den verlorenen Stadtteil
+  distinkt (`districtLostMessage`), und die **Erholung unter die Schwelle** (Hysterese:
+  `isDistrictLost` nutzt `>=`) hebt `districtLost` über `ObjectProfile.reduceCorruption` auf
+  (Senkungs-Call-Site im Gefechtsergebnis).
+- [x] `flutter analyze` ohne neue Warnungen; `flutter test` grün (inkl. der neuen Tests).
 
 ## Risiken
 

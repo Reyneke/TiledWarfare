@@ -4,6 +4,7 @@ import 'package:tiled_warfare/models/sector.dart';
 import 'package:tiled_warfare/objects/object_host.dart';
 import 'package:tiled_warfare/screens/screen_battle_result.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
@@ -14,7 +15,17 @@ class ScreenMain extends StatefulWidget {
   /// Pfad zur .tmx-Datei, die geladen werden soll.
   final String mapPath;
 
-  const ScreenMain({super.key, this.mapPath = 'assets/maps/street_battle.tmx'});
+  /// Kapitel 14 (FRT): Monsterstärke-Faktor des Stadtteils zum Gefechtsbeginn.
+  /// Wird aus der Stadtteil-Korruption berechnet
+  /// ([FrtService.monsterStrengthFactor]) und an die Gefechts-Monster
+  /// weitergereicht; `1.0` = unverändert.
+  final double monsterStrengthFactor;
+
+  const ScreenMain({
+    super.key,
+    this.mapPath = 'assets/maps/street_battle.tmx',
+    this.monsterStrengthFactor = 1.0,
+  });
 
   /// Extrahiert den Kartennamen aus dem Pfad für die Match-Historie.
   static String mapNameFromPath(String path) {
@@ -85,7 +96,7 @@ class _ScreenMainState extends State<ScreenMain>
     });
   }
 
-  void _onGameOver(bool playerWon, int loot) {
+  void _onGameOver(bool playerWon, int loot, int monstersKilled) {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -94,6 +105,7 @@ class _ScreenMainState extends State<ScreenMain>
           playerWon: playerWon,
           opponentName: ScreenMain.mapNameFromPath(widget.mapPath),
           enemyLoot: loot,
+          enemyKills: monstersKilled,
         ),
       ),
     );
@@ -389,6 +401,7 @@ class _ScreenMainState extends State<ScreenMain>
                       fogOfWarService: _fogOfWarService,
                       terrainMap: _terrainMap,
                       sectors: _sectors,
+                      monsterStrengthFactor: widget.monsterStrengthFactor,
                     ),
                   ),
               ],

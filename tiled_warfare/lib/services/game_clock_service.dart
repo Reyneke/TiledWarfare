@@ -11,6 +11,7 @@ import 'package:tiled_warfare/objects/object_team_medic.dart';
 import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/power_projection_service.dart';
@@ -100,6 +101,10 @@ class WeeklyTickResult {
   /// (V13) – bereits in [passiveIncome] enthalten und dort abgezogen.
   final int rivalSabotageLosses;
 
+  /// Anzahl der in diesem Catch-up **unentdeckt** gebliebenen FRT-Sabotagen
+  /// (Fehl-Attribution, Kapitel 14/Q6) – sie treiben die Korruption zusätzlich.
+  final int frtSabotages;
+
   /// **Power Projection** des Restaurants am Ende dieses Ticks (0–100, Kap. 12).
   final int powerProjection;
 
@@ -111,6 +116,12 @@ class WeeklyTickResult {
 
   /// Effektiver Einkommensfaktor aus PP × Konkurrenzdruck (Q10); `1.0` = neutral.
   final double incomeFactor;
+
+  /// Stadtteil-Rangliste (Spieler + Rivalen, Kap. 13) am Ende des Ticks.
+  ///
+  /// `null`, wenn kein Tick fällig war (No-op) – so bleibt „Keine Zeile ohne
+  /// Block“ erhalten und der UI-Wochenbericht kann die Liste direkt anzeigen.
+  final DistrictStandings? standings;
 
   /// Budget nach der Abrechnung.
   final int budgetAfter;
@@ -127,6 +138,14 @@ class WeeklyTickResult {
   /// Summe der Tageserträge dieser Resttage (§ 6).
   final int leftoverIncome;
 
+  /// Korruption des Stadtteils am Ende dieses Ticks (gerundet, 0–100,
+  /// Kapitel 14). Intern als `double` geführt, hier nur zur Anzeige gerundet.
+  final int corruptionPercent;
+
+  /// `true`, wenn der Stadtteil am Ende dieses Ticks als **verloren** gilt
+  /// (Q4, Kapitel 14).
+  final bool districtLost;
+
   const WeeklyTickResult({
     required this.weeks,
     required this.passiveIncome,
@@ -137,15 +156,19 @@ class WeeklyTickResult {
     this.penaltyCosts = 0,
     this.featureCosts = 0,
     this.rivalSabotageLosses = 0,
+    this.frtSabotages = 0,
     this.powerProjection = 0,
     this.playerRank = 0,
     this.rivalCount = 0,
     this.incomeFactor = 1.0,
+    this.standings,
     required this.budgetAfter,
     required this.bankrupt,
     this.settlements = const [],
     this.leftoverDays = 0,
     this.leftoverIncome = 0,
+    this.corruptionPercent = 0,
+    this.districtLost = false,
   });
 
   /// Ergebnis ohne fällige Tage/Wochen (No-op).
@@ -587,12 +610,32 @@ class GameClockService {
       incomePerWeek = (incomePerWeek * (100 + incomeBonusPercent) / 100)
           .round();
     }
+    // Kapitel 14: Korruption des Stadtteils zu Beginn des Catch-ups – sie
+    // dämpft das passive Einkommen **und** den PP-Einkommensfaktor (Q8) und
+    // bleibt über die ganze Lücke konstant (analog zum PP-Faktor).
+    final corruptionAtStart = restaurant.corruptionPercent;
     // Kapitel 12/13 (Frage 8/9): Treiber → PP → Ranking → Einkommensfaktor.
     // Der effektive Faktor (PP × Konkurrenzdruck) skaliert das passive
     // Wocheneinkommen (§ 8, P2) und wird über die ganze Lücke konstant gehalten.
     final ppState = powerProjectionState(restaurant, now: now);
-    if (ppState.incomeFactor != 1.0) {
-      incomePerWeek = (incomePerWeek * ppState.incomeFactor).round();
+    // Q8: Der PP-Einkommensfaktor wird zusätzlich durch die Korruption gemindert
+    // (`ppFaktorEff = ppFaktor × (1 − f × frtPowerProjectionPenaltyPercent/100)`,
+    // geklemmt auf ≥ 0). Beide Multiplikatoren (PP und Korruption) bleiben über
+    // die ganze Lücke konstant.
+    final ppIncomeFactor = FrtService.powerProjectionIncomeFactor(
+      ppState.incomeFactor,
+      corruptionAtStart,
+    );
+    if (ppIncomeFactor != 1.0) {
+      incomePerWeek = (incomePerWeek * ppIncomeFactor).round();
+    }
+    // Kapitel 14: Korruptions-Malus des Stadtteils **vor** der Tages-Aufteilung
+    // (DoD: identisch für volle Wochen und Resttage).
+    if (corruptionAtStart > 0) {
+      incomePerWeek = FrtService.applyIncomeMalus(
+        incomePerWeek,
+        corruptionAtStart,
+      );
     }
     // Tagesertrag; der 7. Tag eines Blocks trägt den Rundungsrest.
     final incomePerDay = incomePerWeek ~/ 7;
@@ -680,11 +723,33 @@ class GameClockService {
     // V13: Abschöpfung durch **unentdeckte** Rivalen-Sabotage (je Block).
     var rivalLossForBlock = 0;
     var totalRivalLoss = 0;
+    // Kapitel 14: Anzahl der in diesem Catch-up unentdeckt gebliebenen
+    // FRT-Fehl-Attributionen (Korruptions-Anstieg je Angriff, Q6).
+    var totalFrtSabotages = 0;
     final settlements = <WeekSettlement>[];
     var cursor = lastSeen;
+    // Kapitel 14: Korruption wird über den Catch-up monoton fortgeschrieben.
+    var corruption = restaurant.corruptionPercent;
 
     for (var i = 0; i < days; i++) {
       final dayInBlock = daysElapsed(weekAnchor, cursor) + 1; // 1 … 7
+
+      // L6 (`maxCatchUpWeeks`): Ist der Cap an abgerechneten Blöcken erreicht,
+      // wird die weitere Abwesenheit **ohne Buchung** übersprungen. Cursor und
+      // Wochenanker springen gemeinsam um ganze Wochen, damit das Wochenraster
+      // erhalten bleibt; liegen danach noch Resttage (< 1 Woche) an, werden sie
+      // normal abgerechnet (Resttag-Logik § 6).
+      if (dayInBlock == 1 &&
+          settlements.length >= EconomyBalance.maxCatchUpWeeks) {
+        final skipDays = ((days - i) ~/ 7) * 7;
+        if (skipDays > 0) {
+          cursor = cursor.add(Duration(days: skipDays));
+          weekAnchor = weekAnchor.add(Duration(days: skipDays));
+          i += skipDays - 1; // `for`-Inkrement berücksichtigen
+          continue;
+        }
+      }
+
       final isBlockEnd = dayInBlock >= 7;
       final dailyIncome = isBlockEnd ? incomeLastDayOfBlock : incomePerDay;
       budget += dailyIncome;
@@ -764,6 +829,27 @@ class GameClockService {
         totalRivalLoss += rivalLossForBlock;
       }
 
+      // Kapitel 14 (Q6/Q8): Unentdeckt gebliebene FRT-Fehl-Attributionen treiben
+      // die Korruption zusätzlich (je Angriff `frtCorruptionPerSabotagePercent`).
+      // Eine **entdeckte** Fehl-Attribution fliegt auf und nutzt dem FRT nicht.
+      final frtUndetected = incoming?.undetectedFrtCount ?? 0;
+      if (frtUndetected > 0) {
+        corruption = FrtService.addSabotage(corruption, frtUndetected);
+        totalFrtSabotages += frtUndetected;
+      }
+
+      // Kapitel 14: Mit jedem **vollendeten** Block steigt die Korruption des
+      // Stadtteils (monoton, V8-idempotent). Erreicht sie die Verlustschwelle,
+      // gilt der Stadtteil als verloren (Q4): bestehende Restaurants werden
+      // entschädigungslos geschlossen, neue können dort nicht gegründet werden.
+      corruption = FrtService.afterBlock(corruption);
+      if (!restaurant.districtLost && FrtService.isDistrictLost(corruption)) {
+        restaurant.districtLost = true;
+        restaurant.districtLostAt = cursor;
+        restaurant.isDissolved = true;
+        restaurant.dissolvedAt = cursor;
+      }
+
       // Blockende: wöchentliche Kosten und Zinsen (§ 8/§ 10) – die Zinsen
       // werden auf den jeweiligen Saldo am Blockende angewandt.
       final blockMedic = _negateCostDays(reducedMedicPerWeek, negatedCostDays);
@@ -827,6 +913,7 @@ class GameClockService {
     ManagementFeatureService.clearFinished(restaurant.staffEntries, cursor);
 
     restaurant.budget = budget;
+    restaurant.corruptionPercent = corruption;
     restaurant.lastSeenAt = cursor;
     restaurant.weekAnchorAt = weekAnchor;
 
@@ -843,15 +930,19 @@ class GameClockService {
       penaltyCosts: totalPenalty,
       featureCosts: totalFeature,
       rivalSabotageLosses: totalRivalLoss,
+      frtSabotages: totalFrtSabotages,
       powerProjection: ppState.powerProjection,
       playerRank: ppState.standings.playerRank,
       rivalCount: ppState.standings.total - 1,
-      incomeFactor: ppState.incomeFactor,
+      incomeFactor: ppIncomeFactor,
+      standings: ppState.standings,
       budgetAfter: budget,
       bankrupt: EconomyService.isBankrupt(budget),
       settlements: settlements,
       leftoverDays: leftoverDays,
       leftoverIncome: incomePerDay * leftoverDays,
+      corruptionPercent: corruption.round(),
+      districtLost: restaurant.districtLost,
     );
   }
 

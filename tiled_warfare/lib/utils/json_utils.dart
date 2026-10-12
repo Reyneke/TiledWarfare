@@ -14,6 +14,15 @@ int? readInt(dynamic value) {
   return null;
 }
 
+/// Liest einen Fließkomma-Wert (akzeptiert auch `int` und numerische Strings).
+/// Liefert `null`, wenn kein Zahlwert vorliegt (Kap. 14: `corruptionPercent`).
+double? readDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
 /// Liest einen String. Liefert `null`, wenn der Wert kein String ist.
 String? readString(dynamic value) => value is String ? value : null;
 

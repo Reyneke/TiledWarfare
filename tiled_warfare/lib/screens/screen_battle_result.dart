@@ -22,11 +22,17 @@ class ScreenBattleResult extends StatefulWidget {
   /// Beute (`moneyValue`-Summe) der besiegten Gegner (§ 2.2).
   final int enemyLoot;
 
+  /// Kapitel 14 (FRT): Anzahl der im Gefecht getöteten Monster. Sie senkt die
+  /// Stadtteil-Korruption (je Monster) und wird – wie [enemyLoot] – aus dem
+  /// Gefecht übergeben.
+  final int enemyKills;
+
   const ScreenBattleResult({
     super.key,
     required this.playerWon,
     required this.opponentName,
     this.enemyLoot = 0,
+    this.enemyKills = 0,
   });
 
   @override
@@ -121,6 +127,14 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
     _profile.lastMatchResult =
         widget.playerWon ? MatchResult.win : MatchResult.loss;
     _profile.applyNegativeInterest();
+
+    // Kapitel 14 (FRT): Korruption des Stadtteils wird durch das Gefecht gesenkt
+    // (je getötetem Monster und zusätzlich je Sieg). Vor `saveToStorage`, damit
+    // der neue Wert sofort persistiert wird.
+    _profile.reduceCorruption(
+      monstersKilled: widget.enemyKills,
+      victory: widget.playerWon,
+    );
 
     // Sync units + save. Nur die Überlebenden (unitList) an
     // syncUnitsAfterBattle übergeben, da ObjectProfile._performSurvivalRolls()

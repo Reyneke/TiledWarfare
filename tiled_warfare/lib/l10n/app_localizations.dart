@@ -260,6 +260,18 @@ abstract class AppLocalizations {
   /// **'In {district} gibt es bereits ein Restaurant.'**
   String districtOccupied(String district);
 
+  /// Error when founding in a corrupted (lost) district
+  ///
+  /// In de, this message translates to:
+  /// **'Der Stadtteil {district} ist verloren (Korruption). Solange er nicht befreit ist, kann dort kein Restaurant gegründet werden.'**
+  String districtLostMessage(String district);
+
+  /// Label showing the FRT corruption of the district
+  ///
+  /// In de, this message translates to:
+  /// **'Korruption: {percent} %'**
+  String corruptionLabel(int percent);
+
   /// Snackbar when there are no other savegames to switch to
   ///
   /// In de, this message translates to:
@@ -445,6 +457,12 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Anstellen'**
   String get hire;
+
+  /// Zustand einer bereits angestellten Hilfs-/Verwaltungsrolle (Einzelanstellung)
+  ///
+  /// In de, this message translates to:
+  /// **'Bereits angestellt'**
+  String get roleAlreadyHired;
 
   /// Fallback-Name für das Restaurant
   ///
@@ -1802,6 +1820,72 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Rivalen-Sabotage: Einkommen −{loss} €'**
   String catchUpRivalSabotageLoss(int loss);
+
+  /// Platzierung des Restaurants im Stadtteil (Kapitel 12)
+  ///
+  /// In de, this message translates to:
+  /// **'Platz {rank} von {total} in {district}'**
+  String rankingBadge(int rank, int total, String district);
+
+  /// Titel des Wochenberichts mit der Rangliste (Kapitel 12/13)
+  ///
+  /// In de, this message translates to:
+  /// **'Wochenbericht'**
+  String get weekReportTitle;
+
+  /// Überschrift der Stadtteil-Rangliste im Wochenbericht
+  ///
+  /// In de, this message translates to:
+  /// **'Rangliste im Stadtteil'**
+  String get rankingSectionTitle;
+
+  /// Markierung des Spielers in der Rangliste
+  ///
+  /// In de, this message translates to:
+  /// **'Sie'**
+  String get rankingYou;
+
+  /// Rivalen-Stance: Verbündet (Kapitel 13, Q9)
+  ///
+  /// In de, this message translates to:
+  /// **'Verbündet'**
+  String get stanceAlly;
+
+  /// Rivalen-Stance: Neutral (Kapitel 13, Q9)
+  ///
+  /// In de, this message translates to:
+  /// **'Neutral'**
+  String get stanceNeutral;
+
+  /// Rivalen-Stance: Feind (Kapitel 13, Q9)
+  ///
+  /// In de, this message translates to:
+  /// **'Feind'**
+  String get stanceEnemy;
+
+  /// Kennzeichnung eines bankrotten Rivalen in der Rangliste
+  ///
+  /// In de, this message translates to:
+  /// **'Pleite'**
+  String get rivalInsolvent;
+
+  /// Überschrift der Rivalen-Teilnehmerliste im Karten-Tab (Kapitel 13, Q8)
+  ///
+  /// In de, this message translates to:
+  /// **'Rivalen in diesem Gefecht'**
+  String get battleRivalsTitle;
+
+  /// Hinweis, wenn keine Rivalen zum Gefecht antreten
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Rivalen im Stadtteil.'**
+  String get battleRivalsNone;
+
+  /// Zeile eines Rivalen-Teilnehmers im Gefecht
+  ///
+  /// In de, this message translates to:
+  /// **'{name} — {stance}, {count, plural, =1{1 Einheit} other{{count} Einheiten}}'**
+  String battleRivalRow(String name, String stance, int count);
 
   /// Charakter ist vollständig geheilt (V3)
   ///

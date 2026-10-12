@@ -168,8 +168,8 @@ void main() {
     expect(lineCook.rank, kRankLineCook);
   });
 
-  test('kProfileSchemaVersion ist 9 (V12: Feature-Mannschaft)', () {
-    expect(kProfileSchemaVersion, 9);
+  test('kProfileSchemaVersion ist 10 (FRT: Korruption, Kapitel 14)', () {
+    expect(kProfileSchemaVersion, 10);
   });
 
   test('RestaurantData.copyWith ersetzt nur staff/budget (V10)', () {

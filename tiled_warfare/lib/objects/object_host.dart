@@ -12,6 +12,7 @@ import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/fog_of_war.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/terrain_service.dart';
 import 'package:tiled_warfare/utils/hex_grid.dart';
 import 'package:random_name_generator/random_name_generator.dart';
@@ -237,6 +238,15 @@ class ObjectHost {
   /// Liste aller vom Host kontrollierten Dough Dumpster.
   List<ObjectDoughDumpster> doughDumpsterList = [];
 
+  /// Kapitel 14 (FRT, Q3): Monsterstärke-Faktor des aktuellen Stadtteils zum
+  /// Gefechtsbeginn – `1 + f × (frtMonsterStrengthScalePercent / 100)` aus
+  /// [FrtService.monsterStrengthFactor]. Er skaliert alle neu erschaffenen
+  /// Dough Zombies und Dough Dumpster; `1.0` (Default) lässt sie unverändert.
+  ///
+  /// [ScreenMain] setzt ihn vor dem Aufbau des Gefechts aus der
+  /// Stadtteil-Korruption.
+  double monsterStrengthFactor = 1.0;
+
   /// Zufallsgenerator.
   final Random _random = Random();
 
@@ -284,7 +294,8 @@ class ObjectHost {
   /// Erzeugt einen neuen [ObjectDoughDumpster] und fügt ihn der
   /// [doughDumpsterList] hinzu. Gibt den neu erschaffenen Dumpster zurück.
   ObjectDoughDumpster spawnDoughDumpster() {
-    final dumpster = ObjectDoughDumpster();
+    final dumpster =
+        ObjectDoughDumpster(strengthFactor: monsterStrengthFactor);
     doughDumpsterList.add(dumpster);
     return dumpster;
   }
@@ -710,7 +721,8 @@ class ObjectHost {
               // dass anstelle des Tokens ein weiterer Dough Zombie erscheint.
               // Zombie wird gepuffert und nach der Iteration hinzugefügt.
               if (_random.nextInt(100) < 50) {
-                final newZombie = ObjectDoughZombie();
+                final newZombie =
+                    ObjectDoughZombie(strengthFactor: monsterStrengthFactor);
                 newZombie.position = Offset(
                   dumpster.position.dx + _random.nextInt(64) - 32,
                   dumpster.position.dy + _random.nextInt(64) - 32,
@@ -721,7 +733,8 @@ class ObjectHost {
 
               // 25% Chance: Zombie wird zu einem Dough Dumpster
               if (_random.nextInt(100) < 25) {
-                final newDumpster = ObjectDoughDumpster();
+                final newDumpster =
+                    ObjectDoughDumpster(strengthFactor: monsterStrengthFactor);
                 logMessages.add('Ein neuer Dough Dumpster erscheint!');
                 // Neuen Dumpster in der Nähe des aktuellen positionieren
                 newDumpster.position = Offset(

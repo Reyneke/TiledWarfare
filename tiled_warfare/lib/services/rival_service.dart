@@ -61,12 +61,19 @@ class IncomingSabotageOutcome {
   /// Gegenschlag des Sicherheitschefs (oder `null`).
   final SabotageOutcome? counter;
 
+  /// Rivalen-IDs, deren Angriff in Wahrheit ein **FRT-Angriff mit
+  /// Fehl-Attribution** ist (Kapitel 14, Q6). Deterministische Teilmenge von
+  /// [attackerIds]; dem Spieler bleibt die Wahrheit verborgen, solange der
+  /// Angriff nicht entdeckt wird.
+  final List<int> frtAttackerIds;
+
   const IncomingSabotageOutcome({
     required this.blockAnchor,
     required this.attackerIds,
     required this.detectedIds,
     required this.detectionPercent,
     required this.counter,
+    this.frtAttackerIds = const [],
   });
 
   /// `true`, wenn mindestens ein Angriff entdeckt wurde.
@@ -81,6 +88,17 @@ class IncomingSabotageOutcome {
 
   /// Anzahl der unentdeckt gebliebenen Angreifer.
   int get undetectedCount => undetectedIds.length;
+
+  /// Rivalen-IDs der **unentdeckt** gebliebenen FRT-Angriffe (Kapitel 14) –
+  /// nur diese treiben die Korruption (eine entdeckte Fehl-Attribution fliegt
+  /// auf und nutzt dem FRT nicht mehr).
+  List<int> get undetectedFrtIds => [
+    for (final id in frtAttackerIds)
+      if (!detectedIds.contains(id)) id,
+  ];
+
+  /// Anzahl der unentdeckt gebliebenen FRT-Angriffe (Korruptions-Anstieg).
+  int get undetectedFrtCount => undetectedFrtIds.length;
 }
 
 /// Rivalen-Restaurants des Stadtteils – **Minimal-Modul** des Kapitels 13
@@ -354,6 +372,44 @@ class RivalService {
         detectionPercent;
   }
 
+  /// `true`, wenn der Angriff des Rivalen [rivalId] im Block [blockAnchor] in
+  /// Wahrheit ein **FRT-Angriff mit Fehl-Attribution** ist (Kapitel 14, Q6).
+  ///
+  /// Deterministisch (`CRC32('frt-attack:<anchor>:<rivalId>')`) und unabhängig
+  /// vom übrigen Zustand (V8-Idempotenz): dieselbe Verteilung bei jedem Laden.
+  static bool isFrtAttack(int rivalId, DateTime blockAnchor) {
+    final stamp = blockAnchor.toIso8601String();
+    return CRC32.compute('frt-attack:$stamp:$rivalId').abs() % 100 <
+        EconomyBalance.frtSabotageSharePercent;
+  }
+
+  /// Rivalen-IDs der Angriffe des Blocks [blockAnchor], die in Wahrheit von der
+  /// FRT stammen (Roster-Reihenfolge, Kapitel 14).
+  static List<int> frtAttackerIds(
+    RestaurantData restaurant,
+    DateTime blockAnchor,
+  ) => [
+    for (final rivalId in incomingAttackerIds(restaurant, blockAnchor))
+      if (isFrtAttack(rivalId, blockAnchor)) rivalId,
+  ];
+
+  /// Deterministisch **behaupteter** Rivale, dem die FRT-Sabotage [rivalId] im
+  /// Block [blockAnchor] angelastet wird (Q6b): ein Roster-Kollege
+  /// (`CRC32('frt-attributed:<anchor>:<rivalId>') % roster.length`), damit der
+  /// Verdacht zwischen den Rivalen wandert – ohne Zufall und ohne Zustand.
+  static int attributedRivalId(
+    RestaurantData restaurant,
+    int rivalId,
+    DateTime blockAnchor,
+  ) {
+    final roster = rosterOf(restaurant.district);
+    if (roster.isEmpty) return rivalId;
+    final stamp = blockAnchor.toIso8601String();
+    final index =
+        CRC32.compute('frt-attributed:$stamp:$rivalId').abs() % roster.length;
+    return roster[index].id;
+  }
+
   /// Durchschnittliche `shadiness` des Kampfpersonals des Restaurants (0–100).
   ///
   /// Charaktere ohne Persönlichkeits-Profil (`personalityId < 0`) zählen nicht;
@@ -560,6 +616,12 @@ class RivalService {
   }) {
     final attackers = incomingAttackerIds(restaurant, blockAnchor);
     if (attackers.isEmpty) return null;
+    // Kapitel 14 (Q6): Ein Teil der Angriffe stammt in Wahrheit von der FRT
+    // (Fehl-Attribution) – deterministisch und unabhängig von der Entdeckung.
+    final frt = [
+      for (final rivalId in attackers)
+        if (isFrtAttack(rivalId, blockAnchor)) rivalId,
+    ];
     final detection = incomingDetectionPercent(restaurant);
     final detected = [
       for (final rivalId in attackers)
@@ -588,6 +650,7 @@ class RivalService {
       detectedIds: detected,
       detectionPercent: detection,
       counter: counter,
+      frtAttackerIds: frt,
     );
   }
 
@@ -767,6 +830,86 @@ class RivalService {
     if (availableSpawns <= 0 || participantCount <= 0) return const [];
     return [for (var i = 0; i < participantCount; i++) i % availableSpawns];
   }
+
+  /// Truppenstärke eines teilnehmenden Rivalen (Fairness, Q8).
+  ///
+  /// Rein aus der simulierten Rivalen-PP abgeleitet: 1 Einheit plus je
+  /// [EconomyBalance.rivalBattleTeamSizePpStep] PP eine weitere, gedeckelt auf
+  /// [EconomyBalance.rivalBattleMaxTeamSize] – keine versteckten Armeen.
+  static int battleTeamSizeForPp(num rivalPp) {
+    final extra =
+        (rivalPp / EconomyBalance.rivalBattleTeamSizePpStep).floor();
+    return (1 + extra).clamp(1, EconomyBalance.rivalBattleMaxTeamSize);
+  }
+
+  /// Deterministische Rivalen-Teilnehmer eines Gefechts (Q8/Q9) inklusive
+  /// Stance, Truppenstärke und Ziel-Spawnpunkt.
+  ///
+  /// Baut auf [battleParticipantIds] (stärkste Rivalen zuerst) und
+  /// [distributeBattleSpawns] auf; [availableSpawns] ist die Zahl der
+  /// `spawn_player*`-Punkte der gewählten Karte.
+  static List<BattleRivalParticipant> battleParticipants(
+    RestaurantData restaurant, {
+    required int playerPp,
+    required int availableSpawns,
+    int? seed,
+  }) {
+    final ids = battleParticipantIds(restaurant, playerPp: playerPp, seed: seed);
+    if (ids.isEmpty) return const [];
+    final roster = rosterOf(restaurant.district);
+    final spawns = distributeBattleSpawns(
+      participantCount: ids.length,
+      availableSpawns: availableSpawns,
+    );
+    return [
+      for (var i = 0; i < ids.length; i++)
+        () {
+          final rival = byId(roster, ids[i])!;
+          final pp = rivalPowerProjection(rival, playerPp: playerPp);
+          final rounded = pp.round();
+          return BattleRivalParticipant(
+            rivalId: rival.id,
+            name: rival.name,
+            stance: stanceForRival(rivalPp: rounded, playerPp: playerPp),
+            teamSize: battleTeamSizeForPp(pp),
+            spawnIndex: spawns[i],
+          );
+        }(),
+    ];
+  }
+}
+
+/// Ein deterministisch bestimmter Rivalen-Teilnehmer eines Gefechts
+/// (Kapitel 13, Q8/Q9): wer mit welcher Haltung, Truppenstärke und auf welchem
+/// `spawn_player*`-Punkt der Karte beitritt.
+class BattleRivalParticipant {
+  /// Rivalen-ID.
+  final int rivalId;
+
+  /// Anzeigename des Rivalen.
+  final String name;
+
+  /// Haltung zum Spieler ([RivalStance]).
+  final RivalStance stance;
+
+  /// Truppenstärke (Einheiten), die der Rivale ins Gefecht bringt.
+  final int teamSize;
+
+  /// Index des `spawn_player*`-Punktes (0-basiert), auf dem die Truppe startet.
+  final int spawnIndex;
+
+  const BattleRivalParticipant({
+    required this.rivalId,
+    required this.name,
+    required this.stance,
+    required this.teamSize,
+    required this.spawnIndex,
+  });
+
+  @override
+  String toString() =>
+      'BattleRivalParticipant(#$rivalId, $name, $stance, '
+      'size=$teamSize, spawn=$spawnIndex)';
 }
 
 /// Sentinel-ID des Spielers in der Stadtteil-Rangliste.

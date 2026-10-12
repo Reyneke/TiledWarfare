@@ -21,6 +21,7 @@ import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/objects/player_objects/object_sous_chef.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/profile_storage.dart';
@@ -124,6 +125,31 @@ class ObjectProfile {
   /// Ende des Sabotage-Wirkungsfensters (Einkommens-Bonus, `11a` E14).
   DateTime? sabotageAppliedUntil;
 
+  /// Kapitel 14 (FRT): Korruption (0–100) des aktiven Stadtteils (Q1: ein
+  /// Meter je Stadtteil). Sie ist – wie die Zeitanker – ein
+  /// ereignisgetriebener Zustandswert (Senkung durch Kills/Siege, Anstieg
+  /// durch Sabotagen/Eliminierungen) und wird über
+  /// [activeRestaurantSnapshot]/[runCatchUp]/[toProfileData] mit dem
+  /// `RestaurantData`-Slot synchronisiert.
+  double corruptionPercent = 0;
+
+  /// `true`, wenn der aktive Stadtteil als **verloren** gilt (Korruption ≥
+  /// Verlustschwelle, Q4). Bleibt – wie `RestaurantData.districtLost` – über
+  /// die Auflösung des Restaurants hinweg erhalten.
+  bool districtLost = false;
+
+  /// Zeitpunkt, ab dem der Stadtteil als verloren gilt (Q4); sonst `null`.
+  DateTime? districtLostAt;
+
+  /// `true`, wenn das aktive Restaurant **aufgelöst** ist (z. B. durch einen
+  /// verlorenen Stadtteil, Kapitel 14/Q4). Wird – wie die Korruption – über
+  /// [loadFromData]/[runCatchUp]/[toProfileData] mit dem Slot synchronisiert,
+  /// damit die Auflösung durch den Wochen-Tick auch wirklich persistiert wird.
+  bool isDissolved = false;
+
+  /// Zeitpunkt der Auflösung des aktiven Restaurants; sonst `null`.
+  DateTime? dissolvedAt;
+
   /// Full profile data from the last load - basis for the merge in
   /// [toProfileData] (all other savegames stay untouched while saving).
   ProfileData? _profileData;
@@ -195,12 +221,32 @@ class ObjectProfile {
   /// Gibt das gesamte angestellte Nicht-Kampf-Personal zurück.
   List<StaffEntryData> get staffEntries => List.unmodifiable(_staffEntries);
 
+  /// `true`, wenn die Hilfs-/Service-[role] bereits angestellt ist (V10/`11a`).
+  ///
+  /// Hilfs-/Service-Rollen sind **einmalig**: Sie wirken als Ja/Nein-Boni, daher
+  /// darf jede Rolle höchstens einmal vertreten sein.
+  bool hasSupportRole(SupportRole role) =>
+      _supportStaff.any((e) => e.role == role.name);
+
+  /// `true`, wenn die Verwaltungs-/Marketing-[role] bereits angestellt ist.
+  bool hasManagementRole(ManagementRole role) => _staffEntries.any(
+        (e) => e.kind == RoleKind.management && e.role == role.name,
+      );
+
   /// Stellt eine Hilfs-/Service-Rolle ein (Karrierepfade, V10, Phase 6).
   ///
   /// Der Wochenlohn stammt aus `EconomyBalance.supportRoleWagePerWeek` und wird
   /// erst zum nächsten Wochen-Tick abgebucht (kein anteiliger Einzug). Gibt die
   /// angestellte Rolle zurück.
+  ///
+  /// **Idempotent:** Ist [role] bereits vertreten, wird kein zweiter Eintrag
+  /// angelegt, sondern die bestehende Anstellung zurückgegeben (`11a` E11:
+  /// keine Mehrfach-Anstellung derselben Rolle).
   SupportRoleData hireSupportRole(SupportRole role, {DateTime? now}) {
+    final existing = _supportStaff
+        .where((e) => e.role == role.name)
+        .toList(growable: false);
+    if (existing.isNotEmpty) return existing.first;
     final hiredAt = now ?? DateTime.now();
     final roleName = RandomNames(activeCuisine.zone).fullName();
     final entry = SupportRoleData(
@@ -239,7 +285,14 @@ class ObjectProfile {
   ///
   /// Der Wochenlohn stammt aus `EconomyBalance.managementRoleWagePerWeek` und
   /// wird erst zum nächsten Wochen-Tick abgebucht (kein anteiliger Einzug).
+  ///
+  /// **Idempotent:** Ist [role] bereits vertreten, wird kein zweiter Eintrag
+  /// angelegt, sondern die bestehende Anstellung zurückgegeben (`11a` E11).
   StaffEntryData hireManagementRole(ManagementRole role, {DateTime? now}) {
+    final existing = _staffEntries
+        .where((e) => e.kind == RoleKind.management && e.role == role.name)
+        .toList(growable: false);
+    if (existing.isNotEmpty) return existing.first;
     final hiredAt = now ?? DateTime.now();
     final roleName = RandomNames(activeCuisine.zone).fullName();
     final entry = StaffEntryData(
@@ -1188,6 +1241,16 @@ class ObjectProfile {
     activeUpgrades = {};
     sabotageTargetId = null;
     sabotageAppliedUntil = null;
+    // Kapitel 14: Ein neu gegründetes Restaurant startet in einem (noch)
+    // unkorrumpierten Stadtteil – allerdings nur, wenn dort kein Stadtteil
+    // verloren ist. Die Gründungssperre selbst prüft `ScreenStart`.
+    corruptionPercent = 0;
+    districtLost = false;
+    districtLostAt = null;
+    // Ein neu gegründetes Restaurant ist nicht aufgelöst. Das **alte**
+    // Restaurant wurde oben bereits entschädigungslos aufgelöst.
+    isDissolved = false;
+    dissolvedAt = null;
     _personal.clear();
     _hiredMedics.clear();
     _supportStaff.clear();
@@ -1226,6 +1289,11 @@ class ObjectProfile {
       activeUpgrades = {};
       sabotageTargetId = null;
       sabotageAppliedUntil = null;
+      corruptionPercent = 0;
+      districtLost = false;
+      districtLostAt = null;
+      isDissolved = false;
+      dissolvedAt = null;
       _personal.clear();
       _hiredMedics.clear();
       _supportStaff.clear();
@@ -1246,6 +1314,11 @@ class ObjectProfile {
     activeUpgrades = Map.of(restaurant.upgrades);
     sabotageTargetId = restaurant.sabotageTargetId;
     sabotageAppliedUntil = restaurant.sabotageAppliedUntil;
+    corruptionPercent = restaurant.corruptionPercent;
+    districtLost = restaurant.districtLost;
+    districtLostAt = restaurant.districtLostAt;
+    isDissolved = restaurant.isDissolved;
+    dissolvedAt = restaurant.dissolvedAt;
 
     // Restore team.
     _personal.clear();
@@ -1365,12 +1438,14 @@ class ObjectProfile {
           weekAnchorAt ??
           (existingIndex >= 0 ? restaurants[existingIndex].weekAnchorAt : null),
       lastMatchResult: lastMatchResult,
-      isDissolved: existingIndex >= 0
-          ? restaurants[existingIndex].isDissolved
-          : false,
-      dissolvedAt: existingIndex >= 0
-          ? restaurants[existingIndex].dissolvedAt
-          : null,
+      isDissolved: isDissolved,
+      dissolvedAt: dissolvedAt,
+      // Kapitel 14: Korruption des Stadtteils ist – wie `lastSeenAt` – ein
+      // ereignisgetriebener Zustandswert und muss persistiert werden (sonst
+      // ginge die Senkung durch Gefechte verloren bzw. sähe nie die Platte).
+      corruptionPercent: corruptionPercent,
+      districtLost: districtLost,
+      districtLostAt: districtLostAt,
     );
 
     if (existingIndex >= 0) {
@@ -1414,6 +1489,11 @@ class ObjectProfile {
     lastSeenAt: lastSeenAt,
     weekAnchorAt: weekAnchorAt,
     lastMatchResult: lastMatchResult,
+    corruptionPercent: corruptionPercent,
+    districtLost: districtLost,
+    districtLostAt: districtLostAt,
+    isDissolved: isDissolved,
+    dissolvedAt: dissolvedAt,
   );
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
@@ -1492,10 +1572,39 @@ class ObjectProfile {
     // `11a` E14: Ergebnis einer im Tick aufgelösten Sabotage übernehmen.
     sabotageTargetId = snapshot.sabotageTargetId;
     sabotageAppliedUntil = snapshot.sabotageAppliedUntil;
+    // Kapitel 14: Anstieg/Verlustregel des Ticks zurückschreiben – sonst würde
+    // der nächste Save die Korruption auf dem Stand vor dem Catch-up speichern.
+    corruptionPercent = snapshot.corruptionPercent;
+    districtLost = snapshot.districtLost;
+    districtLostAt = snapshot.districtLostAt;
+    // Kapitel 14/Q4: Erreicht die Korruption die Verlustschwelle, löst der Tick
+    // das Restaurant auf – die Auflösung muss ebenfalls zurückgeschrieben werden.
+    isDissolved = snapshot.isDissolved;
+    dissolvedAt = snapshot.dissolvedAt;
     // V3: geheilten Status/Spritzen-Zustand in die In-Memory-Charaktere
     // zurückschreiben (beide Listen sind 1:1 über die Konvertierung geordnet).
     _syncStaffFromSnapshot(snapshot);
     return result;
+  }
+
+  /// Kapitel 14 (FRT): Senkt die Korruption des aktiven Stadtteils nach einem
+  /// Gefecht – je getötetem Monster und zusätzlich je Sieg (Floor 0).
+  ///
+  /// Der Aufruf fasst ausschließlich den Korruptionswert an; **persistiert**
+  /// wird er durch den Aufrufer (das Gefechtsergebnis ruft diese Methode vor
+  /// `saveToStorage`). Fällt die Korruption wieder unter die Verlustschwelle,
+  /// gilt der Stadtteil wieder als bespielbar (Q4-Hysterese).
+  void reduceCorruption({int monstersKilled = 0, bool victory = false}) {
+    if (monstersKilled <= 0 && !victory) return;
+    corruptionPercent = FrtService.reduce(
+      corruptionPercent,
+      monstersKilled: monstersKilled,
+      victory: victory,
+    );
+    if (districtLost && !FrtService.isDistrictLost(corruptionPercent)) {
+      districtLost = false;
+      districtLostAt = null;
+    }
   }
 
   /// Schreibt den durch den Catch-up veränderten Heilungs-/Spritzenzustand aus

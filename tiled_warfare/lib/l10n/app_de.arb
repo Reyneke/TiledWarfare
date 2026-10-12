@@ -123,6 +123,16 @@
     "description": "Error when founding in an already occupied district",
     "placeholders": { "district": { "type": "String" } }
   },
+  "districtLostMessage": "Der Stadtteil {district} ist verloren (Korruption). Solange er nicht befreit ist, kann dort kein Restaurant gegründet werden.",
+  "@districtLostMessage": {
+    "description": "Error when founding in a corrupted (lost) district",
+    "placeholders": { "district": { "type": "String" } }
+  },
+  "corruptionLabel": "Korruption: {percent} %",
+  "@corruptionLabel": {
+    "description": "Label showing the FRT corruption of the district",
+    "placeholders": { "percent": { "type": "int" } }
+  },
   "noOtherSavegames": "Keine weiteren Spielstände vorhanden.",
   "@noOtherSavegames": {
     "description": "Snackbar when there are no other savegames to switch to"
@@ -269,6 +279,10 @@
   "hire": "Anstellen",
   "@hire": {
     "description": "Button zum Anstellen von Personal"
+  },
+  "roleAlreadyHired": "Bereits angestellt",
+  "@roleAlreadyHired": {
+    "description": "Zustand einer bereits angestellten Hilfs-/Verwaltungsrolle (Einzelanstellung)"
   },
 
   "restaurant": "Restaurant",
@@ -1118,6 +1132,52 @@
   "@catchUpRivalSabotageLoss": {
     "description": "Unentdeckte Rivalen-Sabotage schöpft Blockeinkommen ab (V13, Kapitel 13)",
     "placeholders": { "loss": { "type": "int" } }
+  },
+  "rankingBadge": "Platz {rank} von {total} in {district}",
+  "@rankingBadge": {
+    "description": "Platzierung des Restaurants im Stadtteil (Kapitel 12)",
+    "placeholders": {
+      "rank": { "type": "int" },
+      "total": { "type": "int" },
+      "district": { "type": "String" }
+    }
+  },
+  "weekReportTitle": "Wochenbericht",
+  "@weekReportTitle": {
+    "description": "Titel des Wochenberichts mit der Rangliste (Kapitel 12/13)"
+  },
+  "rankingSectionTitle": "Rangliste im Stadtteil",
+  "@rankingSectionTitle": {
+    "description": "Überschrift der Stadtteil-Rangliste im Wochenbericht"
+  },
+  "rankingYou": "Sie",
+  "@rankingYou": { "description": "Markierung des Spielers in der Rangliste" },
+  "stanceAlly": "Verbündet",
+  "@stanceAlly": { "description": "Rivalen-Stance: Verbündet (Kapitel 13, Q9)" },
+  "stanceNeutral": "Neutral",
+  "@stanceNeutral": { "description": "Rivalen-Stance: Neutral (Kapitel 13, Q9)" },
+  "stanceEnemy": "Feind",
+  "@stanceEnemy": { "description": "Rivalen-Stance: Feind (Kapitel 13, Q9)" },
+  "rivalInsolvent": "Pleite",
+  "@rivalInsolvent": {
+    "description": "Kennzeichnung eines bankrotten Rivalen in der Rangliste"
+  },
+  "battleRivalsTitle": "Rivalen in diesem Gefecht",
+  "@battleRivalsTitle": {
+    "description": "Überschrift der Rivalen-Teilnehmerliste im Karten-Tab (Kapitel 13, Q8)"
+  },
+  "battleRivalsNone": "Keine Rivalen im Stadtteil.",
+  "@battleRivalsNone": {
+    "description": "Hinweis, wenn keine Rivalen zum Gefecht antreten"
+  },
+  "battleRivalRow": "{name} — {stance}, {count, plural, =1{1 Einheit} other{{count} Einheiten}}",
+  "@battleRivalRow": {
+    "description": "Zeile eines Rivalen-Teilnehmers im Gefecht",
+    "placeholders": {
+      "name": { "type": "String" },
+      "stance": { "type": "String" },
+      "count": { "type": "int" }
+    }
   },
   "healingComplete": "Voll einsatzbereit",
   "@healingComplete": { "description": "Charakter ist vollständig geheilt (V3)" },

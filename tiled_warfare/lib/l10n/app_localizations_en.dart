@@ -100,6 +100,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String districtLostMessage(String district) {
+    return 'The district $district is lost (corruption). Until it is liberated, no restaurant can be founded there.';
+  }
+
+  @override
+  String corruptionLabel(int percent) {
+    return 'Corruption: $percent %';
+  }
+
+  @override
   String get noOtherSavegames => 'No other save games available.';
 
   @override
@@ -206,6 +216,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hire => 'Hire';
+
+  @override
+  String get roleAlreadyHired => 'Already hired';
 
   @override
   String get restaurant => 'Restaurant';
@@ -1034,6 +1047,49 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String catchUpRivalSabotageLoss(int loss) {
     return 'Rival sabotage: income −$loss €';
+  }
+
+  @override
+  String rankingBadge(int rank, int total, String district) {
+    return 'Rank $rank of $total in $district';
+  }
+
+  @override
+  String get weekReportTitle => 'Weekly report';
+
+  @override
+  String get rankingSectionTitle => 'District ranking';
+
+  @override
+  String get rankingYou => 'You';
+
+  @override
+  String get stanceAlly => 'Ally';
+
+  @override
+  String get stanceNeutral => 'Neutral';
+
+  @override
+  String get stanceEnemy => 'Enemy';
+
+  @override
+  String get rivalInsolvent => 'Bankrupt';
+
+  @override
+  String get battleRivalsTitle => 'Rivals in this battle';
+
+  @override
+  String get battleRivalsNone => 'No rivals in the district.';
+
+  @override
+  String battleRivalRow(String name, String stance, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count units',
+      one: '1 unit',
+    );
+    return '$name — $stance, $_temp0';
   }
 
   @override

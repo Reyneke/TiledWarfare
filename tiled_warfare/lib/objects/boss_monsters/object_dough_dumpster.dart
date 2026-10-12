@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:tiled_warfare/objects/monsters/object_dough_zombie.dart';
 import 'package:tiled_warfare/objects/object_token.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/frt_service.dart';
 
 /// Zählt, wie viele Dough Dumpster-Instanzen bereits erstellt wurden.
 /// Der erste heißt "Donald Trumpster", alle weiteren erhalten
@@ -40,30 +41,63 @@ String _generateTrumpsterName() {
 }
 
 class ObjectDoughDumpster extends ObjectToken {
-  ObjectDoughDumpster() : super(
-    name: _generateTrumpsterName(),
-    imagePath: "assets/images/token/token_spawner.png",
-    woundValue: EconomyBalance.doughDumpsterStats.wound,
-    attackValue: EconomyBalance.doughDumpsterStats.attack,
-    defenseValue: EconomyBalance.doughDumpsterStats.defense,
-    movementValue: EconomyBalance.doughDumpsterStats.movement,
-    damageValue: EconomyBalance.doughDumpsterStats.damage,
-    rangeValue: EconomyBalance.doughDumpsterStats.range,
-    moneyValue: EconomyBalance.doughDumpsterStats.money,
-    xpValue: EconomyBalance.doughDumpsterStats.xp,
-  );
+  /// Kapitel 14 (Q3): Faktor aus der Stadtteil-Korruption zum Spawn-Zeitpunkt.
+  /// Er skaliert die eigenen Werte **und** wird an alle neu erschaffenen
+  /// [ObjectDoughZombie]-Instanzen weitergereicht.
+  final double strengthFactor;
+
+  ObjectDoughDumpster({this.strengthFactor = 1.0})
+      : super(
+          name: _generateTrumpsterName(),
+          imagePath: "assets/images/token/token_spawner.png",
+          woundValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.wound,
+            strengthFactor,
+          ),
+          attackValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.attack,
+            strengthFactor,
+          ),
+          defenseValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.defense,
+            strengthFactor,
+          ),
+          movementValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.movement,
+            strengthFactor,
+          ),
+          damageValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.damage,
+            strengthFactor,
+          ),
+          rangeValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.range,
+            strengthFactor,
+          ),
+          moneyValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.money,
+            strengthFactor,
+          ),
+          xpValue: FrtService.scaleStat(
+            EconomyBalance.doughDumpsterStats.xp,
+            strengthFactor,
+          ),
+        );
 
   List<ObjectDoughZombie> zombieList = [];
 
   /// Spawnt 1w6 (1-6) Dough Zombies und fügt sie der zombieList hinzu.
   /// Gibt die Liste der neu erschaffenen Zombies zurück.
+  ///
+  /// Die Zombies erben den [strengthFactor] des Dumpsters (Kapitel 14, Q3),
+  /// damit der Spawner seine Korruptions-Skalierung weitergibt.
   List<ObjectDoughZombie> spawnZombies() {
     final random = Random();
     final count = random.nextInt(6) + 1; // 1w6: 1 bis 6
     final List<ObjectDoughZombie> newZombies = [];
 
     for (int i = 0; i < count; i++) {
-      final zombie = ObjectDoughZombie();
+      final zombie = ObjectDoughZombie(strengthFactor: strengthFactor);
       zombieList.add(zombie);
       newZombies.add(zombie);
     }

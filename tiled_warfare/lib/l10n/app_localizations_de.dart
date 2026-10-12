@@ -100,6 +100,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String districtLostMessage(String district) {
+    return 'Der Stadtteil $district ist verloren (Korruption). Solange er nicht befreit ist, kann dort kein Restaurant gegründet werden.';
+  }
+
+  @override
+  String corruptionLabel(int percent) {
+    return 'Korruption: $percent %';
+  }
+
+  @override
   String get noOtherSavegames => 'Keine weiteren Spielstände vorhanden.';
 
   @override
@@ -208,6 +218,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get hire => 'Anstellen';
+
+  @override
+  String get roleAlreadyHired => 'Bereits angestellt';
 
   @override
   String get restaurant => 'Restaurant';
@@ -1041,6 +1054,49 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String catchUpRivalSabotageLoss(int loss) {
     return 'Rivalen-Sabotage: Einkommen −$loss €';
+  }
+
+  @override
+  String rankingBadge(int rank, int total, String district) {
+    return 'Platz $rank von $total in $district';
+  }
+
+  @override
+  String get weekReportTitle => 'Wochenbericht';
+
+  @override
+  String get rankingSectionTitle => 'Rangliste im Stadtteil';
+
+  @override
+  String get rankingYou => 'Sie';
+
+  @override
+  String get stanceAlly => 'Verbündet';
+
+  @override
+  String get stanceNeutral => 'Neutral';
+
+  @override
+  String get stanceEnemy => 'Feind';
+
+  @override
+  String get rivalInsolvent => 'Pleite';
+
+  @override
+  String get battleRivalsTitle => 'Rivalen in diesem Gefecht';
+
+  @override
+  String get battleRivalsNone => 'Keine Rivalen im Stadtteil.';
+
+  @override
+  String battleRivalRow(String name, String stance, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Einheiten',
+      one: '1 Einheit',
+    );
+    return '$name — $stance, $_temp0';
   }
 
   @override
