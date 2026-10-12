@@ -730,6 +730,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       itemBuilder: (context, index) {
         final role = kAllManagementRoles[index];
         final wage = EconomyBalance.managementRoleWagePerWeek[role] ?? 0;
+        final alreadyHired = _profile.hasManagementRole(role);
         return SizedBox(
           width: 220,
           child: Card(
@@ -760,9 +761,16 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () => _hireManagementRole(role),
-                      icon: const Icon(Icons.person_add, size: 18),
-                      label: Text(l10n.hire),
+                      onPressed: alreadyHired
+                          ? null
+                          : () => _hireManagementRole(role),
+                      icon: Icon(
+                        alreadyHired ? Icons.check : Icons.person_add,
+                        size: 18,
+                      ),
+                      label: Text(
+                        alreadyHired ? l10n.roleAlreadyHired : l10n.hire,
+                      ),
                     ),
                   ),
                 ],
@@ -785,6 +793,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       itemBuilder: (context, index) {
         final role = kAllSupportRoles[index];
         final wage = EconomyBalance.supportRoleWagePerWeek[role] ?? 0;
+        final alreadyHired = _profile.hasSupportRole(role);
         return SizedBox(
           width: 220,
           child: Card(
@@ -815,9 +824,15 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () => _hireSupportRole(role),
-                      icon: const Icon(Icons.person_add, size: 18),
-                      label: Text(l10n.hire),
+                      onPressed:
+                          alreadyHired ? null : () => _hireSupportRole(role),
+                      icon: Icon(
+                        alreadyHired ? Icons.check : Icons.person_add,
+                        size: 18,
+                      ),
+                      label: Text(
+                        alreadyHired ? l10n.roleAlreadyHired : l10n.hire,
+                      ),
                     ),
                   ),
                 ],

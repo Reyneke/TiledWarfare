@@ -1,4 +1,9 @@
-//TODO Diese Notizen überarbeiten und sinnvoll ergänzen.
+<!--
+  Pflege-Hinweis (V1 abgeschlossen): Dieses Regelwerk beschreibt den Soll-Zustand
+  nach `feat_better_restaurant_management`. Kapitel 1 (mehrere Restaurants),
+  Kapitel 2 (Wirtschaftsschleife) und Kapitel 8 (Echtzeit-Zeitsystem) sind
+  umgesetzt; Abweichungen sind je Abschnitt als „Ist/V1" markiert.
+-->
 Um das "Your Guys"-Prinzip aufzubauen, wird dem Spieler die Chance gegeben, sich ein Team aus Spielercharakteren aufzubauen und mit diesem in die Schlacht zu ziehen.
 
 Dafür benötigt es einige Regeln zur Verwaltung des Teams. Diese sollen hier nun aufgeführt werden.
@@ -8,6 +13,20 @@ Dafür benötigt es einige Regeln zur Verwaltung des Teams. Diese sollen hier nu
 ## 1. Die Bedeutung des Wortes "Team"
 
 Da das Spiel im Restaurant-Genre spielt und sich Charaktere an dem internationalen Brigade-System orientieren (siehe: [Brigade System](https://en.wikipedia.org/wiki/Brigade_system)), besitzt der Spieler natürlich kein "Team", sondern ein **Restaurant**. Dieses kann er frei benennen und über einen Picker ein Bild hochladen, welches lokal gespeichert wird.
+
+### 1.1 Mehrere Restaurants = unabhängige Spielstände mit Standort (V1)
+
+Der Spieler kann **mehrere Restaurants** gleichzeitig besitzen. Jedes Restaurant ist ein **eigener, unabhängiger Spielstand** und wird gedanklich wie ein eigener „Spieler“ geführt:
+
+| Aspekt | Regel |
+|--------|-------|
+| Unabhängigkeit | Budget, Personal, Erweiterungen, Verletzungen und Zeitanker (`lastSeenAt`/`weekAnchorAt`) gehören **je Restaurant**. Der Wechsel zwischen Restaurants löst je Restaurant seinen **eigenen Catch-up** aus |
+| Standort (Stadtteil) | Jedes Restaurant hat einen **Stadtteil** (District). Der Stadtteil bestimmt **Prestige**, Attraktivität, die **Rivalen-Anzahl** (Kapitel 13) und die Namensquelle des Personals |
+| Ein Restaurant ist „aktiv“ | Es gibt **ein aktives Restaurant**. Nur dieses wird in der Restaurant-Ansicht bearbeitet; alle anderen werden über die Restaurantliste verwaltet |
+| Auflösung | Wird ein Restaurant bankrott (Permadeath, § 6.2), bleibt es **sichtbar**, blockiert aber den belegten Stadtteil und ist **löschbar**; die übrigen Restaurants sind davon nicht betroffen |
+| Persistenz | Alle Restaurants liegen im selben lokalen Profil (siehe `6_Persistenz.md`); die Ablage als eine Profildatei mit einer Liste von Restaurants |
+
+> Formeln, Konstanten und Umsetzung: `doc/todo/feat_better_restaurant_management/1_mehrere_Restaurants.md`.
 
 ---
 
@@ -44,7 +63,10 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
   **Verwaltungsrollen** (Chefsekretärin/Rechtsanwalt/Buchhalter, `11a` E12) mindern laufende Kosten, Strafen
   bzw. Erweiterungs-Anschaffungspreise; ihre aktiven Features richten sich nach `11a` E14–E16.
 
-**Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. Restaurant-Wechsel nachgeholt (Catch-up). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
+**Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. beim **Wechsel zum jeweiligen Restaurant** nachgeholt (Catch-up, je Restaurant eigenständig). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
+
+- **Tagesschritt (§ 6):** Das passive Einkommen entsteht anteilig **je vollem Echtzeittag** (Resttage werden gutgeschrieben); Arztkosten, Unterhalt, Negativzinsen und die Wochen-Zusammenfassung entstehen nur an **vollen 7-Tage-Blöcken**.
+- **Wochen-Cap (L6):** Eine zu lange Abwesenheit wird nicht unbegrenzt nachgerechnet. Mehr als `EconomyBalance.maxCatchUpWeeks` (= 52) fällige Wochen werden **ohne Buchung übersprungen** (das Wochenraster bleibt erhalten), damit ein versehentlich vorgestellter Systemtimer den Spielstand nicht in den Bankrott rechnet.
 
 ### 2.3 Charakterklassen & Brigade-Rollen
 
@@ -265,4 +287,4 @@ Bei einem Neustart:
 
 - Dieses Regelwerk sollte mit den tatsächlichen Implementierungen in `object_apprentice.dart`, `object_line_cook.dart`, `object_token.dart` und `object_player.dart` abgeglichen werden
 - **Attribute & Persönlichkeit (V9):** kanonische Attributliste, Enneagramm-Traits, ±1W20-Varianz, Ressourcen, Stress/Ruhe und Erschöpfungs-Malus siehe `doc/todo/feat_better_restaurant_management/9_Personal.md`
-- **Aktuelles Implementierungs-Detail:** `ObjectPlayer` verwaltet derzeit nur `lineCookList`. Die Anheuerung von Lehrlingen und deren Verwaltung muss noch in den Code integriert werden
+- **Aktuelles Implementierungs-Detail:** Die Kampf-Kader-Verwaltung liegt bei `ObjectPlayer` (Auswahl über die Checkboxen in § 5.1). Die Anheuerung/Fortbildung von Lehrlingen ist über die Personalverwaltung umgesetzt; das Nicht-Kampf-Personal (Hilfs-/Service- und Verwaltungsrollen) wird über `hireSupportRole`/`hireManagementRole` geführt und ist **einmalig je Rolle** (keine Mehrfach-Anstellung derselben Rolle, `11a` E11).

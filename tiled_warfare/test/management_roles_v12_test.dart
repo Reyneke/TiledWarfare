@@ -552,7 +552,7 @@ void main() {
       }
     });
 
-    test('Mannschaft wird persistiert (Schema v9)', () {
+    test('Mannschaft wird persistiert (Schema v10)', () {
       final entry = management(
         ManagementRole.unionChief,
         activeFeature: ManagementFeature.unionWorkers.name,
@@ -564,7 +564,7 @@ void main() {
 
       final legacy = StaffEntryData.fromJson({'name': 'Alt'});
       expect(legacy.featureTeamIds, isNull);
-      expect(kProfileSchemaVersion, 9);
+      expect(kProfileSchemaVersion, 10);
     });
   });
 
