@@ -1,6 +1,6 @@
 # Power Projection
 
-> **Status:** Entwurf. Dieses Dokument spezifiziert den **Power Projection**-Wert (PP), der über eine **Fuzzy-Logik** bestimmt wird – als Kapitel des Sprints (gefolgt von `13_Gegner_Restaurants.md`) und aufbauend auf `2-Wirtschaftsschleife.md` (§ 8, passives Einkommen), `8_Echtzeit-Zeitsystem.md` (V8, Wochen-Tick), `7_Wirtschaftswerte_zentralisieren.md` (V7, `EconomyBalance`) sowie `9_Personal.md`.
+> **Status:** ✅ umgesetzt & validiert (Kapitel 12/13, Commit `4f2c300`; P2-Verifikation nachgezogen). Dieses Dokument spezifiziert den **Power Projection**-Wert (PP), der über eine **Fuzzy-Logik** bestimmt wird – als Kapitel des Sprints (gefolgt von `13_Gegner_Restaurants.md`) und aufbauend auf `2-Wirtschaftsschleife.md` (§ 8, passives Einkommen), `8_Echtzeit-Zeitsystem.md` (V8, Wochen-Tick), `7_Wirtschaftswerte_zentralisieren.md` (V7, `EconomyBalance`) sowie `9_Personal.md`.
 
 ## Ziel
 
@@ -89,7 +89,7 @@ return output.crispValue ?? 50;   // Defuzzifizierung über die Representative-V
 ### Effekte
 
 - **Ranking (nicht-fuzzy):** Alle Restaurants des Stadtteils (Spieler + NPC) werden je Wochen-Tick nach PP **absteigend** sortiert; Platzierung = Rang 1…n. Das neue Ranking fließt erst im **nächsten** Tick als Konkurrenzdichte ein (1-Tick-Verzögerung ⇒ kein Fixpunkt, P1).
-- **Passives Einkommen:** `incomePerWeek = passiveIncomePerWeek(...)` (§ 8) × Faktor aus PP. Vorschlag: `powerProjectionIncomeFactor` linear aus PP 0–100 abgeleitet (z. B. 0.75 … 1.25), justierbar in `EconomyBalance`. **Bewusst als Faktor** statt als 4. Eingang der Kunden-Fuzzy (§ 8), damit der bestehende Motor samt Tests unverändert bleibt (P2). Zusätzlich wird der Faktor durch die **Gegenwirkung** der Rivalen-Aggressivität skaliert (`13_Gegner_Restaurants.md` → „Rangliste“).
+- **Passives Einkommen:** `incomePerWeek = passiveIncomePerWeek(...)` (§ 8) × Faktor aus PP. **Umgesetzt (P2/Q2/Q10):** zweite Mini-Fuzzy-Stufe `PowerProjectionService.incomeFactor` (0.75–1.25), zusätzlich skaliert durch die **Gegenwirkung** `PowerProjectionService.competitionPressureFactor` (0.85–1.15); der gebuchte Faktor ist `effectiveIncomeFactor = incomeFactor(PP) × competitionPressureFactor` (`13_Gegner_Restaurants.md` → „Rangliste“). **Bewusst als Faktor** statt als 4. Eingang der Kunden-Fuzzy (§ 8), damit der bestehende Motor samt Tests unverändert bleibt (P2). In `GameClockService.catchUp` wird der Faktor zusätzlich um den FRT-Korruptions-Abzug ergänzt (Q8, `14_FRT.md`) und als `WeeklyTickResult.incomeFactor` ausgewiesen.
 
 ## Integration
 
@@ -97,13 +97,32 @@ return output.crispValue ?? 50;   // Defuzzifizierung über die Representative-V
 - PP/Platzierung wird **je Catch-up neu berechnet** (idempotent, V8) – kein neues Feld in `RestaurantData` nötig, solange alles aus dem Snapshot plus einer deterministischen NPC-Quelle (z. B. aus Profil-/Restaurant-ID) ableitbar ist. Die aktuelle Platzierung wird für die UI im Wochen-Ergebnis (`WeeklyTickResult`) mitgeliefert.
 - `ScreenRestaurant`: Anzeige „Platz 3 von 7 in SoHo“ (neue l10n-Strings in `app_de.arb`/`app_en.arb`).
 
+## Umsetzung (Stand)
+
+**Umgesetzt & validiert** (Kapitel 12/13, Commit `4f2c300`; P2-Verifikation nachgezogen):
+
+| Baustein | Datei | Test |
+|---|---|---|
+| PP-Fuzzy (Treiber Konkurrenzdichte/Bilanz/Teamqualität) | `lib/services/power_projection_service.dart` (`_PowerProjectionEngine`) | `balance_sanity_test.dart` |
+| PP-Einkommensfaktor (0.75–1.25, zweite Mini-Fuzzy-Stufe, Q2) | `power_projection_service.dart` (`_IncomeFactorEngine`, `incomeFactor`) | `balance_sanity_test.dart` |
+| Konkurrenzdruck (0.85–1.15, Gegenwirkung, Q10) | `power_projection_service.dart` (`_PressureEngine`, `competitionPressureFactor`) | `balance_sanity_test.dart` |
+| Effektiver Faktor `incomeFactor × Konkurrenzdruck` | `power_projection_service.dart` (`effectiveIncomeFactor`) | `balance_sanity_test.dart`, `power_projection_ranking_test.dart` |
+| Verdrahtung in den Wochen-Tick (§ 8, P2) | `lib/services/game_clock_service.dart` (`catchUp`, `powerProjectionState`, `WeeklyTickResult.incomeFactor`) | `power_projection_ranking_test.dart`, `rival_simulation_weekly_test.dart` |
+| Rangliste/Wochen-Simulation | `lib/services/rival_service.dart` (`standings`/`simulateField`) | `rival_simulation_weekly_test.dart` |
+| Konstanten (V7) | `lib/services/economy_balance.dart` | `balance_sanity_test.dart` |
+
+> Hinweis: Die persistenzfreie 1-Tick-Näherung (P1/Q3) nutzt im Code den Rang einer
+> **vorläufigen** PP (`competitionFromRank`). Die frühere, nie verdrahtete
+> `competitionFromPp`-Variante wurde als toter Code entfernt.
+
+
 ## Probleme
 
 ### P1 – Ranking zugleich Ein- und Ausgang (Zirkelbezug)
 Steht das Ranking als **Eingang** einer Fuzzy-Logik, deren **Ausgang** (PP) genau dieses Ranking festlegt, entsteht ein Fixpunkt. **Entschieden:** Eingang ist die Konkurrenzdichte aus der Platzierung des **vorherigen** Ticks (1-Tick-Verzögerung); das Ranking selbst ist Ausgabe eines einfachen Sortierens. Das macht die Logik sequentiell, deterministisch und testbar.
 
 ### P2 – Überlappung mit dem passiven Einkommen (§ 8)
-Laut Roh-Notiz soll PP „weiterer Eingangswert“ der §-8-Fuzzy sein. Ein 4. Eingang würde `PassiveIncomeService` samt Verträgen (`balance_sanity_test`) ändern. **Entschieden:** PP wirkt als **Faktor** (0.75–1.25) auf `passiveIncomePerWeek`.
+Laut Roh-Notiz soll PP „weiterer Eingangswert“ der §-8-Fuzzy sein. Ein 4. Eingang würde `PassiveIncomeService` samt Verträgen (`balance_sanity_test`) ändern. **Entschieden:** PP wirkt als **Faktor** (0.75–1.25) auf `passiveIncomePerWeek`. **Umgesetzt:** `PowerProjectionService.effectiveIncomeFactor` (PP-Faktor × Konkurrenzdruck), verdrahtet in `GameClockService.catchUp` (`WeeklyTickResult.incomeFactor`); abgesichert in `balance_sanity_test.dart` und `power_projection_ranking_test.dart`.
 
 ### P3 – „Gegner“ doppeldeutig / kein Rivalen-Modell im Code
 Im Code existieren nur **Gefechts-Gegner** (`ObjectHost`, Token). Ein NPC-Restaurant-/Rivalen-Modell **fehlt**; ohne definierte Quelle ist weder die Anzahl je Stadtteil noch das Ranking berechenbar. Die in „Ranking“ vorgeschlagene Prestige↔Anzahl-Ableitung setzt damit eine Datenquelle (`13_Gegner_Restaurants.md`) voraus.
@@ -127,6 +146,6 @@ Ohne eigenes PP-Modell der Gegner (oder Level-Bänder) ändert sich die Ranglist
 3. **Matchmaking:** Soll PP auch die **Host-Schwierigkeit** der Gefechts-Gegner skalieren (Brücke zu `ObjectHost`)? **Entschieden:** Rivalen treten im Gefecht des Spielers auf (1–4 Rivalen, Stance Verbündet/Neutral/Feind) – siehe `13_Gegner_Restaurants.md` → „Gefechtsteilnahme“.
 4. **Persistenz:** Bewusst je Catch-up **neu berechnen** (Vorschlag) oder doch als Feld (`powerProjection`, `rank`) in `RestaurantData` sichern – inkl. Migration?
 5. **Weitere Eingangswerte:** Welche der Vorschläge (Erweiterungslevel, Rebranding-Frische, Kundenzufriedenheit, Social-Media-Manager) kommen in die Kern-Fuzzy, welche nur in den Faktor?
-6. **Faktorform:** Linearer Faktor vs. zweite Mini-Fuzzy-Stufe (PP → Faktor); Absicherung in `balance_sanity_test`.
+6. **Faktorform:** Linearer Faktor vs. zweite Mini-Fuzzy-Stufe (PP → Faktor); Absicherung in `balance_sanity_test`. **Entschieden/umgesetzt:** zweite Mini-Fuzzy-Stufe (`_IncomeFactorEngine` 0.75–1.25; `_PressureEngine` 0.85–1.15), Tests in `balance_sanity_test.dart`.
 7. **UI:** Wo wird die Platzierung angezeigt (Restaurant-Screen, Start-Screen, Wochenbericht)? Benötigte l10n-Strings.
 8. **Update-Reihenfolge im Catch-up:** Ranking-Update vor oder nach der Einkommensbuchung? **Vorschlag:** Bilanz/Teamqualität einsammeln → PP → Ranking → Einkommen mit neuem Faktor.

@@ -343,17 +343,6 @@ class PowerProjectionService {
     return normalized.clamp(0.0, 1.0);
   }
 
-  /// Konkurrenzdichte aus dem **relativen PP-Abstand** zur Feldspitze – die
-  /// persistenzfreie Variante der 1-Tick-Verzögerung (Q3): Der aktuelle
-  /// Feld-Durchschnitt dient als Näherung für den vorherigen Rang.
-  static double competitionFromPp(int playerPp, double fieldAveragePp) {
-    final gap =
-        (playerPp - fieldAveragePp) / EconomyBalance.powerProjectionDomainMax;
-    // Spieler über dem Feld ⇒ wenig Konkurrenz (kompetitiv niedrig).
-    final value = (1.0 - gap) / 2.0;
-    return value.clamp(0.0, 1.0);
-  }
-
   /// Einkommensfaktor (0.75–1.25) aus der PP – zweite Mini-Fuzzy-Stufe (Q2).
   static double incomeFactor(int pp) =>
       _factor.resolve(pp.clamp(0, EconomyBalance.powerProjectionDomainMax));

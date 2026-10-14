@@ -58,10 +58,18 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
 - Wiederbelebung durch den Teamarzt (einmalig, pro wiederholtem Rettungswurf)
 - **Laufend (wöchentlich):** Teamarzt-Kosten (`costPerWeek`), Unterhalt der Restauranterweiterungen
 - Negativzinsen bei verschuldetem Budget
-- **Strafen** (V11): aufgedeckte Sabotage gegen Rivalen (`13_Gegner_Restaurants.md` → „Minimal-Modul“); sie
-  werden im Wochentick gebucht und erscheinen als `penaltyCosts` in der Wochenabrechnung. Die
+- **Strafen** (V11/V13): aufgedeckte Sabotage gegen Rivalen (`13_Gegner_Restaurants.md` → „Minimal-Modul“)
+  sowie – als passive zweite Quelle – die **Behörden-Inspektion** (Hygiene-Kontrolle der Behörden, alle paar
+  Wochen deterministisch fällig; Strafe steigt mit der Stadtteil-Korruption). Beide werden im Wochentick gebucht
+  und erscheinen als `penaltyCosts` in der Wochenabrechnung. Die Minderung ist **additiv** und auf 100 %
+  gedeckelt: **Rechtsanwalt** (passiv), der aktive „Winkelzug“ und die Restauranterweiterung
+  **Zertifizierung/Hygiene-Siegel** (`11b`). Die
   **Verwaltungsrollen** (Chefsekretärin/Rechtsanwalt/Buchhalter, `11a` E12) mindern laufende Kosten, Strafen
   bzw. Erweiterungs-Anschaffungspreise; ihre aktiven Features richten sich nach `11a` E14–E16.
+- **Einmalkosten der Personal-Features** (Aktivierung, `11a` E9/E15/E16): Sie werden **sofort** beim Aktivieren
+  gebucht – der Spieler bestätigt sie vorab im Aktivierungsdialog (Wirkung, Kosten, Träger, Dauer). Die
+  Wochenabrechnung führt sie zusätzlich als eigene Zeile `prepaidFeatureCosts` (informativ, keine zweite
+  Buchung, `11a` E20).
 
 **Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. beim **Wechsel zum jeweiligen Restaurant** nachgeholt (Catch-up, je Restaurant eigenständig). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
 
@@ -76,7 +84,10 @@ Der Spieler kann Charaktere verschiedener Klassen anheuern und weiterentwickeln.
 |--------|-----------|---------------|--------------|
 | **Lehrling (Apprentice)** | `object_apprentice.dart` | Sofort verfügbar | Einstiegsklasse, geringe Stats, günstig. Wird direkt angeworben |
 | **Line Cook** | `object_line_cook.dart` | Fortbildung aus Lehrling (alle 5 Level) | Verbesserte Stats, teurer, stärker im Kampf |
-| *(Weitere Klassen folgen)* | – | – | Z. B. Sous Chef, Chef de Partie, Patissier |
+| **Chef de partie** | `object_chef_de_partie.dart` | Fortbildung aus Line Cook (Level-Gate) | Postenchef; wählt ab hier eine **Küchenstation** (Selbst-Bonus + Aura) |
+| **Sous-chef** | `object_sous_chef.dart` | Fortbildung aus Chef de partie | Stellvertreter des Küchenchefs, größerer Aura-Radius |
+| **Chef de cuisine** | `object_head_chef.dart` | Fortbildung aus Sous-chef | Doppelrolle: **aktiv** (Management-Buff, kein Gefecht) oder **formell** (kämpfend) |
+| **Pâtissier** | `object_patissier.dart` | Support-**Station** des Chef de partie | Kein Aura-Träger; verstärkt den Wochen-Refill des Personals (eigenes Klassen-Profil) |
 
 **Wichtig:** Der Spieler kann **nur** Lehrlinge direkt anheuern. Höhere Klassen werden durch Fortbildung freigeschaltet.
 
@@ -127,6 +138,21 @@ Zusätzlich trägt jeder Charakter eine stabile `id` (CRC32) als Referenz für A
 
 > Formeln, Konstanten und Umsetzung: `doc/todo/feat_better_restaurant_management/9_Personal.md`.
 
+### 2.7 Teamdynamik (V9, P5)
+
+Zwischen den Charakteren eines Restaurants entsteht eine **deterministische Paar-Affinität**: Sie wird aus **beiden
+Persönlichkeits-IDs** und den **stabilen Charakter-IDs** abgeleitet (CRC32 – kein RNG, kein Speicherfeld) und ist
+symmetrisch. Ergebnis je ungeordnetem Paar: **Sympathie (+1)**, **neutral (0)** oder **Spannung (−1)**.
+
+Die Ø-Affinität aller Paare wirkt als kleiner **additiver** Zuschlag auf **Attraktivität** und
+**Kundenzufriedenheit** (und damit auf das passive Einkommen); die Gewichte stehen in `EconomyBalance`
+(`teamChemistryAttractivenessWeight`/`teamChemistrySatisfactionWeight`). Teams mit weniger als zwei Charakteren
+sowie Alt-Daten ohne Persönlichkeitsprofil bleiben neutral. Der Effekt ist bewusst ein **Nudge** – deutlich
+schwächer als Rang-, Stations- oder Erweiterungseffekte.
+
+> Umsetzung: `lib/services/team_dynamics_service.dart`; Wirkung in `GameClockService.attractivenessOf` /
+> `satisfactionOf`; Tests: `test/team_dynamics_test.dart`.
+
 ## 3. Charakter-Progression
 
 ### 3.1 Erfahrungspunkte (XP)
@@ -159,6 +185,24 @@ Bei einem Levelaufstieg erhält der Charakter Verbesserungen. Vorschlag für zuk
 - Der Charakter behält seine bisherigen Stats und addiert die Basis-Stats der neuen Klasse
 
 ---
+
+### 3.4 Karriere-Neustart auf Level 0
+
+Die **einzige Rückholmöglichkeit** eines bereits beförderten Charakters (V10 § 6): Gegen eine level-abhängige
+Gebühr (`careerRestartCostBase` + `careerRestartCostPerLevel` je Charakter-Level, gebucht bis zur Negativgrenze
+via `canAfford`) wird er wieder **Lehrling**:
+
+- Rang → Lehrling, Level/XP → frischer Start, Küchenstation und Doppelrolle → keine
+- Zustand → `ready` (Verletzungen, Notfall-Spritze und Stress-/Ruhe-Override werden aufgehoben)
+- Ressourcen (`vitalityCurrent`/`moraleCurrent`) → Trait-Startwerte des Profils
+- Die **Identität bleibt** erhalten: stabile `id`, Persönlichkeit, Match-Historie, Name und Grafik
+- Fällt dadurch der **aktive** Chef de cuisine weg, rückt ein formeller Chef nach (§ 6.2)
+
+Die Aktion steht ab jedem Rang **über** dem Lehrling auf der Charakter-Detailseite bereit, wird **bestätigt** und
+ist **nicht erstattbar**; Lehrlinge selbst können nicht neu starten.
+
+> Umsetzung: `ObjectProfile.restartCareer`, `EconomyService.careerRestartCost`; Tests:
+> `test/career_restart_test.dart`, `test/screen_character_detail_career_restart_test.dart`.
 
 ## 4. Charakter-Status & Verletzungen
 
@@ -271,7 +315,8 @@ Nach der Auswahl kann der Spieler auf **"Ins Gefecht"** klicken und das eigentli
 - Das Budget kann bis zum doppelten Startwert ins Negative gehen
 - Wird diese Grenze überschritten, endet das Spiel dauerhaft (Permadeath)
 - Alle Charaktere gehen verloren
-- Der Spieler muss ein neues Restaurant erstellen
+- **Mehrere Restaurants (V1):** Ein aufgelöstes Restaurant **bleibt sichtbar** (Kennzeichnung „Aufgelöst“), **blockiert** den belegten Stadtteil (dort kann kein neues Restaurant gegründet werden) und ist **löschbar**; die übrigen Restaurants des Profils sind davon **nicht betroffen** (eigene Spielstände, § 1.1). Die Korruption eines verlorenen Stadtteils kann ein Restaurant ebenfalls entschädigungslos auflösen (`14_FRT.md`, Q4).
+- Der Spieler muss (im aufgelösten Stadtteil) ein neues Restaurant erstellen
 
 ### 6.3 Neustart
 

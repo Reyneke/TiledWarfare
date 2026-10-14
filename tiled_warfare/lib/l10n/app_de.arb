@@ -276,6 +276,11 @@
   "@fire": {
     "description": "Button zum Entlassen von Personal"
   },
+  "fireConfirm": "{name} wirklich entlassen? Eine Entlassung wird nicht erstattet.",
+  "@fireConfirm": {
+    "description": "Bestätigungsdialog beim Entlassen von Personal (P4)",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "hire": "Anstellen",
   "@hire": {
     "description": "Button zum Anstellen von Personal"
@@ -426,6 +431,32 @@
   "@stationVariantOf": {
     "description": "Untertitel einer Varianten-Station",
     "placeholders": { "base": { "type": "String" } }
+  },
+  "careerRestart": "Karriere-Neustart",
+  "@careerRestart": {
+    "description": "Bezeichnung des Karriere-Neustarts (Level 0, V10 § 6)"
+  },
+  "careerRestartAction": "Neu starten",
+  "@careerRestartAction": {
+    "description": "Aktion: Karriere neu starten"
+  },
+  "careerRestartHint": "Setzt Rang, Level und Zustand auf einen frischen Lehrling zurück ({cost} €).",
+  "@careerRestartHint": {
+    "description": "Erläuterung des Karriere-Neustarts inkl. Kosten",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "careerRestartConfirm": "{name} die Karriere neu starten? Rang, Level, Station und Zustand werden zurückgesetzt. Das kostet {cost} € und wird nicht erstattet.",
+  "@careerRestartConfirm": {
+    "description": "Bestätigungsdialog des Karriere-Neustarts",
+    "placeholders": { "name": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "careerRestartDone": "Karriere neu gestartet – der Charakter ist wieder Lehrling.",
+  "@careerRestartDone": {
+    "description": "Meldung nach erfolgreichem Karriere-Neustart"
+  },
+  "careerRestartNotAllowed": "Neustart nicht möglich (Rang, Team oder Budget).",
+  "@careerRestartNotAllowed": {
+    "description": "Meldung bei abgelehntem Karriere-Neustart"
   },
   "promoteToChefDePartie": "Zum Chef de partie befördern",
   "@promoteToChefDePartie": {
@@ -694,6 +725,38 @@
   "@managementSabotageEffect": {
     "description": "Wirkungsfenster einer erfolgreichen Sabotage",
     "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureConfirmTitle": "Feature aktivieren?",
+  "@managementFeatureConfirmTitle": {
+    "description": "Titel des Bestätigungsdialogs vor der Feature-Aktivierung (P4)"
+  },
+  "managementFeatureConfirmCarrier": "Träger: {name}",
+  "@managementFeatureConfirmCarrier": {
+    "description": "Träger des Features im Bestätigungsdialog (P4)",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "managementFeatureConfirmCost": "Einmalkosten: {cost} € (sofort)",
+  "@managementFeatureConfirmCost": {
+    "description": "Einmalkosten im Bestätigungsdialog (P4)",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "managementFeatureConfirmActive": "{days, plural, =1{Aktiv: 1 Tag} other{Aktiv: {days} Tage}}",
+  "@managementFeatureConfirmActive": {
+    "description": "Dauer der aktiven Phase im Bestätigungsdialog (P4)",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "managementFeatureConfirmAftermath": "{days, plural, =1{Nachwirkung: 1 Tag} other{Nachwirkung: {days} Tage}}",
+  "@managementFeatureConfirmAftermath": {
+    "description": "Dauer der Nachteilphase im Bestätigungsdialog (P4)",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "managementFeatureConfirmNoAftermath": "keine Nachwirkung",
+  "@managementFeatureConfirmNoAftermath": {
+    "description": "Hinweis: Feature ohne Nachteilphase (P4)"
+  },
+  "activeFeaturesTitle": "Laufende Features",
+  "@activeFeaturesTitle": {
+    "description": "Überschrift der Feature-Countdowns im Restaurant-Screen (P4)"
   },
   "rivalsSection": "Konkurrenz im Stadtteil",
   "@rivalsSection": {
@@ -1051,6 +1114,8 @@
   "@upgradeFirstAid": { "description": "Erweiterung: Erste-Hilfe-Station" },
   "upgradeLounge": "Ruheraum/Lounge",
   "@upgradeLounge": { "description": "Erweiterung: Ruheraum/Lounge" },
+  "upgradeCertification": "Zertifizierung/Hygiene-Siegel",
+  "@upgradeCertification": { "description": "Erweiterung: Zertifizierung/Hygiene-Siegel" },
   "upgradeLevel": "Stufe {level}/{max}",
   "@upgradeLevel": {
     "description": "Ausbaustufe einer Erweiterung",
@@ -1133,6 +1198,11 @@
     "description": "Unentdeckte Rivalen-Sabotage schöpft Blockeinkommen ab (V13, Kapitel 13)",
     "placeholders": { "loss": { "type": "int" } }
   },
+  "catchUpPrepaidFeatureCost": "Feature-Einmalkosten (bei Aktivierung gebucht): −{cost} €",
+  "@catchUpPrepaidFeatureCost": {
+    "description": "Einmalkosten der im Block aktivierten Features (P4)",
+    "placeholders": { "cost": { "type": "int" } }
+  },
   "rankingBadge": "Platz {rank} von {total} in {district}",
   "@rankingBadge": {
     "description": "Platzierung des Restaurants im Stadtteil (Kapitel 12)",
@@ -1145,6 +1215,69 @@
   "weekReportTitle": "Wochenbericht",
   "@weekReportTitle": {
     "description": "Titel des Wochenberichts mit der Rangliste (Kapitel 12/13)"
+  },
+  "weekReportWeeksTitle": "Wochen-Aufschlüsselung",
+  "@weekReportWeeksTitle": {
+    "description": "Überschrift der blockweisen Aufschlüsselung im Wochenbericht (P6, 4.2/#5)"
+  },
+  "weekReportWeekHeader": "Woche {index} ({start}–{end})",
+  "@weekReportWeekHeader": {
+    "description": "Kopfzeile eines abgerechneten 7-Tage-Blocks im Wochenbericht (P6)",
+    "placeholders": {
+      "index": { "type": "int" },
+      "start": { "type": "String" },
+      "end": { "type": "String" }
+    }
+  },
+  "weekReportLineIncome": "Einkommen +{value} €",
+  "@weekReportLineIncome": {
+    "description": "Einkommenszeile eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineMedics": "Teamärzte −{value} €",
+  "@weekReportLineMedics": {
+    "description": "Teamarzt-Kosten eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineStaff": "Personal −{value} €",
+  "@weekReportLineStaff": {
+    "description": "Wochenlöhne eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineUpkeep": "Unterhalt −{value} €",
+  "@weekReportLineUpkeep": {
+    "description": "Erweiterungs-Unterhalt eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineInterest": "Zinsen −{value} €",
+  "@weekReportLineInterest": {
+    "description": "Negativzinsen eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLinePenalties": "Strafen −{value} €",
+  "@weekReportLinePenalties": {
+    "description": "Strafen eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineFeatures": "Features −{value} €",
+  "@weekReportLineFeatures": {
+    "description": "Laufende Feature-Kosten eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLinePrepaidFeatures": "Feature-Einmalkosten (vorab gebucht) −{value} €",
+  "@weekReportLinePrepaidFeatures": {
+    "description": "Im Block aktivierte Feature-Einmalkosten im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineSabotage": "Rivalen-Sabotage −{value} €",
+  "@weekReportLineSabotage": {
+    "description": "Abgeschöpftes Blockeinkommen durch unentdeckte Sabotage (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineBudgetAfter": "Budget danach {value} €",
+  "@weekReportLineBudgetAfter": {
+    "description": "Kontostand am Ende eines Blocks im Wochenbericht (P6)",
+    "placeholders": { "value": { "type": "int" } }
   },
   "rankingSectionTitle": "Rangliste im Stadtteil",
   "@rankingSectionTitle": {

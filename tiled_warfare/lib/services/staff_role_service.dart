@@ -1,7 +1,9 @@
 import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/management_role.dart';
+import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 
 /// Gemeinsamer Verwaltungs-Contract des Nicht-Kampf-Personals (Option C, `11a`).
@@ -12,6 +14,10 @@ import 'package:tiled_warfare/services/management_feature_service.dart';
 /// Rollen aus E12). Die **kategoriespezifische** Wirkung bleibt in den
 /// jeweiligen Diensten (`SupportRoleService`, `ManagementFeatureService`,
 /// `RivalService`).
+///
+/// Die **Strafen-Minderung** bündelt Personal (`lawyerPenaltyReductionPercent`)
+/// und Gebäude (`certification`, § 10) additiv an einer Stelle
+/// ([penaltyReductionPercent]) und deckelt sie auf 100 %.
 class StaffRoleService {
   StaffRoleService._();
 
@@ -97,14 +103,23 @@ class StaffRoleService {
       ? EconomyBalance.accountantOngoingCostReductionPercent
       : 0;
 
+  /// Strafen-Minderung durch Erweiterungen (Prozent) – derzeit nur die
+  /// **Zertifizierung/Hygiene-Siegel** (`certification`, § 10; `11b` Gruppe D).
+  ///
+  /// Kaufmännisch auf ganze Prozent gerundet und additiv zur Personal-Minderung.
+  static int upgradePenaltyReductionPercent(Map<UpgradeType, int> upgrades) =>
+      (EconomyService.upgradeEffects(upgrades).penaltyReduction * 100).round();
+
   /// Strafen-Minderung insgesamt (Prozent, gedeckelt auf 100).
   ///
   /// Setzt sich **additiv** zusammen aus dem passiven Abzug des Rechtsanwalts
-  /// (E12) und der Kompetenz-Stufe eines **aktiven** Winkelzugs (E15) – bei
-  /// Kompetenz 4 erreicht der Winkelzug allein 100 % (Negation).
+  /// (E12), der Kompetenz-Stufe eines **aktiven** Winkelzugs (E15) – bei
+  /// Kompetenz 4 erreicht der Winkelzug allein 100 % (Negation) – und der
+  /// **Zertifizierung** ([upgrades], § 10).
   static int penaltyReductionPercent(
     Iterable<StaffEntryData> entries, {
     DateTime? now,
+    Map<UpgradeType, int>? upgrades,
   }) {
     var percent = hasManagementRole(entries, ManagementRole.lawyer)
         ? EconomyBalance.lawyerPenaltyReductionPercent
@@ -117,18 +132,25 @@ class StaffRoleService {
     if (active != null) {
       percent += ManagementFeatureService.legalTrickReductionPercentFor(active);
     }
+    percent += upgradePenaltyReductionPercent(upgrades ?? const {});
     return percent.clamp(0, 100);
   }
 
-  /// Mindert eine Strafe [fine] um die Strafen-Minderung des Personals.
+  /// Mindert eine Strafe [fine] um die Strafen-Minderung des Personals und der
+  /// Erweiterungen ([upgrades]).
   ///
   /// Kaufmännisch gerundet; das Ergebnis ist nie negativ.
   static int reducedPenalty(
     Iterable<StaffEntryData> entries,
     int fine, {
     DateTime? now,
+    Map<UpgradeType, int>? upgrades,
   }) {
-    final percent = penaltyReductionPercent(entries, now: now);
+    final percent = penaltyReductionPercent(
+      entries,
+      now: now,
+      upgrades: upgrades,
+    );
     if (percent <= 0) return fine;
     return (fine * (100 - percent) / 100).round();
   }
@@ -198,9 +220,10 @@ class StaffRoleService {
   static int counterSabotagePenaltyReductionPercent(
     Iterable<StaffEntryData> entries, {
     DateTime? now,
+    Map<UpgradeType, int>? upgrades,
   }) {
     final at = now ?? DateTime.now();
-    var percent = penaltyReductionPercent(entries, now: at);
+    var percent = penaltyReductionPercent(entries, now: at, upgrades: upgrades);
     final legalTrickActive =
         ManagementFeatureService.activeEntry(
           entries,
@@ -229,8 +252,13 @@ class StaffRoleService {
     Iterable<StaffEntryData> entries,
     int fine, {
     DateTime? now,
+    Map<UpgradeType, int>? upgrades,
   }) {
-    final percent = counterSabotagePenaltyReductionPercent(entries, now: now);
+    final percent = counterSabotagePenaltyReductionPercent(
+      entries,
+      now: now,
+      upgrades: upgrades,
+    );
     if (percent <= 0) return fine;
     return (fine * (100 - percent) / 100).round();
   }

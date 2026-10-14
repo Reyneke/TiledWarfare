@@ -48,16 +48,20 @@ Dieser ist weder Küchenbrigade (`SupportRole`) noch Teamarzt – er gehört in 
 | **G4 – Lohnmodell je Kategorie** | Fixlohn ohne Thriftiness, solange eine Kategorie keine Persönlichkeit besitzt; persönlichkeitsabhängiger Lohn nur, wo Persönlichkeit existiert. |
 | **G5 – Neue Personalart = neuer `kind`-Wert** | Neue Arten docken entlang der gemeinsamen Checkliste an (Kategorie → `EconomyBalance` → Auswertung → Hook → UI → l10n → Tests) – **kein** Parallel-System. |
 
-**Offene Entscheidungen (bewusst noch nicht fixiert):**
+**Offene Entscheidungen:** keine – **E1/E2/E6 sind mit P4 entschieden** (siehe E18 in
+„Entscheidungen (getroffen)“). Offen ist nur noch *Umsetzung* künftiger Rollen (Maître d'hôtel, Caissier,
+Sommelier) als `management`-Einträge; der Duplikations-Guard beim Anheuern ist seit **E11** umgesetzt
+(`role_single_employment_test`). Die Feature-Entscheidungen **E7–E11** sind entschieden und umgesetzt
+(Abschnitt „Features – Sonderfertigkeiten spezieller Mitarbeiter“).
 
-| # | Frage | Optionen / Tendenz |
+| # | Frage | Entscheidung / Stand |
 |---|---|---|
-| E1 | Gehört der **Teamarzt** in die Taxonomie? | Eigenständiges Objekt behalten und nur den Verwaltungs-Contract teilen (**Tendenz**) vs. vollständig als `kind = medic` integrieren. |
-| E2 | Kategorie-Name/-Zuschnitt („Verwaltung & Marketing“)? | `management` vs. `administration` vs. `marketing`; eine Kategorie oder zwei (Verwaltung, Marketing)? |
+| E1 | Gehört der **Teamarzt** in die Taxonomie? | **Entschieden (P4, E18):** Eigenständiges Objekt `ObjectTeamMedic` behalten und nur den Verwaltungs-Contract teilen (`kind = medic` bleibt der Bestimmungsort für diese Sonderlogik) – **keine** vollständige Integration als Katalog-Rolle. |
+| E2 | Kategorie-Name/-Zuschnitt („Verwaltung & Marketing“)? | **Entschieden (P4, E18):** **eine** Kategorie mit dem Schlüssel `management` (`RoleKind.management`); „Verwaltung & Marketing“ bleibt nur der **Anzeigename** des Abschnitts. |
 | E3 | Wirkung des **Social Media Manager**? | **Entschieden (Grundlagen):** binärer Zuschlag **+10 % passives Einkommen** (`socialMediaManagerIncomePercent`), stapelt additiv mit dem Aboyeur; Hook im Catch-up. |
 | E4 | Persistenz-Migration? | Neues Feld `staffEntries`; Alt-Spielstände werden beim Laden importiert (`supportStaff` → `kind = support`), additiv/tolerant (**Tendenz**). |
 | E5 | UI-Gliederung? | **Entschieden (Grundlagen):** Kategorie-Gruppierung im bestehenden `ScreenHireAndFire` (Abschnitt „Verwaltung & Marketing“), **kein** neuer Restaurant-Reiter. |
-| E6 | Rollen-Vorschläge (Maître d'hôtel, Caissier, Sommelier)? | In `management` überführen oder als `support` belassen? |
+| E6 | Rollen-Vorschläge (Maître d'hôtel, Caissier, Sommelier)? | **Entschieden (P4, E18):** Sie werden – wenn sie gebaut werden – als **`management`**-Rollen geführt (Verwaltung/Kasse/Keller); **keine** Umklassierung bestehender Rollen und damit **keine** Änderung an `role_single_employment_test`. |
 
 > Die **Feature**-Entscheidungen **E7–E11** (aktive Sonderfertigkeiten, „PR-Kampagne“ des Social Media Manager)
 > sind im Abschnitt „Features – Sonderfertigkeiten spezieller Mitarbeiter“ mit ihren Tuning-Werten festgehalten.
@@ -91,14 +95,17 @@ Dieser ist weder Küchenbrigade (`SupportRole`) noch Teamarzt – er gehört in 
   migriert. `kProfileSchemaVersion` 5 → **6**.
 - **Tests:** `test/staff_entry_test.dart` (Kategorie-Roundtrip, tolerante Alt-Daten, Migration, Contract);
   die Schema-Version prüfen `support_role_test`/`profile_data_test` auf 6.
-- **Noch offen:** E1/E2/E6 (Teamarzt-Einordnung, Kategorie-Name, Zuordnung der Erweiterungsvorschläge) sowie der
-  Duplikations-Guard beim Anheuern. Die Feature-Entscheidungen **E7–E11** sind entschieden und umgesetzt
-  (Abschnitt „Features – Sonderfertigkeiten spezieller Mitarbeiter“).
+- **Noch offen:** nichts aus E1/E2/E6 – **P4 hat die Taxonomie entschieden** (E18: Teamarzt bleibt eigenständiges
+  Objekt, Kategorie heißt `management`, Vorschlagsrollen werden `management`) und der Duplikations-Guard beim
+  Anheuern ist seit **E11** umgesetzt (`role_single_employment_test`). Die Feature-Entscheidungen **E7–E11** sind
+  entschieden und umgesetzt (Abschnitt „Features – Sonderfertigkeiten spezieller Mitarbeiter“).
 
 ## Ist-Stand (umgesetzt)
 
 **Status:** vollständig umgesetzt (V10, Phasen 6–8, Commit `7939be4`; Features: `11a` E7–E11; V11-Rollen:
-E12–E17; **V12-Rollen: vier weitere `ManagementRole` + vier Features**). Werte verbindlich
+E12–E17; **V12-Rollen: vier weitere `ManagementRole` + vier Features**; **V13:** Sicherheitschef + Gegenschlag;
+**P4:** Rollen-Feinschliff – Entlass-Dialoge, Feature-Countdown, `prepaidFeatureCosts`, Aktivierungsdialog,
+Taxonomie **E18** und Lohn-Entscheidung **E19**). Werte verbindlich
 nur in `EconomyBalance` (V7); Auswertung in `SupportRoleService`/`StaffRoleService`/`ManagementFeatureService`
 (reine Funktionen), Modell/Persistenz in `SupportRole`/`SupportRoleData` (`RestaurantData.supportStaff`,
 `kProfileSchemaVersion = 9`, additiv/tolerant – unbekannte Rollen werden beim Laden übersprungen; ab v6 zusätzlich
@@ -134,7 +141,7 @@ Abschnitt „Verwaltungsrollen (umgesetzt V13)“:
 |---|---|---|---|---|
 | Social Media Manager | Social media manager | passives Einkommen **+10 %** (`socialMediaManagerIncomePercent`); stapelt **additiv** mit dem Aboyeur (+10 %, `aboyeurIncomePercent`) | 180 € | `catchUp` |
 | Chefsekretärin | Head secretary | laufende **Mitarbeiterkosten −5 %** (`chefSecretaryStaffCostReductionPercent`) und **Erweiterungs-Anschaffung −5 %** (`chefSecretaryUpgradeCostReductionPercent`) | 220 € | `catchUp` (Löhne), `ObjectProfile.buyUpgrade` (Anschaffung) |
-| Rechtsanwalt | Lawyer | **erlittene Strafen −25 %** (`lawyerPenaltyReductionPercent`); stapelt **additiv** mit dem aktiven „Winkelzug“ bis 100 % | 260 € | `RivalService.resolveSabotage` (Strafbuchung im Tick) |
+| Rechtsanwalt | Lawyer | **erlittene Strafen −25 %** (`lawyerPenaltyReductionPercent`); stapelt **additiv** mit dem aktiven „Winkelzug“ und der **Zertifizierung** (`11b`) bis 100 % | 260 € | `RivalService.resolveSabotage`/`InspectionService` (Strafbuchung im Tick) |
 | Buchhalter | Accountant | **alle laufenden Kosten −5 %** (`accountantOngoingCostReductionPercent`: Löhne, Arztkosten, Erweiterungs-Unterhalt) | 200 € | `catchUp` (Blockende) |
 | Oberkellner | Head waiter | Attraktivität **+0.05** (`headWaiterAttractivenessBonus`) und Kapazität **+5 %** (`headWaiterCapacityPercent`); Feature „Rush Hour“ | 150 € | `attractivenessOf`/`capacityOf` |
 | Personalchef | Personnel manager | Zufriedenheit **+0.05** (`personnelManagerSatisfactionBonus`) und Kapazität **+5 %** (`personnelManagerCapacityPercent`); Feature „Organisation ist alles“ | 230 € | `satisfactionOf`/`capacityOf`, `catchUp` (`featureCosts`) |
@@ -194,7 +201,9 @@ Abschnitt „Verwaltungsrollen (umgesetzt V13)“:
   und wird auch bei der Idempotenz wie die Heilung behandelt (nie fortschreiben, immer aus `featureActivatedAt`
   rechnen). Details siehe „Features – Sonderfertigkeiten spezieller Mitarbeiter“.
 - **Abrechnungsreihenfolge (Blockende):** passives Einkommen → Teamarzt-Kosten → Wochenlöhne
-  (Personal **+ Rollen**) → Erweiterungs-Unterhalt → Negativzinsen → `WeekSettlement`/Bankrott-Check.
+  (Personal **+ Rollen**) → Erweiterungs-Unterhalt → Negativzinsen → `WeekSettlement`/Bankrott-Check. Die
+  Wochenzeile führt zusätzlich die **vorab gebuchten** Feature-Einmalkosten des Blocks als eigene Zeile
+  `prepaidFeatureCosts` mit (P4, E20 – informativ, keine zweite Buchung).
 
 ### Schnittstellen & Datenfluss
 
@@ -202,11 +211,11 @@ Abschnitt „Verwaltungsrollen (umgesetzt V13)“:
 |---|---|
 | Modell | `enum SupportRole` (`lib/models/support_role.dart`) · `SupportRoleData` (`lib/models/profile_data.dart`) · `RoleKind`/`StaffEntryData` (`lib/models/staff_entry.dart`) · `ManagementRole` (`lib/models/management_role.dart`) · `ManagementFeature` (`lib/models/management_feature.dart`) |
 | Balance | `EconomyBalance.supportRoleWagePerWeek`/`managementRoleWagePerWeek` + alle `*Bonus`/`*Percent`-Konstanten, `patissierRefillBonusPercent`, `socialMediaManagerIncomePercent`, `feature*` (Kosten, Fenster, Kompetenz, Nachteile), `counterSabotage*`/`incomingSabotageChanceBasePercent`/`incomingDetectionShadinessToPercent`/`securityChiefDetectionBonusPercentPerCompetence`/`incomingSabotageIncomePenaltyPercent`/`incomingSabotageIncomePenaltyMaxPercent` (V13) |
-| Auswertung | `SupportRoleService` (reine Funktionen: `has`, `refillBonusPercent`, `exhaustionReliefPercent`, `incomePercent`, `upkeepReductionPercent`, `lootPercent`, `attractivenessBonus`, `satisfactionBonus`, `weeklyWages`) · `StaffRoleService` (Contract + Passive: `ofKind`, `hasKind`, `hasRole`, `weeklyWages`, `managementWagePerWeek`, `managementIncomePercent`, `nonCombatWeeklyWages`, `hasManagementRole`, `chefSecretaryStaffCostReductionPercent`, `chefSecretaryUpgradeCostReductionPercent`, `accountantOngoingCostReductionPercent`, `headWaiterAttractivenessBonus`, `personnelManagerSatisfactionBonus`, `capacityPercent`, `unionChiefWageIncreasePercent`, `unionChiefSinkReductionPercent`, `penaltyReductionPercent`, `reducedPenalty`, `reduceByPercent`) · `ManagementFeatureService` (Features: `competenceOf`, `activeEntry`, `aftermathEntry`, `featureCostFor`, `fixedCostOf`, `activationCostFor`, `activeDurationOf`, `aftermathDurationOf`, `legalTrickReductionPercentFor`, `sabotageSuccessPercentFor`, `sabotageRollFor`, `sabotageSucceeds`, `isResolutionDue`, `aftermathSinkMultipliers`, `refillFractionFor`, `xpBoostPercentFor`, V12: `inputBoostPercent`, `capacityFactor`, `sinkReliefPercent`, `malusReliefPercent`, `rushHourExtraSink`, `featureDailyCosts`, `unionWorkersTeamIds`, `sabotageTeamSize`, `sabotageAttempts`, `shadinessBonusPercent`, `sabotageExhaustionPerMember`, `unionChiefSinkReliefPercent`, V13: `securityChiefDetectionBonusPercent`, `counterSabotageTeamLimit`, `counterSabotageSuccessPercentFor`, `counterSabotageRollFor`, `counterSabotageSucceeds`, `isArmed`) · `RivalService` (Kapitel 13: `countFor`, `rosterOf`, `byId`, `sabotageIncomeBonusPercent`, `sabotageChancePercent`, `resolveSabotage`, V13: `incomingAttemptOccurs`, `incomingAttemptDetected`, `averageShadiness`, `incomingDetectionPercent`, `incomingAttackerIds`, `detectedAttackerIds`, `counterSabotageSecretary`, `counterSabotageCrewIds`, `counterSabotageChancePercent`, `resolveCounterSabotage`, `resolveIncomingSabotage`, `undetectedIds`/`undetectedCount`) |
-| Verwaltung | `ObjectProfile.hireSupportRole`/`fireSupportRole` · `ObjectProfile.hireManagementRole`/`fireStaffEntry` · `ObjectProfile.activateManagementFeature`/`activateUntargetedFeature`/`activateSabotage`/`activateUnionWorkers` · `ObjectProfile.managementFeatureActivationCost`/`unionWorkersTeamLimit`/`shadinessById` · `ObjectProfile.upgradePurchaseCost`/`buyUpgrade` · `ScreenHireAndFire` (Kategorie-Abschnitte, Feature-Aktivierung inkl. Mannschafts-Dialog, Rivalen-Liste) |
-| Wirtschaft | `GameClockService.catchUp` (Aboyeur, Plongeur, Social Media Manager, **Chefsekretärin/Buchhalter-Kostenabzüge**, **Gewerkschafts-Lohnaufschlag + `featureCosts`**, `staffCosts`, **Feature-Tages-XP/Sink/Refill/Reset**, **Sabotage-Auflösung + Tages-Einkommensbonus + Strafen**, **V13: eingehende Rivalen-Sabotage + Einkommens-Abschöpfung + Gegenschlag am Blockende**) · `_refillStaffResources` (Communard) · `_probeResources` (Tournant, **V12-Malus-Minderung**) · `_applyDailyResourceSink` (V12: Sink-Minderung + rangverteilte Rush-Hour-Erschöpfung) · `attractivenessOf`/`satisfactionOf`/`capacityOf` (Commis/Garçon **+ V12-Zuschläge und -Faktoren**) · `ScreenBattleResult` (Boucher, **Feature-XP-Boost**) |
+| Auswertung | `SupportRoleService` (reine Funktionen: `has`, `refillBonusPercent`, `exhaustionReliefPercent`, `incomePercent`, `upkeepReductionPercent`, `lootPercent`, `attractivenessBonus`, `satisfactionBonus`, `weeklyWages`) · `StaffRoleService` (Contract + Passive: `ofKind`, `hasKind`, `hasRole`, `weeklyWages`, `managementWagePerWeek`, `managementIncomePercent`, `nonCombatWeeklyWages`, `hasManagementRole`, `chefSecretaryStaffCostReductionPercent`, `chefSecretaryUpgradeCostReductionPercent`, `accountantOngoingCostReductionPercent`, `headWaiterAttractivenessBonus`, `personnelManagerSatisfactionBonus`, `capacityPercent`, `unionChiefWageIncreasePercent`, `unionChiefSinkReductionPercent`, `penaltyReductionPercent`, `reducedPenalty`, `reduceByPercent`) · `ManagementFeatureService` (Features: `competenceOf`, `activeEntry`, `aftermathEntry`, `featureCostFor`, `fixedCostOf`, `activationCostFor`, `activeDurationOf`, `aftermathDurationOf`, `legalTrickReductionPercentFor`, `sabotageSuccessPercentFor`, `sabotageRollFor`, `sabotageSucceeds`, `isResolutionDue`, `aftermathSinkMultipliers`, `refillFractionFor`, `xpBoostPercentFor`, V12: `inputBoostPercent`, `capacityFactor`, `sinkReliefPercent`, `malusReliefPercent`, `rushHourExtraSink`, `featureDailyCosts`, `unionWorkersTeamIds`, `sabotageTeamSize`, `sabotageAttempts`, `shadinessBonusPercent`, `sabotageExhaustionPerMember`, `unionChiefSinkReliefPercent`, V13: `securityChiefDetectionBonusPercent`, `counterSabotageTeamLimit`, `counterSabotageSuccessPercentFor`, `counterSabotageRollFor`, `counterSabotageSucceeds`, `isArmed`, **P4: `prepaidActivationCosts`**) · `RivalService` (Kapitel 13: `countFor`, `rosterOf`, `byId`, `sabotageIncomeBonusPercent`, `sabotageChancePercent`, `resolveSabotage`, V13: `incomingAttemptOccurs`, `incomingAttemptDetected`, `averageShadiness`, `incomingDetectionPercent`, `incomingAttackerIds`, `detectedAttackerIds`, `counterSabotageSecretary`, `counterSabotageCrewIds`, `counterSabotageChancePercent`, `resolveCounterSabotage`, `resolveIncomingSabotage`, `undetectedIds`/`undetectedCount`) · `InspectionService` (P3: `phaseOf`, `isDue`, `grossFine`, `resolve` – passive **Behörden-Inspektion** als `penaltyCosts`-Quelle) |
+| Verwaltung | `ObjectProfile.hireSupportRole`/`fireSupportRole` · `ObjectProfile.hireManagementRole`/`fireStaffEntry` · `ObjectProfile.activateManagementFeature`/`activateUntargetedFeature`/`activateSabotage`/`activateUnionWorkers` · `ObjectProfile.managementFeatureActivationCost`/`unionWorkersTeamLimit`/`shadinessById` · `ObjectProfile.upgradePurchaseCost`/`buyUpgrade` · `ScreenHireAndFire` (Kategorie-Abschnitte, Feature-Aktivierung inkl. Mannschafts-Dialog, Rivalen-Liste, **P4: `_confirmFire` + `_confirmFeatureActivation`**) |
+| Wirtschaft | `GameClockService.catchUp` (Aboyeur, Plongeur, Social Media Manager, **Chefsekretärin/Buchhalter-Kostenabzüge**, **Gewerkschafts-Lohnaufschlag + `featureCosts`**, `staffCosts`, **Feature-Tages-XP/Sink/Refill/Reset**, **Sabotage-Auflösung + Tages-Einkommensbonus + Strafen** (+ **P3: Inspektions-Strafe**), **V13: eingehende Rivalen-Sabotage + Einkommens-Abschöpfung + Gegenschlag am Blockende**, **P4: `prepaidFeatureCosts` je Block**) · `_refillStaffResources` (Communard) · `_probeResources` (Tournant, **V12-Malus-Minderung**) · `_applyDailyResourceSink` (V12: Sink-Minderung + rangverteilte Rush-Hour-Erschöpfung) · `attractivenessOf`/`satisfactionOf`/`capacityOf` (Commis/Garçon **+ V12-Zuschläge und -Faktoren**) · `ScreenBattleResult` (Boucher, **Feature-XP-Boost**) |
 | Persistenz | `RestaurantData.supportStaff` (`List<SupportRoleData>`) **und** `RestaurantData.staffEntries` (`List<StaffEntryData>` mit `kind`, Feature-Feldern inkl. `featureResolvedAt`/`featureTeamIds` sowie `RestaurantData.sabotageTargetId`/`sabotageAppliedUntil`; JSON tolerant, `kProfileSchemaVersion = 9`; Alt-Bestände werden zu `kind = support` migriert) |
-| l10n | `lib/l10n/support_role_labels.dart`, `lib/l10n/management_role_labels.dart`, `lib/l10n/management_feature_labels.dart` + ARB (DE/EN) |
+| l10n | `lib/l10n/support_role_labels.dart`, `lib/l10n/management_role_labels.dart`, `lib/l10n/management_feature_labels.dart`, `lib/l10n/management_feature_status.dart` (**P4**: geteilte Statuszeile für Personal- und Restaurant-Screen) + ARB (DE/EN) |
 
 ## Erweiterungsvorschläge („letzten Endes erweitert“)
 
@@ -240,7 +249,7 @@ Kategorie-Zuordnung (`support` vs. `management`) ist noch offen (E6):
 | **Caissier** (offen) | **Tresor/Kassenraum** (`vault`) | Senkung der Negativzinsen stapelt **additiv** mit der Erweiterung. |
 | **Lagerist** (V12) | **Kühlhaus/Kühlkette** (`coldRoom`) – **Erweiterung umgesetzt** ✅ | Mehr Kapazitäts-Basis für das aktive „Lagertetris“ – die Basis steht seit dem V1-Paket (`11b`); ohne Personal bleibt sie wirkungslos (`capacityOf` = 0). |
 | **Communard / Pâtissier** (V10 umgesetzt) · **Gewerkschaftschef** (V12) · **Tournant** (V10) | **Ruheraum/Lounge** (`lounge`) – **Erweiterung umgesetzt** ✅ | Der Ruheraum hebt das **Refill-Ziel**, auf das Communard (+15 %) und Pâtissier (+10 %) additiv aufsetzen (und von dem der Pâtissier sich selbst ausnimmt – das Gebäude nicht); die **Sink-Erleichterung** stapelt **additiv** mit dem Gewerkschaftschef (−24 % bei Kompetenz 4) und wird auf 100 % gedeckelt. Der **Erschöpfungs-Malus der Nulltage** bleibt allein die Domäne des **Tournant**. |
-| **Rechtsanwalt** (V11) | **Zertifizierung/Hygiene-Siegel** (`certification`) | Strafen-Minderung **setzt eine Strafenquelle** voraus (offen: Behörden/Inspektionen). |
+| **Rechtsanwalt** (V11) | **Zertifizierung/Hygiene-Siegel** (`certification`) – **Erweiterung umgesetzt** ✅ | Strafen-Minderung **setzt eine Strafenquelle** voraus – **entschieden & umgesetzt (P3):** die deterministische **Behörden-Inspektion** (`InspectionService`, fällig alle `inspectionIntervalWeeks` Blöcke) bucht ihre Strafe als `penaltyCosts` im Wochen-Tick; die Minderung stapelt dort **additiv** mit Rechtsanwalt-Passiv und „Winkelzug“ (100 %-Deckel). |
 | **Sicherheitschef** (V13) | **Sicherheitstechnik/Alarmanlage** (`security`) | Entdeckung/Abschöpfung eingehender Sabotage. |
 
 ## Verwaltungsrollen (umgesetzt V11)
@@ -265,8 +274,9 @@ haben **keinen** Ankaufspreis und wirken – wie alle Rollen – **binär** (Anw
   Der Buchhalter mindert mit „alle laufenden Kosten“ bewusst **auch** die Lohnsumme.
 - Der Chefsekretärin-Rabatt auf Erweiterungen wirkt **nur auf den Anschaffungspreis**
   (`ObjectProfile.upgradePurchaseCost`, in der UI angezeigt), **nie** auf den laufenden Unterhalt.
-- **Strafen** entstehen im Minimal-Modul aus `13_Gegner_Restaurants.md` (aufgedeckte Sabotage) und werden
-  zentral gemindert (`StaffRoleService.reducedPenalty` → `penaltyReductionPercent`).
+- **Strafen** entstehen im Minimal-Modul aus `13_Gegner_Restaurants.md` (aufgedeckte Sabotage) sowie seit
+  **P3** passiv aus der **Behörden-Inspektion** (`InspectionService`) und werden zentral gemindert
+  (`StaffRoleService.reducedPenalty` → `penaltyReductionPercent`).
 
 **Aktive Features der Rollen** (Mechanik: Abschnitt „Features – Sonderfertigkeiten spezieller Mitarbeiter“):
 
@@ -533,10 +543,14 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 | E16 | „Kreative Buchführung“ (Buchhalter) | **1000 €** Aktivierung, aktive Dauer **Kompetenz × 1 Tagestick**, Negation **aller** laufenden Kosten **tagesanteilig** (`negatedDays / 7`); Burnout (Nachteilphase) in gleicher Länge. |
 | E17 | Persistenz | `kProfileSchemaVersion` 7 → **8**: `StaffEntryData.featureResolvedAt` (Idempotenz-Marker der Tick-Auflösung) und `RestaurantData.sabotageTargetId`/`sabotageAppliedUntil` – **additiv/tolerant**, keine Pflichtfelder. |
 
-> **Noch offen:** weitere Features/Rollen (weitere `ManagementFeature`-Werte), ein UI-Countdown außerhalb der
-> Personal-Karte sowie eine Zeile in `WeekSettlement` für die **Einmalkosten** der Features (derzeit
-> Sofortbuchung außerhalb des Wochenrumpfes – Strafen sind dagegen bereits als `penaltyCosts` in
-> `WeekSettlement`/`WeeklyTickResult`).
+> **Umgesetzt (P4):** Entlass-Dialoge (`fireConfirm`), der **Feature-Countdown** außerhalb der Personal-Karte
+> (`managementFeatureStatusLine`, geteilt mit `ScreenHireAndFire`), der **Bestätigungsdialog vor der
+> Aktivierung** (`_confirmFeatureActivation`: Wirkung, Kosten, Träger, Dauer) und die **Einmalkosten-Zeile** der
+> Wochenabrechnung (`WeekSettlement`/`WeeklyTickResult.prepaidFeatureCosts`, abgeleitet aus
+> `featureActivatedAt` über `ManagementFeatureService.prepaidActivationCosts` – **ohne** neues Persistenzfeld,
+> siehe **E20**).
+>
+> **Noch offen:** weitere Features/Rollen (weitere `ManagementFeature`-Werte) und weiteres Zahlen-Tuning.
 
 ## Entscheidungen (getroffen)
 
@@ -567,8 +581,9 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 - **Eine Kompetenz für alles (E13):** Feature-Skalierungen nutzen die bestehende deterministische
   Kompetenz 1–4 aus der Personal-ID; es gibt **keine** neuen Qualitätsstufen.
 - **Sabotage & Strafen laufen in einem Minimal-Modul (E14, Kapitel 13):** Rivalen werden deterministisch
-  abgeleitet, die Sabotage wird im Wochen-Tick aufgelöst; der einzige Strafen-Erzeuger ist vorerst die
-  aufgedeckte Sabotage – damit ist der **Chefsekretärin → Strafe → Rechtsanwalt**-Kreislauf spielbar.
+  abgeleitet, die Sabotage wird im Wochen-Tick aufgelöst; Strafen-Erzeuger sind die aufgedeckte Sabotage
+  **und** seit **P3** die passive **Behörden-Inspektion** (`InspectionService`) – damit ist der
+  **Chefsekretärin → Strafe → Rechtsanwalt**-Kreislauf spielbar (und der Rechtsanwalt auch ohne Sabotage wertvoll).
 - **Fenster je Feature (E15/E16):** Winkelzug (1 Woche aktiv, 3 Tage Nachlauf) und Kreative Buchführung
   (Kompetenz × 1 Tag aktiv, gleiche Burnout-Länge) haben je eigene Fenster in `EconomyBalance`; die
   PR-Kampagne nutzt unverändert die generischen Fenster (E10) – die Dauer-Auflösung liegt in
@@ -576,40 +591,58 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 - **Persistenz additiv (E17):** Schema v8 ergänzt nur `featureResolvedAt` und das Sabotage-Fenster; alte
   Spielstände bleiben ladbar.
 
+**Entscheidungen der P4-Runde (fixiert):**
+
+| # | Frage | Entscheidung |
+|---|---|---|
+| E18 | **Taxonomie-Details E1/E2/E6** | **Teamarzt** bleibt eigenständiges Objekt (`ObjectTeamMedic`, Pool/Qualität/Persönlichkeit) und teilt nur den Verwaltungs-Contract – `kind = medic` bleibt der Bestimmungsort, **keine** Katalog-Rolle. Die Kategorie heißt **`management`** (eine Kategorie; „Verwaltung & Marketing“ ist nur der Anzeigename). Die Vorschlagsrollen **Maître d'hôtel, Caissier, Sommelier** werden künftig als `management` gebaut (Maître d'hôtel ist als **Oberkellner** bereits umgesetzt, V12). Keine Umklassierung ⇒ `role_single_employment_test` unverändert. |
+| E19 | **Lohn-Thriftiness für Rollen?** | **Nicht einführen**, solange die Rollen keine Persönlichkeit besitzen (G4): Fixlohn je Rolle, keine Varianz – Thriftiness bleibt dem Kampfpersonal und dem Teamarzt vorbehalten. Wird erst neu bewertet, wenn Rollen eigene Profile erhalten. |
+| E20 | **Feature-Einmalkosten in der Wochenabrechnung** | **Eigene Zeile** `WeekSettlement`/`WeeklyTickResult.prepaidFeatureCosts` (statt Mischung mit `featureCosts`): Die Beträge werden bei der Aktivierung **sofort** gebucht (E9/E15/E16) und in der Zeile nur transparent ausgewiesen – so bleibt die Budget-Arithmetik des Blocks korrekt (`featureCosts` bleibt „laufend“). Ermittelt wird der Betrag **deterministisch aus dem Aktivierungsanker** (`ManagementFeatureService.prepaidActivationCosts`, `[periodStart, periodEnd)`; Level-Snapshot für die PR-Kampagne) – **kein** neues Persistenzfeld, idempotent. Ergänzend: **Countdown** laufender Features außerhalb der Personal-Karte und **Bestätigungsdialog** (Wirkung/Kosten/Träger/Dauer) vor jeder Aktivierung. |
+| E21 | **Falschklick-Schutz beim Entlassen** | **Immer bestätigen** – eine Entlassung wird nicht erstattet (analog Erweiterungs-Verkauf, `11b`); derselbe Dialog-Text (`fireConfirm`) gilt für Teamärzte, Rollen und Charaktere. |
+
 - **Generalisierte Personal-Taxonomie (Option C, Grundsätze G1–G5)** – beschlossen: **eine** gemeinsame Anstell-/
   Abrechnungs-Mechanik für alles Nicht-Kampf-Personal; die **Kategorie ist ein Datenfeld** (`kind`), die Wirkung
-  bleibt kategoriespezifisch. Die Detail-Entscheidungen E1–E6 sind noch offen (Abschnitt „Personal-Kategorien“).
+  bleibt kategoriespezifisch. Die Detail-Entscheidungen E1–E6 sind mit **P4** entschieden (E18).
 
 ## Offene Punkte
 
-- Mehrfach-Anstellung derselben Rolle verhindern (UI-Disable oder Guard in `hireSupportRole` per
-  `SupportRoleService.has`).
-- Lohn-Thriftiness nachziehen, falls Rollen später Persönlichkeit erhalten.
+- Mehrfach-Anstellung derselben Rolle verhindern – **erledigt (E11)**: `hireSupportRole`/`hireManagementRole`
+  sind idempotent, `role_single_employment_test` sichert das ab.
+- Lohn-Thriftiness – **entschieden (E19): nicht einführen**, solange Rollen keine Persönlichkeit haben.
 - Tournant wirkt nur auf Wochen-Proben im Restaurant, Kampf-Malus unberührt (dokumentierte V10-Abweichung).
 - Erweiterungsvorschläge in Abstimmung mit `11b` priorisieren – die Zuordnung steht (Tabelle „Zuordnung Rolle ↔
   Erweiterung“): V1-Paket sind `cellar`, `coldRoom`, `firstAid` **und** `lounge` (**alle umgesetzt** ✅ – die
   Zufriedenheits-Basis des **Sommeliers**, die Kapazitäts-Basis des **Lageristen**, die Heilzeit-Basis des
   **Teamarztes** und der Personal-Ressourcen-Hebel für **Communard/Pâtissier/Gewerkschaftschef/Tournant** stehen),
-  als nächstes `vault` (macht **Caissier** wertvoll); **offen** bleibt die **Strafenquelle
-  Behörden/Inspektionen**, damit die **Zertifizierung** (Rechtsanwalt) wirkt.
+  als nächstes `vault` (macht **Caissier** wertvoll); die früher **offene Strafenquelle
+  Behörden/Inspektionen** ist **entschieden und umgesetzt (P3)**: die deterministische Inspektion
+  (`InspectionService`) liefert die passive Strafbuchung, damit die **Zertifizierung** (Rechtsanwalt) wirkt.
 - **Balance-Check:** Rollen lohnen sich erst, wenn ihre Wirkungsbasis existiert (Plongeur nur mit Erweiterungen,
   Aboyeur nur mit Personal/Einkommen, Boucher hängt an der Gefechtsfrequenz) – Löhne bewusst gegenprüfen.
-- Entlassen ohne Rückerstattung ist bewusst (analog Charakter-Entlassung); Bestätigungs-Dialog prüfen (wie in
-  `11b` beim Erweiterungs-Verkauf).
-- **Taxonomie – offene Detail-Entscheidungen E1/E2/E6:** Teamarzt-Einordnung, Kategorie-Name/-Zuschnitt und
-  Zuordnung der Erweiterungsvorschläge (Abschnitt „Personal-Kategorien – Grundsätze & offene Entscheidungen“).
-- **Features:** weitere aktive Fertigkeiten brauchen je einen `ManagementFeature`-Wert + Balance-Spec; offen sind
-  ein UI-Countdown außerhalb der Personal-Karte, eine `WeekSettlement`-Zeile für die Einmalkosten und ein
-  Bestätigungs-Dialog vor der Aktivierung. Bei mehreren Trägern desselben Features gilt weiterhin „höchstens ein
-  laufendes Feature pro Träger“.
+- Entlassen ohne Rückerstattung ist bewusst (analog Charakter-Entlassung) und wird seit **P4** auf allen drei
+  Wegen mit demselben Dialog bestätigt (Ärzte/Rollen in `ScreenHireAndFire`, Charaktere im Restaurant-Screen,
+  l10n `fireConfirm`).
+- **Taxonomie (P4, E18):** Teamarzt bleibt eigenständiges Objekt mit gemeinsamem Contract; die Kategorie heißt
+  `management`; die Vorschlagsrollen (Maître d'hôtel, Caissier, Sommelier) werden als `management` geführt –
+  keine Umklassierung bestehender Rollen (`role_single_employment_test` unverändert).
+- **Features:** weitere aktive Fertigkeiten brauchen je einen `ManagementFeature`-Wert + Balance-Spec. Der
+  **UI-Countdown**, die **Einmalkosten-Zeile** (`prepaidFeatureCosts`) und der **Aktivierungsdialog** sind seit
+  **P4** umgesetzt (E20). Bei mehreren Trägern desselben Features gilt weiterhin „höchstens ein laufendes Feature
+  pro Träger“.
 - **Rivalen-Minimal-Modul (E14):** Umgesetzt sind der Roster (deterministisch, je Stadtteil), die
   **Spieler-Sabotage** und seit **V13** die **eingehende Rivalen-Sabotage** samt **Entdeckung** und dem
   **Gegenschlag** des Sicherheitschefs (Abschnitt „Verwaltungsrollen (umgesetzt V13)“,
   `13_Gegner_Restaurants.md`). Die **wirtschaftliche Folge unentdeckter** Angriffe ist seit V13 ein
   **Einkommens-Abschöpfung** (10 % je Angreifer, Deckel 30 %, Abschnitt „Verwaltungsrollen (umgesetzt V13)“).
-  Offen bleiben die Rivalen-Simulation (Mini-PP), die Rangliste/„Platz X von Y“ und die Gefechtsteilnahme.
-- **Strafen-Quellen:** Bislang erzeugt nur die aufgedeckte Sabotage Strafen; weitere Quellen (Behörden,
-  Rufschädigung) sind noch nicht modelliert – der Rechtsanwalt wirkt dann automatisch mit.
+  Seit **V13/Kap. 12–13** sind zusätzlich die **Rivalen-Simulation** (Mini-PP, `RivalService.simulateField`),
+  die **Rangliste/„Platz X von Y“** und die **Gefechtsteilnahme** umgesetzt (siehe `12_Power_Projection.md`,
+  `13_Gegner_Restaurants.md`); offen bleibt dort nur noch Zahlen-Tuning.
+- **Strafen-Quellen:** Die aufgedeckte Sabotage bleibt die einzige *aktive* Quelle; daneben steht seit **P3**
+  die passive **Behörden-Inspektion** (`InspectionService`, deterministisch alle `inspectionIntervalWeeks`
+  Blöcke, Grundstrafe `inspectionFineBase` + Korruptions-Zuschlag). Beide werden als `penaltyCosts` im
+  Wochen-Tick gebucht (eine Quelle der Wahrheit, V8) und laufen durch dieselbe Minderung – der Rechtsanwalt
+  (bzw. die **Zertifizierung**, `11b` Gruppe D) wirkt damit automatisch mit. Weitere Quellen (Rufschädigung)
+  sind noch nicht modelliert.
 - **Sabotage-Namen:** Die Rivalen-Namen stammen aus dem Namensgenerator und werden je Stadtteil
   zwischengespeichert (nur kosmetisch) – die Determinismus-Anforderung gilt für **IDs/Persönlichkeiten/Prestige**.
 
@@ -630,8 +663,16 @@ Buchführung ihre eigenen (E14–E16, Abschnitt „Verwaltungsrollen (umgesetzt 
 `ManagementFeature`-Wert + `managementFeatureOf(role)`-Zuordnung → `EconomyBalance` (Kosten, beide Fensterlängen,
 Kompetenz-Spanne/-Schritt, Nachteil-Faktoren) → `ManagementFeatureService` (Anker, Faktoren, reine Funktionen) →
 Hooks in `GameClockService.catchUp` und ggf. `ScreenBattleResult` → Aktivierungs-API in `ObjectProfile` →
-`management_feature_labels.dart` + ARB (DE/EN, `gen-l10n`) → UI in `ScreenHireAndFire` → **Schema-Version +
-tolerante Felder** → `management_feature_test` + `balance_sanity_test`.
+`management_feature_labels.dart` + ARB (DE/EN, `gen-l10n`) → UI in `ScreenHireAndFire` →
+**Schema-Version + tolerante Felder** → `management_feature_test` + `balance_sanity_test`.
+
+**UI/Abrechnung eines Features (P4-Standard, E20):**
+Aktivierungsweg in `ScreenHireAndFire` → **Bestätigungsdialog** (`_confirmFeatureActivation`: Wirkung, Kosten,
+Träger, Dauer) → Statuszeile über `lib/l10n/management_feature_status.dart` (geteilt von Personal- und
+Restaurant-Screen; Countdown außerhalb der Personal-Karte in `ScreenRestaurant._buildActiveFeaturesInfo`) →
+Einmalkosten erscheinen automatisch als `prepaidFeatureCosts` in `WeekSettlement`/`WeeklyTickResult`
+(`ManagementFeatureService.prepaidActivationCosts`), sofern der Aktivierungsanker im Block liegt – **kein**
+eigenes Persistenzfeld, keine zweite Buchung.
 
 **Neues Feature mit eigenem Auflösungs-Modul (Vorbild E14/Sabotage):**
 `ManagementFeature`-Wert + `managementFeatureOf(role)` → `EconomyBalance` (Kosten/Fenster/Erfolgswerte) →
@@ -658,7 +699,9 @@ Aktivierungs-API `ObjectProfile.activateSabotage`/`activateUntargetedFeature` �
   `headWaiterAttractivenessBonus`, `personnelManagerSatisfactionBonus`, `capacityPercent`,
   `unionChiefWageIncreasePercent`, `unionChiefSinkReductionPercent`) ·
   Features: `lib/services/management_feature_service.dart` · Rivalen: `lib/services/rival_service.dart`
-  (`sabotageChancePercent`, `resolveSabotage`)
+  (`sabotageChancePercent`, `resolveSabotage`) · **Strafenquelle (P3): `lib/services/inspection_service.dart`**
+  (`isDue`, `grossFine`, `resolve`; Werte `inspection*` in `EconomyBalance`) · Erweiterung:
+  `UpgradeType.certification`/`EconomyService.upgradeEffects(...).penaltyReduction` (`11b`, Gruppe D)
 - Verwaltung/Abrechnung: `lib/objects/object_profile.dart` (`hireSupportRole`/`fireSupportRole`,
   `hireManagementRole`/`fireStaffEntry`, `activateManagementFeature`, `activateUntargetedFeature`,
   `activateSabotage`, `activateUnionWorkers`, `managementFeatureActivationCost`, `unionWorkersTeamLimit`,
@@ -668,13 +711,18 @@ Aktivierungs-API `ObjectProfile.activateSabotage`/`activateUntargetedFeature` �
   `_resolveDueSabotage`, `attractivenessOf`/`satisfactionOf`/`capacityOf`) ·
   `lib/screens/screen_battle_result.dart` (Boucher, Feature-XP-Boost)
 - UI/l10n: `lib/screens/screen_hire_and_fire.dart` (Kategorie-Abschnitte + Feature-Aktivierung inkl.
-  Mannschafts-Dialog, Rivalen-Liste) ·
+  Mannschafts-Dialog, Rivalen-Liste, **P4: `_confirmFire`/`_confirmFeatureActivation`**) ·
+  `lib/screens/screen_restaurant.dart` (**P4: Feature-Countdown `_buildActiveFeaturesInfo`, `fireConfirm`-Dialog
+  für Charaktere, Einmalkosten-Zeile im Wochenbericht**) ·
   `lib/l10n/support_role_labels.dart`, `lib/l10n/management_role_labels.dart`,
-  `lib/l10n/management_feature_labels.dart` + ARB (DE/EN)
+  `lib/l10n/management_feature_labels.dart`, `lib/l10n/management_feature_status.dart` (**P4**) + ARB (DE/EN)
 - Tests: `test/support_role_test.dart`, `test/weekly_wages_test.dart`, `test/staff_entry_test.dart`,
-  `test/management_feature_test.dart`, `test/management_roles_v11_test.dart`,
+  `test/management_feature_test.dart` (**P4: Einmalkosten im Wochenblock**),
+  `test/management_roles_v11_test.dart`,
   `test/management_roles_v12_test.dart`, `test/rival_service_test.dart`,
-  `test/sabotage_tick_test.dart`, `test/balance_sanity_test.dart`
+  `test/sabotage_tick_test.dart`, `test/balance_sanity_test.dart`,
+  `test/role_single_employment_test.dart`, **P4:** `test/screen_hire_and_fire_test.dart` (Entlass-Dialog),
+  `test/screen_restaurant_test.dart` (Feature-Countdown)
 - Doku: `10_Karrierepfade.md` § 3 & Phasen 6–8 · `2-Wirtschaftsschleife.md` § 8 & Wochen-Tick ·
   `11b_Restauranterweiterungen.md` (Erweiterungs-Unterhalt) · `13_Gegner_Restaurants.md`
   (Minimal-Modul V11: Sabotage-Auflösung & Strafen) · `9_Personal.md` (`shadiness`-Wirkung) · `0-Base.md` Nr. 3

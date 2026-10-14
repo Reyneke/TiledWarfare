@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/services/crash_logger.dart';
 import 'package:tiled_warfare/services/district_service.dart';
@@ -39,6 +40,59 @@ class ProfileLoadResult {
   bool get hasErrors => errors.isNotEmpty;
 }
 
+/// Write-ahead-Journal eines laufenden Echtzeit-Catch-up (P6, 4.2/#5).
+///
+/// Vor jeder Catch-up-Mutation schreibt der Aufrufer `profiles/<id>/last_tick.json`
+/// mit dem **Anker vor dem Tick**; nach erfolgreichem Save wird es wieder
+/// entfernt. Da der Tick anker-basiert und idempotent ist (V8), sind die
+/// Buchungen selbst nie halb gebucht – das Journal macht einen **abgebrochenen
+/// Tick** (App-Ende zwischen Mutation und Save) lediglich erkennbar: Beim Laden
+/// wird ein verwaistes Journal gemeldet (`CrashLogger.warn`) und entfernt.
+class TickJournal {
+  /// Betroffener Spielstand-Restaurant-Slot.
+  final int restaurantId;
+
+  /// Tagescursor vor dem Tick (`RestaurantData.lastSeenAt`).
+  final DateTime lastSeenAt;
+
+  /// Wochenanker vor dem Tick (`RestaurantData.weekAnchorAt`), falls gesetzt.
+  final DateTime? weekAnchorAt;
+
+  /// Zeitpunkt, zu dem der Tick begonnen wurde.
+  final DateTime startedAt;
+
+  const TickJournal({
+    required this.restaurantId,
+    required this.lastSeenAt,
+    this.weekAnchorAt,
+    required this.startedAt,
+  });
+
+  /// Serialisiert das Journal als JSON.
+  Map<String, dynamic> toJson() => {
+        'restaurantId': restaurantId,
+        'lastSeenAt': lastSeenAt.toIso8601String(),
+        if (weekAnchorAt != null) 'weekAnchorAt': weekAnchorAt!.toIso8601String(),
+        'startedAt': startedAt.toIso8601String(),
+      };
+
+  /// Tolerante Deserialisierung: `null`, wenn Pflichtfelder fehlen oder defekt
+  /// sind – ein kaputtes Journal darf das Laden nie blockieren.
+  static TickJournal? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final id = json['restaurantId'];
+    final lastSeenAt = DateTime.tryParse('${json['lastSeenAt']}');
+    if (id is! int || lastSeenAt == null) return null;
+    return TickJournal(
+      restaurantId: id,
+      lastSeenAt: lastSeenAt,
+      weekAnchorAt: DateTime.tryParse('${json['weekAnchorAt']}'),
+      startedAt: DateTime.tryParse('${json['startedAt']}') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+}
+
 /// Lokale Speicherverwaltung für Nutzerprofile.
 ///
 /// Jeder Spielstand liegt als `profiles/<id>/profile.json` (alleinige Quelle,
@@ -52,11 +106,17 @@ class ProfileStorage {
   /// Default-Basisverzeichnis für alle Profile.
   static const String _defaultBaseDirName = 'profiles';
 
+  /// Unterordner innerhalb von `getApplicationSupportDirectory()` (P6/`6` L6).
+  static const String _appDataDirName = 'tiled_warfare_profiles';
+
   /// Dateiname eines Spielstands innerhalb des Profilordners.
   static const String _profileFileName = 'profile.json';
 
   /// Dateiname des Alt-Index (nur noch für die einmalige Migration).
   static const String _legacyIndexFileName = 'index.json';
+
+  /// Dateiname des Write-ahead-Journals eines laufenden Ticks (P6).
+  static const String _tickJournalFileName = 'last_tick.json';
 
   /// Endung der Backup-Kopie.
   static const String _backupSuffix = '.bak';
@@ -67,8 +127,24 @@ class ProfileStorage {
   /// Optionales Überschreiben des Basisverzeichnisses (Tests / Debug).
   static String? baseDirOverride;
 
-  /// Aktuelles Basisverzeichnis (`profiles/`, für Tests überschreibbar).
-  static String get baseDirName => baseDirOverride ?? _defaultBaseDirName;
+  /// Aufgelöstes plattformgerechtes Basisverzeichnis (P6, 4.2/#4).
+  ///
+  /// `null`, solange nicht aufgelöst wurde **oder** wenn `path_provider` nicht
+  /// verfügbar ist (Unit-Tests, Desktop ohne Plattformkanal) – dann bleibt es
+  /// beim bisherigen relativen `profiles/`-Ordner.
+  static String? _resolvedBaseDir;
+
+  /// `true`, sobald die Auflösung einmal versucht wurde (kein zweiter Versuch,
+  /// damit ein fehlendes Plugin nicht bei jedem Aufruf erneut geworfen wird).
+  static bool _baseDirResolved = false;
+
+  /// Aktuelles Basisverzeichnis (AppData, für Tests überschreibbar).
+  static String get baseDirName =>
+      baseDirOverride ?? _resolvedBaseDir ?? _defaultBaseDirName;
+
+  /// `true`, wenn die Spielstände plattformgerecht außerhalb des
+  /// Arbeitsverzeichnisses liegen.
+  static bool get usesAppDataDir => _resolvedBaseDir != null;
 
   /// Gibt den Pfad zum Profil-Basisverzeichnis zurück.
   static Directory get _baseDir => Directory(baseDirName);
@@ -81,11 +157,141 @@ class ProfileStorage {
   static File get _legacyIndexFile =>
       File('$baseDirName/$_legacyIndexFileName');
 
+  /// Journal-Datei eines Spielstands (`profiles/<id>/last_tick.json`, P6).
+  static File _tickJournalFile(int id) =>
+      File('$baseDirName/$id/$_tickJournalFileName');
+
   /// Initialisiert das Profil-Verzeichnis (erstellt es, falls nicht vorhanden).
+  ///
+  /// Löst dabei einmalig den plattformgerechten Speicherort auf (P6, 4.2/#4)
+  /// und migriert vorhandene Spielstände aus dem alten relativen Ordner.
   static Future<void> ensureInitialized() async {
+    await _resolveBaseDir();
     if (!await _baseDir.exists()) {
       await _baseDir.create(recursive: true);
     }
+  }
+
+  /// Löst das Basisverzeichnis einmalig auf (P6, 4.2/#4).
+  ///
+  /// Bevorzugt `getApplicationSupportDirectory()` (unter Windows z. B.
+  /// `%APPDATA%`, auf Mobilgeräten das App-Sandbox-Verzeichnis) mit dem
+  /// Unterordner [_appDataDirName]. Fehlt das Plugin oder schlägt der Aufruf
+  /// fehl (Unit-Tests, Plattformen ohne Unterstützung), bleibt es beim
+  /// bisherigen relativen `profiles/`-Ordner – für den Rest der Klasse ist das
+  /// transparent.
+  static Future<void> _resolveBaseDir() async {
+    if (baseDirOverride != null || _baseDirResolved) return;
+    _baseDirResolved = true;
+    try {
+      final support = await getApplicationSupportDirectory();
+      _resolvedBaseDir =
+          '${support.path}${Platform.pathSeparator}$_appDataDirName';
+    } catch (e) {
+      CrashLogger.warn(
+        'AppData-Verzeichnis nicht verfügbar – Spielstände bleiben in '
+        '"$_defaultBaseDirName/": $e',
+      );
+      _resolvedBaseDir = null;
+    }
+    // Die Migration hat ihr eigenes Fehler-Handling: Ein Problem beim Umzug
+    // darf den bereits aufgelösten Speicherort nicht wieder verwerfen.
+    if (_resolvedBaseDir != null) {
+      await _migrateLegacySavegames();
+    }
+  }
+
+  /// Einmalige, tolerante Migration bestehender Spielstände in das
+  /// AppData-Verzeichnis (P6, 4.2/#4).
+  ///
+  /// Es wird **kopiert, nie gelöscht**, und nur migriert, solange am Ziel noch
+  /// kein Spielstand liegt – ein bereits genutzter Zielordner bleibt
+  /// unangetastet. Relative Bildpfade in den kopierten Spielständen bleiben
+  /// gültig, weil [absolutePath] sie beim Lesen auflöst.
+  static Future<void> _migrateLegacySavegames() async {
+    final legacy = Directory(_defaultBaseDirName);
+    final target = _baseDir;
+    try {
+      if (!await legacy.exists()) return;
+      if (await target.exists() && await _hasProfileFolders(target)) return;
+
+      await target.create(recursive: true);
+      await for (final entity in legacy.list()) {
+        final name = entity.path.split(Platform.pathSeparator).last;
+        final dest = '${target.path}${Platform.pathSeparator}$name';
+        if (entity is Directory) {
+          await _copyDirectory(entity, Directory(dest));
+        } else if (entity is File && !await File(dest).exists()) {
+          await entity.copy(dest);
+        }
+      }
+      CrashLogger.warn(
+        'Spielstände aus "$_defaultBaseDirName/" nach "${target.path}" '
+        'migriert (Kopie; der alte Ordner bleibt erhalten).',
+      );
+    } catch (e, stackTrace) {
+      CrashLogger.error(
+        'Migration der Spielstände fehlgeschlagen',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// `true`, wenn [dir] mindestens einen Profil-Unterordner enthält.
+  static Future<bool> _hasProfileFolders(Directory dir) async {
+    await for (final entity in dir.list()) {
+      if (entity is Directory) return true;
+    }
+    return false;
+  }
+
+  /// Kopiert [source] rekursiv nach [target] (vorhandene Dateien bleiben).
+  static Future<void> _copyDirectory(Directory source, Directory target) async {
+    await target.create(recursive: true);
+    await for (final entity in source.list()) {
+      final name = entity.path.split(Platform.pathSeparator).last;
+      final dest = '${target.path}${Platform.pathSeparator}$name';
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(dest));
+      } else if (entity is File && !await File(dest).exists()) {
+        await entity.copy(dest);
+      }
+    }
+  }
+
+  /// Löst einen gespeicherten Bildpfad zu einem nutzbaren Dateipfad auf
+  /// (P6, 4.2/#4).
+  ///
+  /// Neue Bilder werden als absolute Pfade gespeichert. Ältere Spielstände
+  /// enthalten dagegen relative Pfade wie `profiles/<id>/logo.png`; die werden
+  /// hier – nach der Migration – im aktuellen Basisverzeichnis gesucht. Pfade,
+  /// die (noch) zu keiner Datei führen, kommen unverändert zurück, damit die UI
+  /// ihr bestehendes Fehlerbild behalten kann.
+  static String absolutePath(String path) {
+    if (path.isEmpty) return path;
+    if (File(path).isAbsolute) return path;
+
+    // Legacy-Spielstände liegen relativ als `profiles/<id>/<datei>` vor; nach
+    // der Migration liegt dieselbe Datei unter `<baseDir>/<id>/<datei>`. Dieser
+    // (neue) Ort ist führend.
+    final segments =
+        path.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).toList();
+    if (segments.length >= 2) {
+      final candidate = File(
+        <String>[
+          _baseDir.path,
+          ...segments.sublist(segments.length - 2),
+        ].join(Platform.pathSeparator),
+      );
+      if (candidate.existsSync()) return candidate.absolute.path;
+    }
+
+    // Solange noch nicht migriert wurde (oder das Plugin fehlt), greift der
+    // relative Pfad wie bisher.
+    final direct = File(path);
+    if (direct.existsSync()) return direct.absolute.path;
+    return path;
   }
 
   /// Lädt alle lokal gespeicherten Profile.
@@ -108,7 +314,13 @@ class ProfileStorage {
       final file = File('${entry.path}/$_profileFileName');
       if (!await file.exists()) continue;
       final profile = await _readProfileFile(file, errors);
-      if (profile != null) profiles.add(profile);
+      if (profile != null) {
+        // P6: Ein beim Start vorgefundenes Tick-Journal bedeutet, dass die App
+        // zwischen Catch-up-Mutation und Save beendet wurde – melden und
+        // aufräumen (nachgeholt wird der Tick ohnehin beim nächsten Lauf).
+        await _discardOrphanedTickJournal(profile);
+        profiles.add(profile);
+      }
     }
 
     await _migrateProfiles(profiles);
@@ -137,6 +349,97 @@ class ProfileStorage {
       );
       return false;
     }
+  }
+
+  /// Schreibt das Write-ahead-Journal eines beginnenden Ticks (P6).
+  ///
+  /// Der Aufruf erfolgt **vor** der Catch-up-Mutation (siehe [TickJournal]) und
+  /// ist bewusst fehlertolerant: Lässt sich das Journal nicht schreiben, läuft
+  /// der Tick trotzdem an – es ist eine Diagnose-Absicherung, keine Buchung.
+  static Future<void> writeTickJournal(
+    int profileId, {
+    required int restaurantId,
+    required DateTime lastSeenAt,
+    DateTime? weekAnchorAt,
+    DateTime? startedAt,
+  }) async {
+    final journal = TickJournal(
+      restaurantId: restaurantId,
+      lastSeenAt: lastSeenAt,
+      weekAnchorAt: weekAnchorAt,
+      startedAt: startedAt ?? DateTime.now(),
+    );
+    try {
+      await _writeAtomically(
+        _tickJournalFile(profileId),
+        const JsonEncoder.withIndent('  ').convert(journal.toJson()),
+      );
+    } catch (e, stackTrace) {
+      CrashLogger.error(
+        'Tick-Journal konnte nicht geschrieben werden (id=$profileId)',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Entfernt das Tick-Journal nach einem erfolgreichen Save (P6).
+  ///
+  /// Fehler werden geloggt, aber nie geworfen – ein übrig gebliebenes Journal
+  /// wird beim nächsten Laden als verwaist erkannt und aufgeräumt.
+  static Future<void> clearTickJournal(int profileId) async {
+    try {
+      final file = _tickJournalFile(profileId);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e, stackTrace) {
+      CrashLogger.error(
+        'Tick-Journal konnte nicht entfernt werden (id=$profileId)',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Liest das Tick-Journal eines Spielstands (`null`, wenn keines vorliegt
+  /// oder die Datei defekt ist).
+  static Future<TickJournal?> readTickJournal(int profileId) async {
+    try {
+      final file = _tickJournalFile(profileId);
+      if (!await file.exists()) return null;
+      return TickJournal.fromJson(jsonDecode(await file.readAsString()));
+    } catch (e, stackTrace) {
+      CrashLogger.error(
+        'Tick-Journal konnte nicht gelesen werden (id=$profileId)',
+        e,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  /// Meldet und entfernt ein **verwaistes** Tick-Journal (P6/`8` P3).
+  ///
+  /// Ein vorhandenes Journal beim Laden bedeutet: Die App wurde zwischen
+  /// Catch-up-Mutation und Save beendet. Die Buchungen fehlen dadurch nicht –
+  /// der Tick ist anker-basiert und idempotent (V8) und wird beim nächsten
+  /// Catch-up vollständig nachgeholt; das Journal dient hier nur als
+  /// Diagnose-Hinweis. Ein **defektes** Journal wird still entfernt
+  /// (`readTickJournal` protokolliert den Parse-Fehler bereits).
+  static Future<void> _discardOrphanedTickJournal(ProfileData profile) async {
+    if (!await _tickJournalFile(profile.id).exists()) return;
+
+    final journal = await readTickJournal(profile.id);
+    if (journal != null) {
+      CrashLogger.warn(
+        'Verwaistes Tick-Journal für Profil ${profile.id} '
+        '(Restaurant ${journal.restaurantId}, '
+        'Anker ${journal.lastSeenAt.toIso8601String()}) – der Catch-up wird '
+        'beim nächsten Laden vollständig nachgeholt.',
+      );
+    }
+    await clearTickJournal(profile.id);
   }
 
   /// Schreibt `profiles/<id>/profile.json` atomar. Eine vorhandene Datei wird

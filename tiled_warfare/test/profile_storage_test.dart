@@ -183,4 +183,74 @@ void main() {
     expect(broken.id, -1);
     expect(broken.restaurants, isEmpty);
   });
+  group('Tick-Journal / Write-ahead (P6, 4.2/#5)', () {
+    File journalFile(int id) => File('${temp.path}/$id/last_tick.json');
+
+    test('write → read liefert die Anker vor dem Tick, clear entfernt sie',
+        () async {
+      await ProfileStorage.saveProfile(buildProfile(id: 11, name: 'J'));
+      await ProfileStorage.writeTickJournal(
+        11,
+        restaurantId: 110,
+        lastSeenAt: DateTime(2026, 1, 1),
+        weekAnchorAt: DateTime(2026, 1, 1),
+        startedAt: DateTime(2026, 1, 2, 3),
+      );
+
+      final journal = await ProfileStorage.readTickJournal(11);
+      expect(journal, isNotNull);
+      expect(journal!.restaurantId, 110);
+      expect(journal.lastSeenAt, DateTime(2026, 1, 1));
+      expect(journal.weekAnchorAt, DateTime(2026, 1, 1));
+      expect(journal.startedAt, DateTime(2026, 1, 2, 3));
+
+      await ProfileStorage.clearTickJournal(11);
+      expect(await journalFile(11).exists(), isFalse);
+      expect(await ProfileStorage.readTickJournal(11), isNull);
+    });
+
+    test('ohne Journal sind read null und clear ein No-op', () async {
+      expect(await ProfileStorage.readTickJournal(12), isNull);
+      await ProfileStorage.clearTickJournal(12);
+      expect(await journalFile(12).exists(), isFalse);
+    });
+
+    test('ein defektes Journal blockiert das Laden nicht', () async {
+      await ProfileStorage.saveProfile(buildProfile(id: 13, name: 'K'));
+      await journalFile(13).writeAsString('{ kaputt');
+
+      final result = await ProfileStorage.loadAllProfiles();
+      expect(result.hasErrors, isFalse);
+      expect(result.profiles.single.id, 13);
+      expect(await journalFile(13).exists(), isFalse);
+    });
+
+    test('verwaistes Journal wird beim Laden gemeldet und entfernt', () async {
+      await ProfileStorage.saveProfile(buildProfile(id: 14, name: 'L'));
+      await ProfileStorage.writeTickJournal(
+        14,
+        restaurantId: 140,
+        lastSeenAt: DateTime(2026, 1, 1),
+      );
+
+      final result = await ProfileStorage.loadAllProfiles();
+      expect(result.profiles.single.id, 14);
+      expect(await journalFile(14).exists(), isFalse);
+    });
+
+    test('Journal wird nicht als Spielstand missverstanden', () async {
+      await ProfileStorage.saveProfile(buildProfile(id: 15, name: 'M'));
+      await ProfileStorage.writeTickJournal(
+        15,
+        restaurantId: 150,
+        lastSeenAt: DateTime(2026, 1, 1),
+      );
+
+      final result = await ProfileStorage.loadAllProfiles();
+      expect(result.profiles, hasLength(1));
+      expect(result.profiles.single.restaurants.single.name, 'M-Restaurant');
+    });
+  });
+
+
 }

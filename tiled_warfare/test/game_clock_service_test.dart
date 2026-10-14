@@ -566,4 +566,72 @@ void main() {
       expect(r.weekAnchorAt, DateTime.utc(2026, 4, 9, 12));
     });
   });
+
+  group('Wochen-Aufschlüsselung (P6, 4.2/#5)', () {
+    StaffData cook() =>
+        StaffData(name: 'Testkoch', imagePath: 'x.png', type: 'apprentice');
+
+    RestaurantData restaurant(String district) => RestaurantData(
+          name: 'Test',
+          district: district,
+          budget: 10000,
+          lastSeenAt: base,
+          weekAnchorAt: base,
+          staff: [cook()],
+        );
+
+    test('jeder Block weist Periodengrenzen und sein Budget aus', () {
+      final r = restaurant('Midtown');
+      final result =
+          GameClockService.catchUp(r, base.add(const Duration(days: 14)));
+      expect(result.settlements, hasLength(2));
+
+      for (var i = 0; i < result.settlements.length; i++) {
+        final s = result.settlements[i];
+        expect(s.weekIndex, i);
+        expect(s.periodEnd.difference(s.periodStart), const Duration(days: 7));
+      }
+      expect(result.settlements.first.periodStart, base);
+      expect(result.settlements.last.periodEnd,
+          base.add(const Duration(days: 14)));
+      // Ohne Resttage endet der Bericht genau auf dem letzten Blockbudget.
+      expect(result.settlements.last.budgetAfter, result.budgetAfter);
+    });
+
+    test('weisen den Sabotage-Verlust je Block aus (Summe = Gesamtverlust)',
+        () {
+      // Die eingehende Sabotage ist je Stadtteil + Blockanker deterministisch;
+      // gesucht wird ein Catch-up mit mindestens einem unentdeckten Angriff.
+      RestaurantData? offender;
+      WeeklyTickResult? tick;
+      for (var weeks = 1; weeks <= 12 && offender == null; weeks++) {
+        final candidate = restaurant('Midtown');
+        final outcome = GameClockService.catchUp(
+          candidate,
+          base.add(Duration(days: 7 * weeks)),
+        );
+        if (outcome.rivalSabotageLosses > 0) {
+          offender = candidate;
+          tick = outcome;
+        }
+      }
+      expect(offender, isNotNull,
+          reason: 'kein Fall mit unentdeckter Rivalen-Sabotage gefunden');
+
+      final result = tick!;
+      final byBlock = result.settlements
+          .fold<int>(0, (sum, s) => sum + s.rivalSabotageLoss);
+      expect(byBlock, result.rivalSabotageLosses);
+      // Mindestens ein Block trägt den Verlust – kein Verlust ohne Block.
+      expect(
+        result.settlements.where((s) => s.rivalSabotageLoss > 0),
+        isNotEmpty,
+      );
+      // Die Abschöpfung ist bereits im Blockeinkommen verrechnet.
+      expect(
+        result.settlements.fold<int>(0, (sum, s) => sum + s.income),
+        result.passiveIncome - result.leftoverIncome,
+      );
+    });
+  });
 }

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/l10n/app_localizations.dart';
+import 'package:tiled_warfare/models/management_feature.dart';
+import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
 import 'package:tiled_warfare/screens/screen_restaurant.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +28,7 @@ void main() {
     DateTime? rebrandingPenaltyUntil,
     String? logoPath,
     List<StaffData>? staff,
+    List<StaffEntryData>? staffEntries,
   }) {
     ObjectProfile().loadFromData(
       ProfileData(
@@ -40,6 +45,7 @@ void main() {
             upgrades: upgrades,
             rebrandingPenaltyUntil: rebrandingPenaltyUntil,
             staff: staff,
+            staffEntries: staffEntries,
           ),
         ],
       ),
@@ -375,4 +381,110 @@ void main() {
 
     expect(find.text('Fortbildung erst ab Level 5 möglich!'), findsOneWidget);
   });
+
+  testWidgets('zeigt den Countdown laufender Features außerhalb der Karte (P4)',
+      (tester) async {
+    loadProfile(
+      staffEntries: [
+        StaffEntryData(
+          id: 1,
+          name: 'Mia',
+          kind: RoleKind.management,
+          role: ManagementRole.socialMediaManager.name,
+          costPerWeek: 180,
+          activeFeature: ManagementFeature.prCampaign.name,
+          featureTargetId: 5,
+          featureActivatedAt: DateTime.now(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    // Der Countdown steht in der Kopfzeile (nicht in der Personal-Karte) und
+    // nennt Träger, Feature und Restlaufzeit.
+    expect(find.textContaining('Laufende Features'), findsOneWidget);
+    expect(find.textContaining('PR-Kampagne'), findsOneWidget);
+    expect(find.textContaining('Aktiv bis'), findsOneWidget);
+  });
+  testWidgets('Wochenbericht schlüsselt jeden Block auf (P6, 4.2/#5)', (tester) async {
+    loadProfile();
+    ObjectProfile().pendingCatchUpResult = WeeklyTickResult(
+      weeks: 2,
+      passiveIncome: 4000,
+      medicCosts: 500,
+      staffCosts: 700,
+      upgradeUpkeep: 100,
+      negativeInterest: 25,
+      penaltyCosts: 3000,
+      featureCosts: 150,
+      prepaidFeatureCosts: 2500,
+      rivalSabotageLosses: 120,
+      budgetAfter: 8000,
+      bankrupt: false,
+      settlements: [
+        WeekSettlement(
+          weekIndex: 0,
+          periodStart: DateTime(2026, 1, 1),
+          periodEnd: DateTime(2026, 1, 8),
+          income: 2000,
+          medicCosts: 250,
+          staffCosts: 350,
+          upgradeUpkeep: 50,
+          negativeInterest: 10,
+          penaltyCosts: 3000,
+          featureCosts: 75,
+          prepaidFeatureCosts: 2500,
+          rivalSabotageLoss: 120,
+          budgetAfter: 7000,
+        ),
+        WeekSettlement(
+          weekIndex: 1,
+          periodStart: DateTime(2026, 1, 8),
+          periodEnd: DateTime(2026, 1, 15),
+          income: 2000,
+          medicCosts: 250,
+          staffCosts: 350,
+          upgradeUpkeep: 50,
+          negativeInterest: 15,
+          budgetAfter: 8000,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Wochenbericht'), findsOneWidget);
+    expect(find.text('Wochen-Aufschlüsselung'), findsOneWidget);
+
+    // Ein Block je Woche, mit Zeitraum – Details erst beim Aufklappen.
+    final firstWeek = find.text('Woche 1 (1.1.2026–8.1.2026)');
+    expect(firstWeek, findsOneWidget);
+    expect(find.text('Woche 2 (8.1.2026–15.1.2026)'), findsOneWidget);
+    expect(find.textContaining('Einkommen +2000 €'), findsNothing);
+
+    await tester.ensureVisible(firstWeek);
+    await tester.tap(firstWeek);
+    await tester.pumpAndSettle();
+
+    // Alle Aufschlüsselungszeilen des Blocks sind sichtbar.
+    expect(find.textContaining('Einkommen +2000 €'), findsOneWidget);
+    expect(find.textContaining('Teamärzte −250 €'), findsOneWidget);
+    expect(find.textContaining('Personal −350 €'), findsOneWidget);
+    expect(find.textContaining('Unterhalt −50 €'), findsOneWidget);
+    expect(find.textContaining('Zinsen −10 €'), findsOneWidget);
+    expect(find.textContaining('Strafen −3000 €'), findsOneWidget);
+    expect(find.textContaining('Features −75 €'), findsOneWidget);
+    expect(find.textContaining('Feature-Einmalkosten (vorab gebucht) −2500 €'),
+        findsOneWidget);
+    expect(find.textContaining('Rivalen-Sabotage −120 €'), findsOneWidget);
+    expect(find.textContaining('Budget danach 7000 €'), findsOneWidget);
+  });
+
+
 }

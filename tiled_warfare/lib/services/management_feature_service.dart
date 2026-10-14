@@ -562,6 +562,61 @@ class ManagementFeatureService {
       ? 0
       : EconomyBalance.organisationCostPerDay;
 
+  /// Einmalkosten der Feature-Aktivierungen, deren Anker in das Fenster
+  /// `[from, until)` fällt (`11a` P4).
+  ///
+  /// Die Beträge werden beim Aktivieren **sofort** vom Budget abgebucht
+  /// (`11a` E9/E15/E16). Diese Funktion leitet sie aus dem **persistierten**
+  /// Zustand ab (Anker `featureActivatedAt`, [targetLevelById] für die
+  /// Level-skalierten Einmalkosten der PR-Kampagne), damit die Wochenabrechnung
+  /// sie zusätzlich als Einmalkosten-Zeile ausweisen kann – ohne neues
+  /// Persistenzfeld.
+  ///
+  /// **Deterministisch und idempotent:** Ein Block, dessen Fenster den Anker
+  /// nicht enthält, liefert `0`; ein zweiter Lauf mit denselben Ankern ändert
+  /// nichts.
+  static int prepaidActivationCosts(
+    Iterable<StaffEntryData> entries,
+    DateTime from,
+    DateTime until, {
+    Map<int, int> targetLevelById = const {},
+  }) {
+    var total = 0;
+    for (final entry in entries) {
+      final feature = managementFeatureFromName(entry.activeFeature);
+      final activatedAt = entry.featureActivatedAt;
+      if (feature == null || activatedAt == null) continue;
+      if (activatedAt.isBefore(from) || !activatedAt.isBefore(until)) continue;
+      total += _bookedActivationCost(feature, entry, targetLevelById);
+    }
+    return total;
+  }
+
+  /// Die beim Aktivieren tatsächlich abgebuchten Einmalkosten von [feature] –
+  /// Gegenstück zu [activationCostFor] inklusive der **ziel**-abhängigen
+  /// PR-Kampagne (`featureCostFor`, E9). Fehlt ein Ziel, zählt das Feature `0`
+  /// (tolerante Auswertung).
+  static int _bookedActivationCost(
+    ManagementFeature feature,
+    StaffEntryData entry,
+    Map<int, int> targetLevelById,
+  ) {
+    final fixed = fixedCostOf(feature);
+    if (fixed != null) return fixed;
+    if (feature == ManagementFeature.storageTetris) {
+      return competenceOf(entry) *
+          EconomyBalance.storageTetrisCostPerCompetence;
+    }
+    if (feature == ManagementFeature.prCampaign) {
+      final targetId = entry.featureTargetId;
+      if (targetId == null) return 0;
+      final level = targetLevelById[targetId];
+      return level == null ? 0 : featureCostFor(level);
+    }
+    // „Organisation ist alles“ kostet nichts im Voraus (Tageskosten).
+    return 0;
+  }
+
   /// Prozentuale Sink-Senkung des passiven **Gewerkschaftschefs** (ohne
   /// Feature-Einfluss) – Kompetenz × `unionChiefSinkReductionPercentPerCompetence`.
   static int unionChiefSinkReliefPercent(Iterable<StaffEntryData> entries) {

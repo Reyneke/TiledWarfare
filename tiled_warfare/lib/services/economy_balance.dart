@@ -141,6 +141,15 @@ class EconomyBalance {
   static const int transferCostBase = 200;
   static const int transferCostPerLevel = 50;
 
+  /// Einmalkosten eines **Karriere-Neustarts** (Karrierepfade, V10 § 6: die
+  /// einzige Rückholmöglichkeit eines „aktiv gewesenen“ Charakters).
+  ///
+  /// Muster wie die Transferkosten: [careerRestartCostBase] plus
+  /// [careerRestartCostPerLevel] je Charakter-Level – ein weiter Karriereweg
+  /// kostet entsprechend mehr, weil mehr Wert vernichtet wird.
+  static const int careerRestartCostBase = 500;
+  static const int careerRestartCostPerLevel = 100;
+
   /// Aura-Radius je Karriere-Rang (Hexfelder). Höhere Ränge wirken weiter; der
   /// `Chef de cuisine` wirkt nur in der formellen (kämpfenden) Rolle. Bewusst
   /// als String-Map (Schlüssel = `kRank*`-Werte), um keinen Import-Zyklus zu
@@ -637,6 +646,27 @@ class EconomyBalance {
   /// Gewicht der Personal-Hilfsbereitschaft auf die Attraktivität (V9, Phase 3).
   static const double personalityAttractivenessWeight = 0.25;
 
+  // ── Teamdynamik / Paar-Affinität (V9 „Teamdynamik“) ───────────────────
+
+  /// Modulo der deterministischen Paar-Buckets (`CRC32 % modulo`).
+  ///
+  /// Die Zuordnung ist **RNG-frei** und damit bei jedem Aufruf identisch:
+  /// dasselbe Paar (Persönlichkeiten + stabile Charakter-IDs) ergibt immer
+  /// dieselbe Affinität – unabhängig von Plattform, Reihenfolge oder Uhrzeit.
+  static const int teamChemistryBucketModulo = 100;
+
+  /// Obere Grenze (exklusiv) des „Sympathie“-Buckets (`+1`).
+  static const int teamChemistryPositiveBound = 30;
+
+  /// Obere Grenze (exklusiv) des „Spannungs“-Buckets (`−1`); darüber neutral (`0`).
+  static const int teamChemistryNegativeBound = 60;
+
+  /// Gewicht der Team-Chemie (−1 … +1) auf die **Attraktivität**.
+  static const double teamChemistryAttractivenessWeight = 0.5;
+
+  /// Gewicht der Team-Chemie (−1 … +1) auf die **Zufriedenheit**.
+  static const double teamChemistrySatisfactionWeight = 0.5;
+
   /// Max. Lohn-Spanne des Teamarztes (± %) aus seiner Thriftiness (V9, Phase 3).
   static const double thriftinessWageSpread = 0.2;
 
@@ -884,6 +914,51 @@ class EconomyBalance {
   /// Ab dieser PP gilt ein Rivale als **Pleite** (Ranglisten-Kennzeichnung).
   static const double rivalPpBankruptThreshold = 15.0;
 
+  // ── Rivalen-Wochen-Simulation (Kapitel 13, „Voll-Simulation“) ─────────
+  //
+  // Die Rivalen sind reine Funktionen von `(district, rivalId, Spieler-Snapshot,
+  // Wochen-Index)` – kein Zufall im Catch-up (P4/V8). Der Wochen-Index folgt aus
+  // dem Wochenanker (`RestaurantData.weekAnchorAt`); die Simulation kennt damit
+  // „diese“ und die „vorige“ Woche und kann die 1-Tick-Verzögerung beim
+  // Nachrücken (Entscheidung 3) exakt abbilden, ohne neue Persistenzfelder.
+
+  /// Epoche des deterministischen Wochen-Index. Tuning-Größe: markiert
+  /// den Startpunkt, ab dem der simulierte Rivalen-Zustand langsam aufsteigt.
+  /// Als **lokale** Zeit gewählt (die Spieluhr ist lokale Wanduhr, `8`/Q3), damit
+  /// der Wochen-Index exakt auf dem 7-Tage-Raster liegt.
+  static final DateTime rivalSimulationEpoch = DateTime(2026, 1, 6);
+
+  /// Langsamer, deterministischer PP-Aufstieg des Rivalen-Zustands je Woche.
+  ///
+  /// Der tatsächliche Aufstieg ist **persönlichkeitsgetrieben**:
+  /// `rivalPpGrowthPerWeek × (rivalPpGrowthMinFactor + aggressiveness/100)`.
+  /// Dadurch wächst das Feld ungleichmäßig, die Reihenfolge ändert sich über die
+  /// Wochen und das Roster atmet (Kapitel 13 → „Handlungen“ Schritt 3).
+  static const double rivalPpGrowthPerWeek = 0.5;
+
+  /// Untergrenze des persönlichkeitsgetriebenen Wachstumsfaktors
+  /// (`aggressiveness = 0`).
+  static const double rivalPpGrowthMinFactor = 0.5;
+
+  /// Zusätzlicher Wachstumsfaktor bis `aggressiveness = 100` (Spanne 0.5–1.5×).
+  static const double rivalPpGrowthAggressivenessSpan = 1.0;
+
+  /// Obergrenze des kumulierten Aufstiegs (Wochen) – hält die Kurve flach.
+  static const int rivalPpGrowthCapWeeks = 40;
+
+  /// Verzögerung (in Wochen-Ticks), bis ein neuer Rivale nachrückt: ein durch
+  /// Pleite/Aufstieg frei werdender Slot bleibt so viele Ticks leer
+  /// (Entscheidung 3 → Browsergame-Gefühl).
+  static const int rivalReplacementDelayWeeks = 1;
+
+  /// Zusätzliche Rivalen, wenn der Spieler die Vorwoche angeführt hat
+  /// (Gegenwind an der Spitze, Q10).
+  static const int rivalRosterLeadBonus = 1;
+
+  /// Abgezogene Rivalen, wenn der Spieler die Vorwoche abgeschlossen hat
+  /// (das Feld schrumpft).
+  static const int rivalRosterTrailPenalty = 1;
+
   // ── Stance (Kapitel 13, Q9) ───────────────────────────────────────────
   //
   // Ableitung aus dem **relativen PP-Abstand** zwischen zwei Fraktionen:
@@ -989,6 +1064,22 @@ class EconomyBalance {
     xp: 200,
   );
 
+  /// Kampf-/Belohnungsprofil des **Pâtissier** (Karrierepfade, V10 § 2).
+  ///
+  /// Der Pâtissier ist eine **Support-Station** (kein Aura-Träger, dafür
+  /// Wochen-Refill-Bonus `patissierRefillBonusPercent`): etwas schwächer im
+  /// Angriff als ein `Chef de partie`, dafür standfester und mit höherem
+  /// `money`-Wert, der über die Ø-Kapazität (`capacityOf`) wirkt.
+  static const UnitStats patissierStats = UnitStats(
+    attack: 90,
+    defense: 65,
+    movement: 3,
+    damage: 2,
+    range: 3,
+    money: 1500,
+    xp: 150,
+  );
+
   /// Kampfprofil des **formellen** `Chef de cuisine`. Der aktive Rang kämpft
   /// nicht, sondern wirkt als Management-Rolle (Karrierepfade, V10).
   static const UnitStats headChefFormalStats = UnitStats(
@@ -1034,6 +1125,29 @@ class EconomyBalance {
 
   /// Anteil der investierten Anschaffungssumme, der beim Verkauf erstattet wird.
   static const double upgradeSellRefundRate = 0.5;
+
+  // ── Behörden-Inspektion (Strafenquelle, `11a` „Behörden/Inspektionen“) ──
+
+  /// Anzahl aufeinanderfolgender Wochenblöcke zwischen zwei Hygiene-Inspektionen.
+  ///
+  /// Die Inspektion ist **deterministisch** (kein Zufall): Sie findet in jedem
+  /// `inspectionIntervalWeeks`-ten Block statt, phasenverschoben je Restaurant
+  /// (`InspectionService.isDue`, CRC32 aus der Restaurant-ID). Dadurch werden
+  /// nicht alle Restaurants in derselben Woche geprüft, und ein Replay desselben
+  /// `catchUp`-Laufs liefert dasselbe Ergebnis (V8-Idempotenz).
+  static const int inspectionIntervalWeeks = 4;
+
+  /// Basisstrafe einer Hygiene-Inspektion (Euro), bevor Korruptions-Zuschlag
+  /// und Strafen-Minderung greifen.
+  static const int inspectionFineBase = 1200;
+
+  /// Korruptions-Zuschlag auf die Basisstrafe (Prozent der Basis je 100 %
+  /// Stadtteil-Korruption).
+  ///
+  /// Bei `100` verdoppelt volle Korruption (`frtCorruptionCeilingPercent`) die
+  /// Strafe: `grossFine = inspectionFineBase × (1 + korruption/100 ×
+  /// inspectionCorruptionSurchargePercent/100)`.
+  static const int inspectionCorruptionSurchargePercent = 100;
 
   /// Definitionen aller Erweiterungen (Maximalstufe, Kosten-Basis, Boni).
   static const Map<UpgradeType, UpgradeSpec> upgrades = {
@@ -1113,6 +1227,18 @@ class EconomyBalance {
       upkeepBaseCostPerWeek: 18,
       refillBonusPerLevel: 0.03,
       dailySinkReliefPerLevel: 0.03,
+    ),
+    // Gruppe D (`11b_Restauranterweiterungen.md`): ⚙-Hook auf **erlittene
+    // Strafen** (−5 %/Stufe). Speist **keinen** der drei Eingangswert-Boni.
+    // Die Strafenquelle ist die deterministische Behörden-Inspektion
+    // (`InspectionService`, `EconomyBalance.inspection*`); die Minderung
+    // stapelt additiv mit dem Rechtsanwalt (`11a` E12) und dem „Winkelzug“
+    // (E15) und wird auf 100 % gedeckelt.
+    UpgradeType.certification: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 200,
+      upkeepBaseCostPerWeek: 20,
+      penaltyReductionPerLevel: 0.05,
     ),
   };
 }

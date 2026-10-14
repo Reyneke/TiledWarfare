@@ -131,6 +131,9 @@ class RivalService {
   /// Zwischenspeicher der Roster je Stadtteil (Namensstabilität, s. o.).
   static final Map<String, List<RivalRestaurant>> _cache = {};
 
+  /// Zwischenspeicher der **Kandidaten-Pools** (Nachrück-Reserve) je Stadtteil.
+  static final Map<String, List<RivalRestaurant>> _poolCache = {};
+
   /// Rivalen-Anzahl eines Stadtteils aus dem Prestige-Tier (S–D).
   static int countFor(String? district) {
     final prestige = EconomyBalance.districtPrestigeFor(district);
@@ -153,14 +156,33 @@ class RivalService {
   }
 
   /// Deterministischer Roster des Stadtteils [district] (Anzeige-Reihenfolge).
+  ///
+  /// Die ersten `countFor(district)` Kandidaten des [candidatePool] – damit sind
+  /// IDs, Persönlichkeiten und Namen zwischen Roster und Simulation stabil.
   static List<RivalRestaurant> rosterOf(String? district) {
     final key = district ?? '';
     final cached = _cache[key];
     if (cached != null) return cached;
+    final roster = candidatePool(district).take(countFor(district)).toList();
+    _cache[key] = roster;
+    return roster;
+  }
+
+  /// Kandidaten-**Pool** des Stadtteils: der volle Roster bis
+  /// `EconomyBalance.rivalCountMax` (Nachrück-Reserve der Wochen-Simulation).
+  ///
+  /// Rein deterministisch aus Stadtteil + Index (ID/`personalityId` per CRC32,
+  /// Namen generiert und je Stadtteil zwischengespeichert). Nur die erste
+  /// `countFor(district)`-Teilfolge ist der „aktive“ [rosterOf]; weitere
+  /// Kandidaten rücken erst über die Roster-Dynamik nach.
+  static List<RivalRestaurant> candidatePool(String? district) {
+    final key = district ?? '';
+    final cached = _poolCache[key];
+    if (cached != null) return cached;
     final prestige = EconomyBalance.districtPrestigeFor(district);
     final zone = EconomyBalance.rivalNameZone;
-    final roster = <RivalRestaurant>[
-      for (var index = 0; index < countFor(district); index++)
+    final pool = <RivalRestaurant>[
+      for (var index = 0; index < EconomyBalance.rivalCountMax; index++)
         RivalRestaurant(
           id: CRC32.compute('rival:$key:$index'),
           name: RandomNames(zone).fullName(),
@@ -171,8 +193,8 @@ class RivalService {
           basePrestige: prestige,
         ),
     ];
-    _cache[key] = roster;
-    return roster;
+    _poolCache[key] = pool;
+    return pool;
   }
 
   /// Rivale mit der [id] (oder `null`).
@@ -183,6 +205,260 @@ class RivalService {
     }
     return null;
   }
+
+  // ── Wochen-Simulation des Rivalen-Feldes (Kapitel 13, „Voll-Simulation“) ──
+  //
+  // Die Rivalen „rechnen selbst ab“: ihr Feld ist eine reine, deterministische
+  // Funktion aus Stadtteil, Kandidaten-IDs, Spieler-PP und Wochen-Index. Es gibt
+  // weder Zufall noch einen neuen Persistenzzustand (P4/V8) – derselbe Snapshot
+  // liefert bei jedem Laden dasselbe Feld und dieselben Ränge.
+
+  /// Deterministischer **Wochen-Index** aus dem Wochenanker (V8-Idempotenz).
+  ///
+  /// Abstand zur [EconomyBalance.rivalSimulationEpoch] in vollen Wochen; ohne
+  /// Anker `0`. Derselbe Anker ⇒ derselbe Index (kein Zufall, keine Persistenz).
+  /// Negative Abstände (Anker vor der Epoche) liefern `0`.
+  static int weekIndexOf(DateTime? weekAnchorAt) {
+    if (weekAnchorAt == null) return 0;
+    final days =
+        weekAnchorAt.difference(EconomyBalance.rivalSimulationEpoch).inDays;
+    final weeks = days ~/ 7;
+    return weeks < 0 ? 0 : weeks;
+  }
+
+  /// Simulierte PP eines Rivalen in Woche [weekIndex] (Zustand der Simulation).
+  ///
+  /// Basis ist das Mini-PP-Modell ([rivalPowerProjection], Rubber-Band an die
+  /// Spieler-PP **ohne Zufall**); darauf liegt der langsame, deterministische,
+  /// **persönlichkeitsgetriebene** Aufstieg: je Woche
+  /// `rivalPpGrowthPerWeek × (rivalPpGrowthMinFactor + aggressiveness/100)`,
+  /// gedeckelt über `rivalPpGrowthCapWeeks`. Dadurch wächst das Feld über die
+  /// Zeit ungleichmäßig (Reihenfolge ändert sich), aber nie per Würfel (P4/V8).
+  static double simulatedRivalPp(
+    RivalRestaurant rival, {
+    required int playerPp,
+    required int weekIndex,
+  }) {
+    final base = rivalPowerProjection(rival, playerPp: playerPp);
+    final weeks = weekIndex.clamp(0, EconomyBalance.rivalPpGrowthCapWeeks);
+    final aggressiveness =
+        PersonalityTraits.forProfile(rival.personalityId, rival.id)
+            .aggressiveness;
+    final rate = EconomyBalance.rivalPpGrowthPerWeek *
+        (EconomyBalance.rivalPpGrowthMinFactor +
+            aggressiveness / 100 *
+                EconomyBalance.rivalPpGrowthAggressivenessSpan);
+    return (base + weeks * rate).clamp(
+      EconomyBalance.rivalPpMin,
+      EconomyBalance.rivalPpMax,
+    );
+  }
+
+  /// Rang des Spielers (1-basiert) im Kandidaten-Feld der Woche [weekIndex],
+  /// rein aus der PP abgeleitet (Tie: Spieler vor dem Rivalen).
+  static int playerRankIn(
+    List<RivalRestaurant> pool, {
+    required int playerPp,
+    required int weekIndex,
+  }) {
+    var ahead = 0;
+    for (final rival in pool) {
+      if (simulatedRivalPp(rival, playerPp: playerPp, weekIndex: weekIndex) >
+          playerPp) {
+        ahead++;
+      }
+    }
+    return ahead + 1;
+  }
+
+  /// Rang eines Rivalen (1-basiert) **unter den Rivalen** der Woche [weekIndex].
+  ///
+  /// Deterministische Gesamtordnung (PP absteigend, Tie-Break kleinere ID), damit
+  /// Ränge eindeutig sind und die Ziel-Anzahl exakt eingehalten wird.
+  static int _rivalRankIn(
+    List<RivalRestaurant> pool,
+    RivalRestaurant rival, {
+    required int playerPp,
+    required int weekIndex,
+  }) {
+    final own =
+        simulatedRivalPp(rival, playerPp: playerPp, weekIndex: weekIndex);
+    var ahead = 0;
+    for (final other in pool) {
+      if (other.id == rival.id) continue;
+      final otherPp =
+          simulatedRivalPp(other, playerPp: playerPp, weekIndex: weekIndex);
+      if (otherPp > own || (otherPp == own && other.id < rival.id)) ahead++;
+    }
+    return ahead + 1;
+  }
+
+  /// Ziel-Anzahl aktiver Rivalen einer Woche: Prestige-Tier-Basis plus
+  /// Gegenwind an der Spitze (Spieler führte die Vorwoche) bzw. Schrumpfen am
+  /// Ende (Spieler war Vorwochen-Letzter); geklemmt auf Min/Max.
+  static int roamTargetCount(
+    String? district, {
+    required int playerPp,
+    required int weekIndex,
+  }) {
+    final pool = candidatePool(district);
+    final base = countFor(district);
+    final previousRank = playerRankIn(
+      pool,
+      playerPp: playerPp,
+      weekIndex: weekIndex - 1,
+    );
+    var target = base;
+    if (previousRank == 1) {
+      target += EconomyBalance.rivalRosterLeadBonus;
+    } else if (previousRank == pool.length + 1) {
+      target -= EconomyBalance.rivalRosterTrailPenalty;
+    }
+    return target.clamp(
+      EconomyBalance.rivalCountMin,
+      EconomyBalance.rivalCountMax,
+    );
+  }
+
+  /// Wochen-Regel der Roster-Dynamik (Kapitel 13): darf ein Kandidat mit diesen
+  /// Merkmalen in der aktuellen Woche **aktiv** sein?
+  ///
+  /// Er muss **jetzt** gesund und im Zielbereich (`rankNow ≤ targetNow`) sein
+  /// **und** schon in der Vorwoche gesund und im damaligen Zielbereich
+  /// (`rankPrev ≤ targetPrev`). Der zweite Teil ist die **1-Tick-Verzögerung**:
+  /// Ein Rivale, der erst diese Woche in den Zielbereich rückt, wird erst in der
+  /// folgenden Woche aktiv – der Slot bleibt einen Tick leer (Entscheidung 3).
+  static bool isRosterActive({
+    required bool healthyNow,
+    required bool healthyPrev,
+    required int rankNow,
+    required int rankPrev,
+    required int targetNow,
+    required int targetPrev,
+  }) =>
+      healthyNow &&
+      rankNow <= targetNow &&
+      rankPrev <= targetPrev &&
+      healthyPrev;
+
+  /// Simuliert das Rivalen-Feld einer Woche **deterministisch** (Kapitel 13,
+  /// „Voll-Simulation“ Schritt 2/3).
+  ///
+  /// Regeln (alle rein aus Stadtteil, Kandidaten-IDs, [playerPp] und
+  /// [weekIndex] – kein Zufall, kein neuer Persistenzzustand, V8/P4):
+  ///
+  /// 1. **Zustand:** Jeder Kandidat hat eine simulierte PP ([simulatedRivalPp],
+  ///    langsamer Aufstieg); unter `rivalPpBankruptThreshold` gilt er als
+  ///    **Pleite** und scheidet aus dem aktiven Feld aus.
+  /// 2. **Ziel-Anzahl:** [roamTargetCount] – Prestige-Basis plus/minus Gegenwind
+  ///    aus der **Vorwoche** (1-Tick-Verzögerung, Q10).
+  /// 3. **Startfeld:** Aktiv sind die stärksten `target` **gesunden** Kandidaten,
+  ///    jedoch nur, wenn sie **auch in der Vorwoche** gesund waren und dort
+  ///    bereits im Zielbereich lagen. Dadurch bleibt ein frei werdender Slot
+  ///    `rivalReplacementDelayWeeks` Tick(s) leer, bevor ein neuer Rivale
+  ///    nachrückt (Entscheidung 3 → „Browsergame-Gefühl“).
+  ///
+  /// [previousPlayerPp] ist der Spieler-Snapshot der **Vorwoche** (Q3-Muster:
+  /// „der aktuelle Wert dient als Näherung“, solange kein Vorwochen-Wert
+  /// vorliegt). Ohne Angabe wird die aktuelle [playerPp] verwendet.
+  static RivalFieldSimulation simulateField(
+    String? district, {
+    required int playerPp,
+    required int weekIndex,
+    int? previousPlayerPp,
+  }) {
+    final prevPp = previousPlayerPp ?? playerPp;
+    final pool = candidatePool(district);
+    // Die Roster-Entscheidung der Woche W fällt aus dem **Vorwochen**-Stand
+    // (1-Tick-Verzögerung): Ziel-Anzahl aus dem Rang der Vorwoche mit deren
+    // Snapshot [prevPp].
+    final target = roamTargetCount(
+      district,
+      playerPp: prevPp,
+      weekIndex: weekIndex,
+    );
+    final targetPrev = roamTargetCount(
+      district,
+      playerPp: prevPp,
+      weekIndex: weekIndex - 1,
+    );
+    final states = <RivalWeekState>[];
+    for (final rival in pool) {
+      final pp = simulatedRivalPp(
+        rival,
+        playerPp: playerPp,
+        weekIndex: weekIndex,
+      ).round();
+      final ppPrev = simulatedRivalPp(
+        rival,
+        playerPp: prevPp,
+        weekIndex: weekIndex - 1,
+      );
+      final rank = _rivalRankIn(
+        pool,
+        rival,
+        playerPp: playerPp,
+        weekIndex: weekIndex,
+      );
+      final rankPrev = _rivalRankIn(
+        pool,
+        rival,
+        playerPp: prevPp,
+        weekIndex: weekIndex - 1,
+      );
+      final healthy = pp >= EconomyBalance.rivalPpBankruptThreshold;
+      final healthyPrev = ppPrev >= EconomyBalance.rivalPpBankruptThreshold;
+      final active = isRosterActive(
+        healthyNow: healthy,
+        healthyPrev: healthyPrev,
+        rankNow: rank,
+        rankPrev: rankPrev,
+        targetNow: target,
+        targetPrev: targetPrev,
+      );
+      states.add(
+        RivalWeekState(
+          rival: rival,
+          powerProjection: pp,
+          active: active,
+          insolvent: !healthy,
+          joinedThisWeek: active && (rankPrev > targetPrev || !healthyPrev),
+        ),
+      );
+    }
+    return RivalFieldSimulation(
+      weekIndex: weekIndex,
+      playerPp: playerPp,
+      playerRank: _visiblePlayerRank(states, playerPp),
+      targetCount: target,
+      states: states,
+    );
+  }
+
+  /// Rang des Spielers (1-basiert) im **sichtbaren** Feld dieser Woche
+  /// (aktive Rivalen plus ausgeschiedene) – konsistent zu [standings].
+  static int _visiblePlayerRank(List<RivalWeekState> states, int playerPp) {
+    var ahead = 0;
+    for (final s in states) {
+      if (!(s.active || s.insolvent)) continue;
+      if (s.powerProjection > playerPp) ahead++;
+    }
+    return ahead + 1;
+  }
+
+  /// Aktive Rivalen einer Woche (Roster-Dynamik inkl. Pleite/Nachrücken).
+  static List<RivalRestaurant> activeRosterOf(
+    String? district, {
+    required int playerPp,
+    required int weekIndex,
+    int? previousPlayerPp,
+  }) =>
+      simulateField(
+        district,
+        playerPp: playerPp,
+        weekIndex: weekIndex,
+        previousPlayerPp: previousPlayerPp,
+      ).activeRivals;
 
   /// `true`, wenn `restaurant` zum Zeitpunkt [now] von einer erfolgreichen
   /// Sabotage profitiert (Einkommens-Fenster aktiv).
@@ -335,6 +611,7 @@ class RivalService {
       restaurant.staffEntries,
       grossFine,
       now: now,
+      upgrades: restaurant.upgrades,
     );
     restaurant.sabotageTargetId = null;
     restaurant.sabotageAppliedUntil = null;
@@ -586,6 +863,7 @@ class RivalService {
       restaurant.staffEntries,
       grossFine,
       now: at,
+      upgrades: restaurant.upgrades,
     );
     return SabotageOutcome(
       rivalId: attackerId,
@@ -713,14 +991,39 @@ class RivalService {
   ///
   /// Deterministisch: gleiche [playerPp] und [RestaurantData] ⇒ gleiche Liste
   /// (Tie-Break: Spieler zuerst, dann kleinere ID).
+  ///
+  /// Ist [weekIndex] gesetzt, fließt die **Wochen-Simulation** ([simulateField])
+  /// ein: Es erscheinen nur die **aktiven** Rivalen plus die als **Pleite**
+  /// ausgeschiedenen (mit Pleite-Kennzeichnung); `rivalAveragePp` mittelt nur
+  /// über die aktiven – so wirkt die Roster-Dynamik direkt auf den Konkurrenz-
+  /// druck (Q10). Ohne [weekIndex] bleibt das Verhalten statisch (Alt-Verhalten).
   static DistrictStandings standings(
     RestaurantData restaurant, {
     required int playerPp,
+    int? weekIndex,
+    int? previousPlayerPp,
   }) {
-    final roster = rosterOf(restaurant.district);
-    final pps = <int, double>{
-      for (final r in roster) r.id: rivalPowerProjection(r, playerPp: playerPp),
-    };
+    final RivalFieldSimulation? sim = weekIndex == null
+        ? null
+        : simulateField(
+            restaurant.district,
+            playerPp: playerPp,
+            weekIndex: weekIndex,
+            previousPlayerPp: previousPlayerPp,
+          );
+    final roster = sim == null
+        ? rosterOf(restaurant.district)
+        : [
+            for (final s in sim.states)
+              if (s.active || s.insolvent) s.rival,
+          ];
+    final activeIds = sim == null
+        ? <int>{}
+        : {for (final s in sim.activeStates) s.rival.id};
+    double ppOf(RivalRestaurant r) => sim == null
+        ? rivalPowerProjection(r, playerPp: playerPp)
+        : simulatedRivalPp(r, playerPp: playerPp, weekIndex: weekIndex!);
+    final pps = <int, double>{for (final r in roster) r.id: ppOf(r)};
     final rows = <RivalStanding>[
       RivalStanding(
         id: kPlayerStandingId,
@@ -762,10 +1065,16 @@ class RivalService {
     for (var i = 0; i < rows.length; i++) {
       rows[i].rank = i + 1;
     }
-    final rivalPps = pps.values.toList();
-    final average = rivalPps.isEmpty
-        ? 0.0
-        : rivalPps.reduce((a, b) => a + b) / rivalPps.length;
+    final List<double> counted = sim == null
+        ? [for (final v in pps.values) v]
+        : [
+            for (final r in roster)
+              if (activeIds.contains(r.id) &&
+                  pps[r.id]! >= EconomyBalance.rivalPpBankruptThreshold)
+                pps[r.id]!.round().toDouble(),
+          ];
+    final double average =
+        counted.isEmpty ? 0.0 : counted.reduce((a, b) => a + b) / counted.length;
     final playerRank = rows.firstWhere((e) => e.isPlayer).rank;
     return DistrictStandings(
       entries: rows,
@@ -914,6 +1223,101 @@ class BattleRivalParticipant {
 
 /// Sentinel-ID des Spielers in der Stadtteil-Rangliste.
 const int kPlayerStandingId = -1;
+
+/// Zustand eines Rivalen-Kandidaten in einer simulierten Woche
+/// (Kapitel 13, „Voll-Simulation“).
+///
+/// Rein abgeleitet (`RivalService.simulateField`) – keine Persistenz (V8).
+class RivalWeekState {
+  /// Der Kandidat.
+  final RivalRestaurant rival;
+
+  /// Simulierte PP dieser Woche (0–100).
+  final int powerProjection;
+
+  /// `true`, wenn der Kandidat in dieser Woche zum aktiven Feld gehört.
+  final bool active;
+
+  /// `true`, wenn die PP unter `rivalPpBankruptThreshold` liegt (Pleite).
+  final bool insolvent;
+
+  /// `true`, wenn der Kandidat in dieser Woche **nachrückt** (durch einen frei
+  /// gewordenen Slot nach der `rivalReplacementDelayWeeks`-Verzögerung).
+  final bool joinedThisWeek;
+
+  const RivalWeekState({
+    required this.rival,
+    required this.powerProjection,
+    required this.active,
+    required this.insolvent,
+    required this.joinedThisWeek,
+  });
+
+  @override
+  String toString() =>
+      'RivalWeekState(#${rival.id}, pp=$powerProjection, active=$active, '
+      'insolvent=$insolvent, joined=$joinedThisWeek)';
+}
+
+/// Ergebnis der deterministischen **Wochen-Simulation** des Rivalen-Feldes
+/// (Kapitel 13, „Voll-Simulation“): Zustand aller Kandidaten, Ziel-Anzahl,
+/// Spieler-Rang und der daraus abgeleitete aktive Roster.
+class RivalFieldSimulation {
+  /// Deterministischer Wochen-Index (siehe `RivalService.weekIndexOf`).
+  final int weekIndex;
+
+  /// Spieler-PP, mit der das Feld simuliert wurde.
+  final int playerPp;
+
+  /// Rang des Spielers im **sichtbaren** Feld dieser Woche (aktive Rivalen plus
+  /// ausgeschiedene, 1-basiert) – konsistent zur Rangliste ([standings]).
+  final int playerRank;
+
+  /// Ziel-Anzahl aktiver Rivalen dieser Woche.
+  final int targetCount;
+
+  /// Zustand **aller** Kandidaten in Pool-Reihenfolge.
+  final List<RivalWeekState> states;
+
+  const RivalFieldSimulation({
+    required this.weekIndex,
+    required this.playerPp,
+    required this.playerRank,
+    required this.targetCount,
+    required this.states,
+  });
+
+  /// Aktive Kandidaten dieser Woche.
+  List<RivalWeekState> get activeStates =>
+      [for (final s in states) if (s.active) s];
+
+  /// Aktive Rivalen dieser Woche (Pool-Reihenfolge).
+  List<RivalRestaurant> get activeRivals =>
+      [for (final s in activeStates) s.rival];
+
+  /// In dieser Woche nachgerückte Rivalen (frei gewordener Slot).
+  List<RivalRestaurant> get joinedRivals =>
+      [for (final s in states) if (s.joinedThisWeek) s.rival];
+
+  /// Als **Pleite** ausgeschiedene Kandidaten dieser Woche.
+  List<RivalRestaurant> get insolventRivals =>
+      [for (final s in states) if (s.insolvent) s.rival];
+
+  /// Anzahl aktiver Rivalen.
+  int get activeCount => activeStates.length;
+
+  /// Durchschnittliche PP der **aktiven** Rivalen (für den Konkurrenzdruck, Q10).
+  double get activeAveragePp => activeStates.isEmpty
+      ? 0.0
+      : activeStates.fold<int>(0, (sum, s) => sum + s.powerProjection) /
+          activeStates.length;
+
+  @override
+  String toString() =>
+      'RivalFieldSimulation(week=$weekIndex, playerPp=$playerPp, '
+      'rank=$playerRank, target=$targetCount, active=$activeCount)';
+}
+
 
 /// Haltung eines Rivalen zum Spieler (Kapitel 13, Q9).
 enum RivalStance {

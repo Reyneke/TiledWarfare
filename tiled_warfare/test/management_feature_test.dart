@@ -360,4 +360,98 @@ void main() {
       );
     });
   });
+
+  /// P4: Die beim Aktivieren **sofort** gebuchten Einmalkosten (`11a` E9/E15/E16)
+  /// werden im Wochenblock transparent ausgewiesen – abgeleitet aus dem
+  /// Aktivierungsanker, ohne neues Persistenzfeld und ohne Doppelbuchung.
+  group('Einmalkosten im Wochenblock (11a P4)', () {
+    test('prepaidActivationCosts kennt feste und Level-abhängige Kosten', () {
+      final lawyer = StaffEntryData(
+        id: 9,
+        name: 'Anwalt',
+        kind: RoleKind.management,
+        role: ManagementRole.lawyer.name,
+        costPerWeek: 260,
+        activeFeature: ManagementFeature.legalTrick.name,
+        featureActivatedAt: start,
+      );
+      expect(
+        ManagementFeatureService.prepaidActivationCosts(
+          [lawyer],
+          start,
+          start.add(const Duration(days: 7)),
+        ),
+        EconomyBalance.legalTrickCost,
+      );
+      // Anker außerhalb des Fensters ⇒ keine Einmalkosten (Idempotenz).
+      expect(
+        ManagementFeatureService.prepaidActivationCosts(
+          [lawyer],
+          start.add(const Duration(days: 7)),
+          start.add(const Duration(days: 14)),
+        ),
+        0,
+      );
+      // PR-Kampagne skaliert mit dem Level des **Ziels** (E9).
+      expect(
+        ManagementFeatureService.prepaidActivationCosts(
+          [managerEntry(activatedAt: start)],
+          start,
+          start.add(const Duration(days: 7)),
+          targetLevelById: const {targetId: 4},
+        ),
+        4 * EconomyBalance.featureCostPerLevel,
+      );
+    });
+
+    test('der Block weist die aktivierten Einmalkosten aus', () {
+      // Die Aktivierung hat die 3000 € (Level 3) bereits abgebucht (E9).
+      final r = restaurant(entries: [managerEntry(activatedAt: start)])
+        ..budget = 10000 - 3000;
+
+      final result =
+          GameClockService.catchUp(r, start.add(const Duration(days: 7)));
+
+      expect(result.weeks, 1);
+      expect(result.settlements.single.prepaidFeatureCosts, 3000);
+      expect(result.prepaidFeatureCosts, 3000);
+      // Die PR-Kampagne hat keine laufenden Kosten.
+      expect(result.featureCosts, 0);
+      expect(result.settlements.single.featureCosts, 0);
+      // Keine Doppelbuchung: das Budget folgt der normalen Wochenrechnung
+      // (die Einmalkosten sind **vor** dem Block geflossen).
+      expect(
+        result.budgetAfter,
+        7000 +
+            result.passiveIncome -
+            result.medicCosts -
+            result.staffCosts -
+            result.upgradeUpkeep -
+            result.negativeInterest -
+            result.penaltyCosts -
+            result.featureCosts,
+      );
+    });
+
+    test('der Folgeblock trägt die Einmalkosten nicht erneut', () {
+      final r = restaurant(entries: [managerEntry(activatedAt: start)])
+        ..budget = 10000 - 3000;
+      GameClockService.catchUp(r, start.add(const Duration(days: 7)));
+
+      final second =
+          GameClockService.catchUp(r, start.add(const Duration(days: 14)));
+
+      expect(second.settlements.single.prepaidFeatureCosts, 0);
+      expect(second.prepaidFeatureCosts, 0);
+    });
+
+    test('ohne Aktivierung bleibt die Zeile leer', () {
+      final r = restaurant(entries: [managerEntry()]);
+      final result =
+          GameClockService.catchUp(r, start.add(const Duration(days: 7)));
+
+      expect(result.prepaidFeatureCosts, 0);
+      expect(result.settlements.single.prepaidFeatureCosts, 0);
+    });
+  });
 }

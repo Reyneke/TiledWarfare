@@ -13,7 +13,11 @@ void main() {
       cuisine: Cuisine.mexican,
       budget: 1234,
       lastMatchResult: MatchResult.win,
-      upgrades: const {UpgradeType.signage: 2, UpgradeType.jukebox: 1},
+      upgrades: const {
+        UpgradeType.signage: 2,
+        UpgradeType.jukebox: 1,
+        UpgradeType.certification: 3,
+      },
     );
 
     final restored = RestaurantData.fromJson(r.toJson());
@@ -24,7 +28,19 @@ void main() {
     expect(restored.lastMatchResult, MatchResult.win);
     expect(restored.upgrades[UpgradeType.signage], 2);
     expect(restored.upgrades[UpgradeType.jukebox], 1);
+    // P3: das neue Enum-Feld wird über den Namen persistiert (additiv).
+    expect(restored.upgrades[UpgradeType.certification], 3);
     expect(restored.upgrades[UpgradeType.tables], isNull);
+  });
+
+  test('RestaurantData ignoriert unbekannte Upgrade-Namen (V6, additiv)', () {
+    final restored = RestaurantData.fromJson({
+      'id': 1,
+      'name': 'Neu',
+      'upgrades': {'signage': 1, 'hygieneSeal': 2},
+    });
+    expect(restored.upgrades[UpgradeType.signage], 1);
+    expect(restored.upgrades.length, 1);
   });
 
   test('RestaurantData defaultet Alt-Daten auf italienisch & Stufe 0', () {

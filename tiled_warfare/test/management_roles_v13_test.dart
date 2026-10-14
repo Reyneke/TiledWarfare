@@ -7,6 +7,7 @@ import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/objects/object_profile.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/inspection_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
@@ -839,10 +840,15 @@ void main() {
   });
 
   group('Einkommens-Abschöpfung unentdeckter Angriffe (V13)', () {
-    /// Blockanker (ab [start]) mit mindestens [min] Angreifern im Block.
+    /// Blockanker (ab [start]) mit mindestens [min] Angreifern im Block und
+    /// **ohne** Behörden-Inspektion (P3) — hier geht es allein um die
+    /// Abschöpfung unentdeckter Angriffe, nicht um Strafen.
     DateTime anchorWithAttackers(RestaurantData r, {int min = 1}) {
       for (var i = 0; i < 400; i++) {
         final anchor = start.add(Duration(days: 7 * i));
+        if (InspectionService.isDue(restaurantId: r.id, blockAnchor: anchor)) {
+          continue;
+        }
         if (RivalService.incomingAttackerIds(r, anchor).length >= min) {
           return anchor;
         }

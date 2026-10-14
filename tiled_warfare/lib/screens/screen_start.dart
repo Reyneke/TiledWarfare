@@ -9,6 +9,7 @@ import 'package:tiled_warfare/services/profile_storage.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/district.dart';
 import 'package:tiled_warfare/services/district_service.dart';
+import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
 import 'package:tiled_warfare/screens/screen_restaurant.dart';
 import 'package:tiled_warfare/theme/app_theme.dart';
@@ -236,6 +237,9 @@ class _ScreenStartState extends State<ScreenStart> {
 
       if (pickedFile == null) return;
 
+      // P6: aufgelöstes Basisverzeichnis (AppData) nutzen und das Ergebnis
+      // absolut speichern.
+      await ProfileStorage.ensureInitialized();
       final profileDir = Directory('${ProfileStorage.baseDirName}/${profile.id}');
       if (!await profileDir.exists()) {
         await profileDir.create(recursive: true);
@@ -245,7 +249,10 @@ class _ScreenStartState extends State<ScreenStart> {
           ? '.${pickedFile.name.split('.').last}'
           : '.png';
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final destPath = '${profileDir.path}/profile_$timestamp$imageExtension';
+      final destPath =
+          File('${profileDir.path}/profile_$timestamp$imageExtension')
+              .absolute
+              .path;
       final destFile = File(destPath);
 
       if (await profileDir.exists()) {
@@ -509,10 +516,23 @@ class _ScreenStartState extends State<ScreenStart> {
 
     // Echtzeit-Catch-up (V8): verpasste Tage/Wochen vor dem ersten Frame
     // abrechnen; das Ergebnis zeigt der Restaurant-Screen beim Aufbau an (L2).
+    // P6: Für den Tick wird ein Write-ahead-Journal geschrieben (Anker vor der
+    // Mutation) und nach erfolgreichem Save wieder entfernt.
+    final anchor = selected.lastSeenAt;
+    final now = DateTime.now();
     ObjectProfile().loadFromData(freshProfile, restaurantId: selected.id);
-    ObjectProfile().pendingCatchUpResult =
-        ObjectProfile().runCatchUp(DateTime.now());
-    _reportSaveResult(await ObjectProfile().saveToStorage());
+    if (anchor != null && GameClockService.daysElapsed(anchor, now) > 0) {
+      await ProfileStorage.writeTickJournal(
+        freshProfile.id,
+        restaurantId: selected.id,
+        lastSeenAt: anchor,
+        weekAnchorAt: selected.weekAnchorAt,
+      );
+    }
+    ObjectProfile().pendingCatchUpResult = ObjectProfile().runCatchUp(now);
+    final saved = await ObjectProfile().saveToStorage();
+    if (saved) await ProfileStorage.clearTickJournal(freshProfile.id);
+    _reportSaveResult(saved);
 
     if (!mounted) return;
     await Navigator.push(
@@ -677,7 +697,11 @@ class _ScreenStartState extends State<ScreenStart> {
                     ? theme.colorScheme.primary
                     : theme.colorScheme.surfaceContainerHighest,
                 backgroundImage: profile.profileImagePath != null
-                    ? FileImage(File(profile.profileImagePath!))
+                    ? FileImage(
+                        File(
+                          ProfileStorage.absolutePath(profile.profileImagePath!),
+                        ),
+                      )
                     : null,
                 child: profile.profileImagePath == null
                     ? Icon(
@@ -852,7 +876,7 @@ class _ScreenStartState extends State<ScreenStart> {
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Image.file(
-                    File(restaurant.logoPath!),
+                    File(ProfileStorage.absolutePath(restaurant.logoPath!)),
                     width: 40,
                     height: 40,
                     fit: BoxFit.cover,

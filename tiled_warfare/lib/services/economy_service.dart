@@ -159,6 +159,14 @@ class EconomyService {
       EconomyBalance.transferCostBase +
       EconomyBalance.transferCostPerLevel * math.max(0, level);
 
+  /// Kosten eines **Karriere-Neustarts** (Level 0) mit [level].
+  ///
+  /// Muster wie [transferCost]: Grundbetrag plus Level-Anteil. Wird von
+  /// `ObjectProfile.restartCareer` geprüft (`canAfford`) und gebucht.
+  static int careerRestartCost({required int level}) =>
+      EconomyBalance.careerRestartCostBase +
+      EconomyBalance.careerRestartCostPerLevel * math.max(0, level);
+
   /// Aura-Radius eines Kampfrangs [rank] in Hexfeldern (Karrierepfade, V10).
   static int stationAuraRadius(String rank) =>
       EconomyBalance.stationAuraRadiusByRank[rank] ?? 0;
@@ -251,7 +259,7 @@ class EconomyService {
 
   // ── Erweiterungen (§ 10) ──────────────────────────────────────────────
 
-  /// Fasst die relativen Boni aller [levels] zu sechs Summenboni zusammen.
+  /// Fasst die relativen Boni aller [levels] zu sieben Summenboni zusammen.
   ///
   /// `healTime` ist die Summe der Heilzeit-Verkürzungen (`firstAid`, § 10); sie
   /// wird nicht auf einen der drei Eingangswerte addiert, sondern als Faktor auf
@@ -260,6 +268,8 @@ class EconomyService {
   /// (`lounge`, § 10): Sie wirken ebenfalls **nicht** auf die drei Eingangswerte,
   /// sondern am Blockende auf den Refill bzw. am Tagesschritt auf den Tages-Sink
   /// (`GameClockService._refillStaffResources`/`_applyDailyResourceSink`).
+  /// `penaltyReduction` ist die Summe der Strafen-Minderungen (`certification`,
+  /// § 10): Sie wirkt an der Strafbuchung (`StaffRoleService.reducedPenalty`).
   static ({
     double capacity,
     double attractiveness,
@@ -267,6 +277,7 @@ class EconomyService {
     double healTime,
     double refill,
     double dailySinkRelief,
+    double penaltyReduction,
   }) upgradeEffects(Map<UpgradeType, int> levels) {
     var capacity = 0.0;
     var attractiveness = 0.0;
@@ -274,6 +285,7 @@ class EconomyService {
     var healTime = 0.0;
     var refill = 0.0;
     var dailySinkRelief = 0.0;
+    var penaltyReduction = 0.0;
     levels.forEach((type, level) {
       final spec = EconomyBalance.upgrades[type];
       if (spec == null || level <= 0) return;
@@ -283,6 +295,7 @@ class EconomyService {
       healTime += spec.healTimeReductionPerLevel * level;
       refill += spec.refillBonusPerLevel * level;
       dailySinkRelief += spec.dailySinkReliefPerLevel * level;
+      penaltyReduction += spec.penaltyReductionPerLevel * level;
     });
     return (
       capacity: capacity,
@@ -291,6 +304,7 @@ class EconomyService {
       healTime: healTime,
       refill: refill,
       dailySinkRelief: dailySinkRelief,
+      penaltyReduction: penaltyReduction,
     );
   }
 

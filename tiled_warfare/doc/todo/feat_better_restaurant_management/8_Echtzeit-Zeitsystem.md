@@ -152,12 +152,12 @@ Dieses Dokument erfasst den **aktuellen Stand** des Zeitsystems, dokumentiert di
 
 - `_runResumeCatchUp`/`_runTick`/`_switchRestaurant` werten `WeeklyTickResult` aus und zeigen eine SnackBar: „3 Wochen abgerechnet: +Y Einkommen, −Z Arztkosten, −W Unterhalt, −V Zinsen; dazu 2 Tage Einkommen +X €“. Die Wochenzeile speist sich aus den Summen/`settlements`, die Resttage aus `result.leftoverDays`/`leftoverIncome` (§ 6). Neue l10n-Strings `catchUpSummary`/`catchUpLeftover` (DE/EN in den ARB-Dateien).
 - **Login:** Weil der Catch-up in `screen_start._login()` vor dem Aufbau des Restaurant-Screens läuft, wird das Ergebnis als `ObjectProfile.pendingCatchUpResult` gereicht und im ersten Frame angezeigt.
-- **Detailansicht (optional, offen):** Ein kleiner „Abrechnungs-Dialog“, der die `settlements` Woche für Woche auflistet.
+- **Wochenbericht mit Detail-Aufschlüsselung (P6, 4.2/#5) – umgesetzt:** Volle Blöcke öffnen `_showWeekReport` (Dialog) statt nur einer SnackBar. Er zeigt die Summenzeile, den **Einmalkosten-Hinweis** und je `settlement` einen aufklappbaren Block (`_buildWeekBreakdown`): Woche, Zeitraum, Einkommen, Teamärzte, Personal, Unterhalt, Zinsen, Strafen, laufende Feature-Kosten, Feature-Einmalkosten, Rivalen-Sabotage und „Budget danach“. Dafür führt `WeekSettlement` zusätzlich `rivalSabotageLoss` (der Verlust **dieses** Blocks; bisher nur als Gesamtsumme in `WeeklyTickResult.rivalSabotageLosses`). Die Blöcke sind **initial eingeklappt**, weil bis zu `EconomyBalance.maxCatchUpWeeks` (52) Blöcke möglich sind; reine Resttage bleiben eine SnackBar.
 
-### L3 – Wochen-Tick robust gegen Save-Lücke (P3) – teilweise umgesetzt
+### L3 – Wochen-Tick robust gegen Save-Lücke (P3) – umgesetzt
 
-- **Umgesetzt (Entkopplung):** Der Wochen-`catchUp` schreibt `RestaurantData.weekAnchorAt` getrennt vom Tagescursor `lastSeenAt` fort; die Wochenrechnung ist damit unabhängig testbar und stabil gegen häufige Catch-ups. Das reduziert die Doppelbuchungs-Gefahr, **ersetzt aber nicht** die Absicherung der Save-Lücke unten.
-- **Offen (Empfehlung):** Die verbleibende **Crash-Lücke** zwischen `runCatchUp` und Save (P3) bleibt – ein Write-ahead-Journal `profiles/<id>/last_tick.json` (vor der Mutation schreiben, beim Boot abgleichen) ist bei Bedarf die strikte Lösung. Angesichts der V6-Absicherung **nicht** zwingend.
+- **Umgesetzt (Entkopplung):** Der Wochen-`catchUp` schreibt `RestaurantData.weekAnchorAt` getrennt vom Tagescursor `lastSeenAt` fort; die Wochenrechnung ist damit unabhängig testbar und stabil gegen häufige Catch-ups. Das reduziert die Doppelbuchungs-Gefahr.
+- **Umgesetzt (Write-ahead-Journal, P6/4.2/#5):** Vor der Mutation schreibt der Aufrufer `profiles/<id>/last_tick.json` (`ProfileStorage.writeTickJournal`, atomar, **ohne** `.bak`) mit Restaurant-ID, `lastSeenAt`, `weekAnchorAt` und Startzeitpunkt und entfernt es nach erfolgreichem Save (`clearTickJournal`) – an allen vier Catch-up-Einstiegen (`_runResumeCatchUp`, `_runTick`, `_switchRestaurant`, `screen_start._login`). Ein beim Laden vorgefundenes Journal bedeutet „App wurde zwischen Mutation und Save beendet“: es wird per `CrashLogger.warn` gemeldet und aufgeräumt (`_discardOrphanedTickJournal`). Da der Tick anker-basiert und idempotent ist, wird er beim nächsten Lauf vollständig nachgeholt – das Journal ist damit ein **Diagnose-/Strictness-Nachweis**, keine zweite Buchungsquelle. Es wird nur geschrieben, wenn mindestens ein voller Tag fällig ist (der periodische 60-s-Tick erzeugt sonst unnötiges I/O); fehlerhafte Journale werden still entfernt und blockieren das Laden nie (`test/profile_storage_test.dart`).
 
 ### L4 – API-Aufräumen (P4–P7; reine Refactorings, kein Verhaltenswechsel)
 
@@ -243,17 +243,23 @@ Der Tagesschritt (§ 6) sowie L1/L2/L3(Teil)/L4.6/L8 sind umgesetzt und getestet
 ### Service (`GameClockService`)
 - `EconomyBalance.dailyTick`; `GameClockService.day`, `daysElapsed`, `nextDailyTick`.
 - `WeekSettlement` (Wochen-Zusammenfassung je Block) und `WeeklyTickResult` mit `settlements`/`leftoverDays`/`leftoverIncome`.
+- `WeekSettlement`/`WeeklyTickResult.prepaidFeatureCosts` (**P4**, `11a` E20): Einmalkosten der im Block aktivierten Personal-Features – abgeleitet aus dem Aktivierungsanker `featureActivatedAt` (`ManagementFeatureService.prepaidActivationCosts`), **informativ** (die Beträge sind bei der Aktivierung bereits gebucht; `featureCosts` bleibt die laufende Zeile).
 - `catchUp`: Heilung → Spritzen-Rückfall → **Tagesschleife** (Tagesertrag; Blockgrenze = Arzt/Unterhalt/Zinsen + `WeekSettlement`); Anker werden um abgerechnete Tage/Wochen fortgeschrieben. Bei Fälligkeit 0 bleiben die Anker unangetastet.
 
 ### UI & l10n
 - `ScreenRestaurant`: `Timer.periodic` (60 s, `_runTick`), Ergebnis-SnackBar (`_showCatchUpResult`), Login-Ergebnis via `pendingCatchUpResult`; der Wochen-Countdown nutzt `weekAnchorAt`.
-- Neue ARB-Strings `catchUpSummary`/`catchUpLeftover` (DE/EN), `flutter gen-l10n` ausgeführt.
+- Wochenbericht (`_showWeekReport`): Summenzeile + Rangliste (Kap. 12/13) + **Wochen-Aufschlüsselung** je `settlement` (P6) inkl. Datum ohne `DateFormat` (bewusst, weil dafür intl-Locale-Daten initialisiert sein müssten).
+- Neue ARB-Strings `catchUpSummary`/`catchUpLeftover` (DE/EN), `flutter gen-l10n` ausgeführt. **P6 ergänzt:** `weekReportWeeksTitle`, `weekReportWeekHeader`, `weekReportLine{Income,Medics,Staff,Upkeep,Interest,Penalties,Features,PrepaidFeatures,Sabotage,BudgetAfter}`.
+
+### Speicherort der Spielstände (P6, 4.2/#4)
+- `ProfileStorage` löst das Basisverzeichnis einmalig über `getApplicationSupportDirectory()` auf (Unterordner `tiled_warfare_profiles`); fehlt das Plugin (Unit-Tests, Plattformen ohne Kanal), bleibt es beim relativen `profiles/`-Ordner (`ProfileStorage.usesAppDataDir` zeigt, was gilt).
+- **Migration:** Beim ersten Start werden Altbestände aus `profiles/` **kopiert** (nicht verschoben) und nur, solange am Ziel noch kein Spielstand liegt – der alte Ordner bleibt erhalten.
+- **Bildpfade:** Neue Profilbilder/Logos werden **absolut** gespeichert; alte relative Pfade (`profiles/<id>/logo.png`) löst `ProfileStorage.absolutePath()` beim Lesen auf (führend ist die migrierte Datei im Basisverzeichnis).
 
 ### Validierung
 - `dart analyze lib test`: **keine Warnungen/Fehler** (nur die vorbestehenden `info`-Lints).
-- `flutter test`: **245 Tests grün**, inkl. neuer Tages-Schritt-, Rundungs-, Anker-Stabilitäts- und Randfall-Tests (`test/game_clock_service_test.dart`), sowie `balance_sanity_test.dart` (`dailyTick × 7 == weeklyTick`).
+- `flutter test`: **641 Tests grün** (631 vor P6 + 10 neue; die ursprünglich hier notierten 245 tests waren der Sprint-Stand), inkl. Tages-Schritt-, Rundungs-, Anker-Stabilitäts- und Randfall-Tests (`test/game_clock_service_test.dart`), `balance_sanity_test.dart` (`dailyTick × 7 == weeklyTick`) sowie der P6-Tests in `game_clock_service_test.dart` (Wochen-Aufschlüsselung), `screen_restaurant_test.dart` (Wochenbericht-Dialog), `profile_storage_test.dart` (Tick-Journal) und `profile_storage_appdata_test.dart` (AppData + Migration).
 
 ### Offen (bewusst zurückgestellt)
 - L4.1–L4.5 (Aufräum-Refactorings ohne Verhaltenswechsel).
-- L6: optionaler `maxCatchUpWeeks`-Cap und optionale UTC-Umstellung (lokale Wanduhr ist dokumentiert und bleibt Standard).
-- L2-Detaildialog (Wochen-Aufschlüsselung) sowie P3-Journal (nur falls nötig).
+- L6: optionale UTC-Umstellung (lokale Wanduhr ist dokumentiert und bleibt Standard); der `maxCatchUpWeeks`-Cap ist umgesetzt.

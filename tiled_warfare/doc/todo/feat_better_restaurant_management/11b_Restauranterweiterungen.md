@@ -22,9 +22,10 @@ stufenweise ausbaubar, kosten **Ankauf** und **wöchentlichen Unterhalt** und we
 **Status:** vollständig umgesetzt (Phase 8 in `2-Wirtschaftsschleife.md`, Commit `a723ad5`
 „Wirtschaftsschleife schließen (V2/V7/V8)“; die Unterhaltsschnittstelle zum Plongeur kam mit V10/`7939be4`).
 Der erste Baustein des **V1-Pakets** aus diesem Dokument (`cellar`, Gruppe A) ist ebenfalls umgesetzt, ebenso der
-zweite (`coldRoom`, Gruppe B), der dritte (`firstAid`, Gruppe B, erster ⚙-Baustein) und der vierte (`lounge`,
-Gruppe B, zweiter ⚙-Baustein) – Beleg und Checklisten-Abarbeitung unter „Abgeschlossene Klärungen“.
-Werte verbindlich nur in `EconomyBalance` (V7); Auswertung in `EconomyService` (reine Funktionen),
+zweite (`coldRoom`, Gruppe B), der dritte (`firstAid`, Gruppe B, erster ⚙-Baustein), der vierte (`lounge`,
+Gruppe B, zweiter ⚙-Baustein) und der erste Baustein der **Gruppe D** (`certification`, P3, dritter ⚙-Baustein) –
+Beleg und Checklisten-Abarbeitung unter „Abgeschlossene Klärungen“. Werte verbindlich nur in `EconomyBalance`
+(V7); Auswertung in `EconomyService` (reine Funktionen),
 Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 (`kProfileSchemaVersion = 5`, additiv/tolerant).
 
@@ -41,6 +42,7 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 | Kühlhaus/Kühlkette | `UpgradeType.coldRoom` | +3 % Kapazität | 5 | 160 € | 16 € |
 | Erste-Hilfe-Station | `UpgradeType.firstAid` | −5 % Heilzeit pro Verletzungsstufe | 3 | 250 € | 25 € |
 | Ruheraum/Lounge | `UpgradeType.lounge` | +3 % Wochen-Refill, −3 % Tages-Sink (Vitalität/Moral) | 3 | 180 € | 18 € |
+| Zertifizierung/Hygiene-Siegel | `UpgradeType.certification` | −5 % erlittene Strafen | 3 | 200 € | 20 € |
 
 > Quelle: `EconomyBalance.upgrades` (V7). Bei Abweichung gilt der **Code**, nicht die Tabelle.
 > `test/balance_sanity_test.dart` erzwingt, dass **jeder** `UpgradeType`-Wert einen Spec besitzt.
@@ -51,6 +53,9 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 > `lounge` ist der vierte (Gruppe B) und der zweite **⚙-Baustein**: Auch er speist **keinen** der drei
 > Eingangswerte und **keine** Heilzeit, sondern hängt sich an die Personal-Ressourcen
 > (`_refillStaffResources` **und** `_applyDailyResourceSink`, § 10).
+> `certification` ist der **erste Baustein der Gruppe D** und der dritte **⚙-Baustein**: Er speist **keinen**
+> Eingangswert, sondern moduliert die Strafbuchung der Wirtschaftsschleife (`penaltyCosts`, § 10) – Grundlage und
+> Entscheidung siehe „Behörden-Inspektionen (P3) statt offener Strafenquelle“ unter „Entscheidungen“.
 
 ### Kosten- & Wirkungsmodell
 
@@ -63,6 +68,9 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
   `EconomyService.upgradeEffects(levels)` als `(capacity, attractiveness, satisfaction)`.
   Die vierte Summe `healTime` des Records wirkt **nicht** auf die drei Eingangswerte, sondern als Faktor auf die
   Heilzeit pro Verletzungsstufe (`GameClockService.healTimePerStageFor`, § 10 `firstAid`).
+  Die fünfte und sechste Summe (`refill`, `dailySinkRelief`) hängen an den Personal-Ressourcen (§ 10 `lounge`),
+  die siebte (`penaltyReduction`) **nicht** an den Eingangswerten, sondern an der Strafminderung
+  (`StaffRoleService.penaltyReductionPercent`, § 10 `certification`).
 - **Verkauf:** erstattet **50 %** der investierten Ankaufssumme (`EconomyBalance.upgradeSellRefundRate`,
   `EconomyService.sellRefund`; kaufmännisch gerundet via `.round()`).
 - **Downgrade:** stufenweise zurückbauen, **ohne** Erstattung – senkt nur den Unterhalt.
@@ -159,18 +167,24 @@ je Stufe – löst die dokumentierte „Einzelstufe“-Entscheidung ab).
 
 ### Gruppe D – Vorbereitung Strafen/Prestige (`13`/`12`)
 
+> **Stand:** `certification` ist **umgesetzt (P3)** – zusammen mit der **Behörden-Inspektion**
+> (`InspectionService`) als passiver Strafenquelle; `stars` bleibt offen (wartet auf `12`/`13`).
+
 | Erweiterung (Arbeitstitel) | Wirkung pro Stufe | Max | Ankauf (Basis) | Unterhalt (Basis) | Hook | Synergie / Vorbereitung |
 |---|---|---:|---:|---:|---|---|
-| Zertifizierung/Hygiene-Siegel (`certification`) ⚙ | erlittene Strafen −5 % | 3 | 200 € | 20 € | Strafbuchung im Tick (`penaltyCosts`) | **Rechtsanwalt** (additiv, bis 100 % kappbar) – wirkungslos ohne eigene Strafenquelle → **gekoppelt** mit der offenen `11a`-Position „Behörden/Inspektionen“ als neuer Strafenquelle |
+| Zertifizierung/Hygiene-Siegel (`certification`) ⚙ – **umgesetzt (P3)** ✅ | erlittene Strafen −5 % | 3 | 200 € | 20 € | Strafbuchung im Tick (`penaltyCosts`) | **Rechtsanwalt** (additiv, bis 100 % kappbar) – die früher fehlende Strafenquelle ist **entschieden & umgesetzt**: die passive **Behörden-Inspektion** (`InspectionService`, `11a`) liefert sie, beide Strafen laufen über dieselbe `penaltyCosts`-Zeile (`GameClockService.catchUp`). |
 | Sterneküche/Auszeichnung (`stars`) ⚙ | +Prestige-Beitrag/Ranglisten-Position; optional seltener Sabotage-Ziel | 5 | 400 € | 40 € | `districtPrestigeFor`/`RivalService`-Zielauswahl | Vorbereitend für **12** (Mini-PP, „Platz X von Y“) und **13** (Rivalen) – erst nach deren offenen Punkten |
 
 **Priorisierung („V1-Paket“):** `cellar` ✅ **umgesetzt** → `coldRoom` ✅ **umgesetzt** → `firstAid` ✅ **umgesetzt** → `lounge` ✅ **umgesetzt**;
-danach `school`/`security`,
-zuletzt die Zeitfenster-/Prestige-Bausteine (`weeklyMenu`, `terrace`, `delivery`, `certification`, `stars`).
+danach `school`/`security`, dann die **Gruppe D** (`certification` ✅ **umgesetzt (P3)** – mit der
+Behörden-Inspektion als Strafenquelle) und
+zuletzt die restlichen Zeitfenster-/Prestige-Bausteine (`weeklyMenu`, `terrace`, `delivery`, `stars`).
 Vor dem Bau der Folge-Bausteine sind deren offene Wirkungs-Optionen zu entscheiden (`school`: −5 %
 Fortbildungskosten **oder** +2 % Sieg-XP; `security`: +5 %
 Entdeckung **oder** −5 % Abschöpfung). Bei `firstAid` **und** `lounge` sind die Optionen **entschieden**
-(Heilzeit bzw. „beide Effekte“, siehe Entscheidungen) und die Hooks gebaut.
+(Heilzeit bzw. „beide Effekte“, siehe Entscheidungen) und die Hooks gebaut; bei `certification` war zusätzlich
+die **Strafenquelle** zu entscheiden – entschieden als **passive Behörden-Inspektion** (`InspectionService`,
+siehe Entscheidungen).
 
 **Bewusst nicht vorgeschlagen:** weitere reine Attraktivitäts-%-Boni (Clamp 0–4), eine „Bar“ neben dem Keller
 (Doppel-Hebel Zufriedenheit), Einkommens-Multiplikatoren auf bestehende Einkommens-%-Boni (verletzt das
@@ -237,6 +251,22 @@ analog zum bestehenden `rebrandingPenaltyUntil`-Fenster (z. B. Saison-Terrasse, 
     Erweiterung).
   - **Abgrenzung:** Der **Erschöpfungs-Malus** der Nulltage (`GameClockService._probeResources`) bleibt dem
     **Tournant** (`11a`) vorbehalten – der Ruheraum senkt nur den Tages-Sink.
+- **`certification`: Behörden-Inspektionen (P3) statt offener Strafenquelle (entschieden & umgesetzt).** Der
+  Baustein war bis dahin **wirkungslos ohne eigene Strafenquelle** (Gruppe D war explizit an die offene
+  `11a`-Position „Behörden/Inspektionen“ gekoppelt). Statt die Erweiterung zu streichen, wurde die Quelle mit
+  ihr zusammen gebaut:
+  - **Neuer Hook `penaltyReductionPerLevel = 0.05`** (3 Stufen, 200 €/20 €) als **siebte** Summe
+    `EconomyService.upgradeEffects(...).penaltyReduction`; sie speist **keinen** Eingangswert, sondern
+    `StaffRoleService.penaltyReductionPercent` **additiv** zu Rechtsanwalt (V11, −25 %) und dem aktiven
+    „Winkelzug“ – gedeckelt auf 100 %, gerundet **pro Strafe** (`reducedPenalty`).
+  - **Passive Strafenquelle `InspectionService`:** die Behörden-Inspektion wird **deterministisch** über einen
+    CRC32 aus Restaurant-ID + Block-Anker fällig (alle `inspectionIntervalWeeks` Blöcke, `inspectionFineBase`
+    + Korruptions-Zuschlag). Sie ist ein reiner **Vorhersage-/Auflösungs-Helfer**, keine Zufallsquelle – damit
+    V8-replay-idempotent; die geminderte Strafe erscheint als `penaltyCosts` in der Wochenabrechnung
+    (`WeekSettlement`/`WeeklyTickResult`).
+  - **Eine Buchungszeile bleibt die Wahrheit:** `GameClockService.catchUp` bucht **alle** Strafen – die der
+    aufgedeckten Sabotage (`RivalService`) **und** die der Inspektion – als `penaltyCosts` im Wochen-Tick, durch
+    dieselbe Minderung. Der Rechtsanwalt wirkt damit automatisch mit, ohne zweiten Hook.
 
 ### Balance-Runde: Gegenwert je Erweiterung (Vergleich)
 
@@ -413,6 +443,20 @@ bleibt die Heilung immer noch spürbar lang (Kette `dying → ready` = 5 Stufen 
   `ObjectProfile.upgradePurchaseCost`; die UI zeigt den geminderten Wert), Plongeur (−25 %) und Buchhalter
   (−5 %) mindern dagegen den **Unterhalt** im Wochen-Tick. Alle Tabellenwerte dieses Dokuments sind daher
   **Basis-Werte ohne Rollen** (erläutert in „Kosten- & Wirkungsmodell“).
+- **P3 – `certification` umgesetzt (Checkliste 1–7 abgearbeitet, dritter ⚙-Baustein):** `UpgradeType.certification`
+  + `UpgradeSpec` (max. 3 Stufen, 200 €/20 €, `penaltyReductionPerLevel = 0.05`).
+  Die bis dahin offene **Strafenquelle** wurde **mit** dem Baustein gebaut: der neue
+  `InspectionService` löst deterministisch (CRC32 aus Restaurant-ID + Blockanker, alle
+  `inspectionIntervalWeeks` Blöcke) eine **Behörden-Inspektion** auf und meldet eine Strafbuchung; die
+  Minderung stapelt **additiv** (Rechtsanwalt + Winkelzug + Zertifizierung, 100 %-Deckel) in
+  `StaffRoleService.penaltyReductionPercent`/`reducedPenalty`. `GameClockService.catchUp` bucht sie – wie die
+  Sabotage-Strafe – als `penaltyCosts` im Wochen-Tick (eine Zeile, ein Hook).
+  l10n `upgradeCertification` (DE „Zertifizierung/Hygiene-Siegel“ / EN „Certification/hygiene seal“) + Kachel
+  im Reiter „Erweiterungen“ (`UpgradeType.values`-getrieben).
+  Tests: `test/inspection_service_test.dart` (Fälligkeits-Determinismus, Strafe/Korruption, Minderungs-Stacking,
+  `catchUp`-Integration), `test/profile_data_test.dart` (Persistenz-Round-trip + Toleranz gegen unbekannte Namen),
+  `test/management_roles_v13_test.dart` (Sabotage-Absorption isoliert von fälligen Inspektionsblöcken),
+  `test/balance_sanity_test.dart` erzwingt die Spec.
 
 ## Checkliste für eine neue Erweiterung (Doku ↔ Code)
 

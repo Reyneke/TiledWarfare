@@ -213,6 +213,46 @@ void main() {
       expect(EconomyService.sellRefund(UpgradeType.lounge, 3), 540);
     });
 
+    test('Zertifizierung (P3) speist ausschließlich die Strafen-Minderung', () {
+      // certification: −5 % Strafen je Stufe (Basis 200 €, max. 3 Stufen).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.certification: 3},
+      );
+      expect(effects.penaltyReduction, closeTo(0.15, 1e-9));
+      // Bewusst kein Zuwachs auf Eingangswerte, Heilzeit oder Ressourcen.
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.satisfaction, closeTo(0.0, 1e-9));
+      expect(effects.healTime, closeTo(0.0, 1e-9));
+      expect(effects.refill, closeTo(0.0, 1e-9));
+      expect(effects.dailySinkRelief, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.certification, 3), 1200);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.certification, 0), 200);
+      expect(
+        EconomyService.upgradeUpkeepPerWeek(UpgradeType.certification, 3),
+        60,
+      );
+      expect(EconomyService.sellRefund(UpgradeType.certification, 3), 600);
+    });
+
+    test('nur die Zertifizierung speist die Strafen-Minderung (§ 10)', () {
+      final effects = EconomyService.upgradeEffects(
+        const {
+          UpgradeType.tables: 3,
+          UpgradeType.kitchen: 3,
+          UpgradeType.signage: 3,
+          UpgradeType.decoration: 3,
+          UpgradeType.jukebox: 1,
+          UpgradeType.cellar: 3,
+          UpgradeType.coldRoom: 3,
+          UpgradeType.firstAid: 3,
+          UpgradeType.lounge: 3,
+        },
+      );
+      expect(effects.penaltyReduction, closeTo(0.0, 1e-9));
+    });
+
     test('nur der Ruheraum speist die Personal-Ressourcen-Summen (§ 10)', () {
       final effects = EconomyService.upgradeEffects(
         const {

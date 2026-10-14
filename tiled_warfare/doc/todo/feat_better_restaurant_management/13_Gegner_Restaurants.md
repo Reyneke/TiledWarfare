@@ -63,13 +63,13 @@ absteigend sortiert nach **Power Projection** (Ableitung: `PowerProjectionServic
 `WeeklyTickResult` mitgeliefert. UI: „Platz 3 von 7 in SoHo“ in `ScreenRestaurant`
 (l10n, `12_Power_Projection.md` → „Integration“).
 
-**Gegenwirkung an der Spitze (Entschieden):** Rivalen-Aggressivität skaliert zusätzlich
+**Gegenwirkung an der Spitze (Entschieden & umgesetzt):** Rivalen-Aggressivität skaliert zusätzlich
 den **PP-Einkommensfaktor** des Spielers (`powerProjectionIncomeFactor`,
-`12_Power_Projection.md` → „Effekte“). Vorschlag: `faktorEffektiv =
+`12_Power_Projection.md` → „Effekte“): `faktorEffektiv =
 powerProjectionIncomeFactor(PP) × konkurrenzdruckFaktor`, wobei der Konkurrenzdruck aus
-dem Ø der Rivalen-PPs relativ zur Spieler-PP folgt – dominiert der Spieler, sinkt sein
-Faktor; liegt ein Rivale vorn, steigt er. Die exakte Formel ist offen (siehe „Offene
-Fragen“ 5).
+dem Ø der **aktiven** Rivalen-PPs relativ zur Spieler-PP folgt – dominiert der Spieler, sinkt sein
+Faktor; liegt ein Rivale vorn, steigt er. Umgesetzt als zweite Mini-Fuzzy-Stufe
+(`PowerProjectionService.competitionPressureFactor`, `effectiveIncomeFactor`, siehe „Offene Fragen“ 5).
 
 ## Identität & Persönlichkeit
 
@@ -154,9 +154,12 @@ Mission aus dem Träger plus bis zu `Kompetenz` gewählten Mitarbeitern (`StaffE
 | Erschöpfung | `sabotageExhaustionPerMission` (12) **gemittelt** über die Mannschaftsgröße, trifft Vitalität **und** Moral der Mitglieder |
 
 **Strafen:** Strafe = `sabotageCaughtFine` (3000 €), gemindert um
-`StaffRoleService.penaltyReductionPercent` (Rechtsanwalt-Passiv + aktiver „Winkelzug“). Sie wird im
+`StaffRoleService.penaltyReductionPercent` (Rechtsanwalt-Passiv + aktiver „Winkelzug“ + **Zertifizierung**
+`certification`, P3; additiv, auf 100 % gedeckelt). Sie wird im
 Wochenbudget gebucht und als `penaltyCosts` in `WeekSettlement`/`WeeklyTickResult` ausgewiesen; die Auflösung
-selbst ist budgetneutral (eine Quelle der Wahrheit im Tick).
+selbst ist budgetneutral (eine Quelle der Wahrheit im Tick). **Zweite Strafenquelle (P3):** die passive
+**Behörden-Inspektion** (`InspectionService`, `11a`/`11b`) nutzt **dieselbe** Buchungszeile und **dieselbe**
+Minderung.
 
 **Persistenz (Schema v9):** Nur das **Wirkungsfenster** wird gespeichert
 (`RestaurantData.sabotageTargetId`/`sabotageAppliedUntil`), der Roster bleibt abgeleitet (wie in
@@ -171,11 +174,7 @@ Auflösungsergebnis; ein zweiter Catch-up mit demselben `now` bucht weder Strafe
 die Träger-Karte des Gewerkschaftschefs öffnet einen Mannschafts-Dialog; `ScreenHireAndFire` zeigt zusätzlich
 eine kompakte Rivalen-Liste mit Sabotage-Status.
 
-**Noch offen:** Rivalen-PP/Rangliste, Rivalen-Aktionen im Tick, Gefechtsteilnahme/Stance sowie ein
-`ScreenRestaurant`-Ranking-Badge. Im **V11**-Modul wird `shadiness` nur über die **Schlagmannschaft**
-(„Alle Räder …“, V12) **aktiv** ausgewertet – solo skaliert die Erfolgschance mit der Kompetenz der
-Chefsekretärin. Die **passive** Entdeckung (Ø-`shadiness` des Personals) ist mit dem V13-Minimal-Modul unten
-umgesetzt.
+**Umgesetzt (Kap. 12/13):** Rivalen-PP/Rangliste, die **Voll-Simulation** im Wochen-Tick (persönlichkeitsgetriebener Zustand, Roster-Dynamik mit Pleite/Nachrücken), Gefechtsteilnahme/Stance sowie der `ScreenRestaurant`-Ranking-Badge. Die Simulation liegt in `RivalService.simulateField`/`activeRosterOf`/`simulatedRivalPp`/`weekIndexOf` und speist über `RivalService.standings(…, weekIndex:)` den `GameClockService`. Im **V11**-Modul wird `shadiness` über die **Schlagmannschaft** („Alle Räder …“, V12) **aktiv** ausgewertet; die **passive** Entdeckung (Ø-`shadiness` des Personals) ist mit dem V13-Minimal-Modul umgesetzt. Offen bleibt nur noch das Zahlen-Tuning der neuen Simulationswerte.
 
 ## Minimal-Modul (V13): Rivalen-Sabotage gegen den Spieler & Gegenschlag
 
@@ -310,15 +309,17 @@ Minimaler Umfang (schrittweise erweiterbar):
 
 1. **Rostern:** Beim Wochen-Tick deterministisch aus Prestige-Tier + Rivalen-IDs
    erzeugen (feste Anzahl, feste Persönlichkeiten).
-2. **Rivalen-PP (symmetrisch):** Jeder Rivale berechnet seine PP mit demselben
-   `PowerProjectionService` wie der Spieler; die Eingänge (Konkurrenzdichte, Bilanz,
-   Teamqualität) stammen aus seinem deterministisch simulierten Rivalen-Zustand. Ein
-   langsamer, deterministischer Basisanstieg hält die Spannungskurve (Rubber-Band ohne
-   Zufall) – keine festen Level-Bänder.
-3. **Tick-Aktionen:** Rivalen „investieren“ gemäß Persönlichkeit (Attraktivität/Faktor)
-   und bauen ihren simulierten Rivalen-Zustand aus. Die **Gefechtsteilnahme** (mindestens
-   Stance Neutral/Feind) folgt, sobald der Rivalen-Zustand steht (siehe
-   „Gefechtsteilnahme“).
+2. **Rivalen-PP (symmetrisch) – umgesetzt:** Jeder Rivale berechnet seine PP mit demselben
+   `PowerProjectionService` wie der Spieler; `RivalService.simulatedRivalPp` legt auf das
+   Mini-PP-Modell einen **persönlichkeitsgetriebenen** (Aggressivität), langsamen,
+   deterministischen Aufstieg – kein Zufall, keine festen Level-Bänder (Rubber-Band).
+3. **Tick-Aktionen – umgesetzt:** `RivalService.simulateField` bildet den Wochen-Zustand des
+   Feldes ab (Rang, aktive Rivalen, Pleite). Die **Roster-Dynamik** (`roamTargetCount`,
+   `isRosterActive`) regelt Zu-/Abgänge: Der Spieler an der Spitze zieht weitere Rivalen nach
+   (Gegenwind, Q10), am Ende schrumpft das Feld; ein frei werdender Slot bleibt einen
+   Wochen-Tick leer (`rivalReplacementDelayWeeks`), bevor ein neuer Rivale (neue ID ⇒ neuer
+   Name) nachrückt. Die **Gefechtsteilnahme** (mindestens Stance Neutral/Feind) folgt aus dem
+   so gebildeten Zustand.
 4. **UI:** „Platz X von Y in <Stadtteil>“ + kompakte Rivalen-Liste (Name + PP/Rang) in
    `ScreenRestaurant`.
 5. **Persistenz:** Keine neuen Felder – Rivalen werden je Catch-up neu berechnet
@@ -410,11 +411,16 @@ Rivalen gemeinsame Spawns/Reservefelder (Detail offen, „Offene Fragen“ 2).
    Karten). => Sind es zu wenige, wird auf die vorhandenen Punkte verteilt
 3. **Stance-Schwellen:** Ab welchem Rangabstand/PP-Verhältnis ist ein Rivale Verbündeter,
    Neutral oder Feind (inkl. Anzahl je Stance)? Tuning in `EconomyBalance`.
-4. **Nachrücken:** Länge der Verzögerung (Vorschlag: 1 Wochen-Tick) final bestätigen;
-   Namensvergabe beim Nachrücken (neue Rivalen-ID ⇒ neuer Name?). => Bestätigt und ja, neue ID heisst auch neuer Name
-5. **Gegenwirkungs-Formel:** Exakte Formel für `konkurrenzdruckFaktor` (siehe „Rangliste“). => Vorschläge?
-6. **Faktorform:** Linearer Faktor vs. zweite Mini-Fuzzy-Stufe – gemeinsam mit
-   `12_Power_Projection.md` (Offene Frage 6) entscheiden.
+4. **Nachrücken – umgesetzt:** Die Verzögerung ist **ein Wochen-Tick**
+   (`EconomyBalance.rivalReplacementDelayWeeks = 1`, `RivalService.isRosterActive`); ein
+   nachrückender Kandidat hat eine neue ID und damit auch einen neuen Namen
+   (`candidatePool`-Index ⇒ `CRC32('rival:<district>:<index>')`).
+5. **Gegenwirkungs-Formel – entschieden/umgesetzt:** Der Konkurrenzdruck ist eine **zweite
+   Mini-Fuzzy-Stufe** (`PowerProjectionService.competitionPressureFactor`, Span 0.85–1.15)
+   über dem relativen PP-Abstand `(playerPp − Ø Rivalen-PP) / 100`; `factorEffektiv =
+   incomeFactor(PP) × competitionPressureFactor` (`effectiveIncomeFactor`). Der Ø stammt aus
+   dem **aktiven** Feld der Wochen-Simulation.
+6. **Faktorform – entschieden:** Fuzzy-Stufe (siehe 5; `12_Power_Projection.md` Q6).
 7. **Folgen unentdeckter Sabotage (V13, teilweise umgesetzt):** Wie schlägt sich ein **unbemerkter** Angriff nieder –
    Kunden-/Ansehensverlust, Erweiterungsschaden („Reparatur“), höhere laufende Kosten oder Strafzahlungen?
    => V13 bucht die **Einkommens-Abschöpfung** (10 % je unentdecktem Angreifer, Deckel 30 % – Abschnitt
@@ -426,9 +432,9 @@ Rivalen gemeinsame Spawns/Reservefelder (Detail offen, „Offene Fragen“ 2).
 | Datei | Änderung |
 |---|---|
 | `lib/models/rival_restaurant.dart` | **Neu:** `RivalRestaurant` (id, name, personalityId, simulierter Zustand) |
-| `lib/services/rival_service.dart` | **Neu:** Rostern + Wochen-Tick-Aktionen (rein, testbar); **umgesetzt (V11):** Roster, `resolveSabotage`; **(V13):** `incomingAttemptOccurs`/`incomingAttemptDetected`/`incomingDetectionPercent`/`resolveIncomingSabotage`/`resolveCounterSabotage` + `IncomingSabotageOutcome.undetectedIds`/`undetectedCount` (Grundlage der Einkommens-Abschöpfung) |
-| `lib/services/economy_balance.dart` | `rivalCountFromPrestige` + Schwellen/Caps, Stance-Schwellen, Gegenwirkungs-Parameter; **(V13):** `incomingSabotageIncomePenaltyPercent` (10 %) / `incomingSabotageIncomePenaltyMaxPercent` (30 %) |
-| `lib/services/game_clock_service.dart` | Rivalen-Update im Wochen-Tick; `WeeklyTickResult` um Rang/Liste ergänzen; **(V13):** eingehende Sabotage + Gegenschlag am Blockende, Abschöpfung in `WeeklyTickResult.rivalSabotageLosses` |
+| `lib/services/rival_service.dart` | **Neu:** Rostern + Wochen-Tick-Aktionen (rein, testbar); **umgesetzt (V11):** Roster, `resolveSabotage`; **(V13):** `incomingAttemptOccurs`/`incomingAttemptDetected`/`incomingDetectionPercent`/`resolveIncomingSabotage`/`resolveCounterSabotage` + `IncomingSabotageOutcome.undetectedIds`/`undetectedCount` (Grundlage der Einkommens-Abschöpfung); **(Kap. 13 Voll-Simulation):** `candidatePool`, `weekIndexOf`, `simulatedRivalPp`, `playerRankIn`, `roamTargetCount`, `isRosterActive`, `simulateField`/`activeRosterOf` + Modelle `RivalWeekState`/`RivalFieldSimulation`; `standings(..., weekIndex:)` |
+| `lib/services/economy_balance.dart` | `rivalCountFromPrestige` + Schwellen/Caps, Stance-Schwellen, Gegenwirkungs-Parameter; **(V13):** `incomingSabotageIncomePenaltyPercent` (10 %) / `incomingSabotageIncomePenaltyMaxPercent` (30 %); **(Kap. 13 Voll-Simulation):** `rivalSimulationEpoch`, `rivalPpGrowthPerWeek`/`...MinFactor`/`...AggressivenessSpan`, `rivalPpGrowthCapWeeks`, `rivalReplacementDelayWeeks`, `rivalRosterLeadBonus`/`...TrailPenalty` |
+| `lib/services/game_clock_service.dart` | Rivalen-Update im Wochen-Tick; `WeeklyTickResult` um Rang/Liste ergänzen; **(V13):** eingehende Sabotage + Gegenschlag am Blockende, Abschöpfung in `WeeklyTickResult.rivalSabotageLosses`; **(Kap. 13 Voll-Simulation):** `powerProjectionState` übergibt den `weekIndex` (`RivalService.weekIndexOf(weekAnchorAt)`) an `RivalService.standings` |
 | `lib/objects/object_host.dart` | Rivalen-Orchestrierung im Tick + Steuerung der Rivalen-Truppen im Gefecht (Delegation an `RivalService`) |
 | `lib/widgets/widget_caretaker.dart` | Rivalen-Teams auf weitere `spawn_player*`-Punkte setzen; Stance im Gefecht anwenden |
 | `lib/screens/screen_restaurant.dart` | „Platz X von Y“ + Rivalen-Anzeige |
@@ -437,6 +443,7 @@ Rivalen gemeinsame Spawns/Reservefelder (Detail offen, „Offene Fragen“ 2).
 ## Tests (neu)
 
 - `test/rival_service_test.dart` – Rostern nach Prestige-Tier, Caps, Determinismus/Idempotenz; **(V13)** eingehende Sabotage (deterministische Versuche/Entdeckung, Ø-`shadiness`, Teilmengen-Regel).
+- `test/rival_simulation_weekly_test.dart` – **(Kap. 13 Voll-Simulation)** `weekIndexOf`/`candidatePool`/`simulatedRivalPp` (monoton, gedeckelt, persönlichkeitsgetrieben), `simulateField` (Determinismus, Invarianten, Ziel-Anzahl nach Vorwochen-Position, Austritte), `isRosterActive` (1-Tick-Verzögerung), `standings(..., weekIndex:)` inkl. Wochentick-Integration.
 - `test/management_roles_v13_test.dart` – **(V13)** Sicherheitschef-Passiv, Fenster/Bereitschaft, Mannschaft, beide Ausführungszweige des Gegenschlags, automatischer Winkelzug, Wochentick-Integration.
 - `test/rival_fairness_test.dart` – Rivalen-Aktionen verletzen keine `EconomyBalance`-Limits.
 - `test/power_projection_ranking_test.dart` – Rangliste inkl. Rivalen (1-Tick-Verzögerung) + Gegenwirkungs-Faktor.

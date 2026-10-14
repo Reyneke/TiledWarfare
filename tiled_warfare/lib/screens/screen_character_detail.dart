@@ -23,7 +23,11 @@ class ScreenCharacterDetail extends StatefulWidget {
 class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
   late final ObjectProfile _profile = ObjectProfile();
 
-  ObjectApprentice get character => widget.character;
+  /// Aktuell angezeigter Charakter. Nach einem Karriere-Neustart wird das
+  /// Klassenobjekt ersetzt (Rang leerling) – die Ansicht folgt der neuen Instanz.
+  late ObjectApprentice _character = widget.character;
+
+  ObjectApprentice get character => _character;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +54,7 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
             const SizedBox(height: 16),
             _buildStationSection(context, theme),
             _buildMedicActions(context, theme),
+            _buildCareerRestartSection(context, theme),
             const SizedBox(height: 16),
             _buildXpBar(context, theme),
             const SizedBox(height: 24),
@@ -387,6 +392,84 @@ class _ScreenCharacterDetailState extends State<ScreenCharacterDetail> {
         ),
       ),
     );
+  }
+
+  /// Karriere-Neustart (V10 § 6): die einzige Rückholmöglichkeit eines
+  /// „aktiv gewesenen“ Charakters. Sichtbar für alle Ränge außer Lehrling.
+  Widget _buildCareerRestartSection(BuildContext context, ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
+    if (character.rank == kRankApprentice) return const SizedBox.shrink();
+    final cost = EconomyService.careerRestartCost(level: character.levelValue);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.restart_alt, color: theme.colorScheme.error, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.careerRestart, style: theme.textTheme.labelLarge),
+                  Text(
+                    l10n.careerRestartHint(cost),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => _confirmCareerRestart(context),
+              child: Text(l10n.careerRestartAction),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bestätigungsdialog des Karriere-Neustarts und Buchung über [ObjectProfile].
+  Future<void> _confirmCareerRestart(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final cost = EconomyService.careerRestartCost(level: character.levelValue);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.careerRestart),
+        content: Text(l10n.careerRestartConfirm(character.name, cost)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.careerRestartAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final restarted = _profile.restartCareer(character);
+    if (!mounted) return;
+    setState(() {
+      if (restarted != null) _character = restarted;
+    });
+    if (!context.mounted) return;
+    if (restarted == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l10n.careerRestartNotAllowed)));
+      return;
+    }
+    await _profile.saveToStorage();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(l10n.careerRestartDone)));
   }
 
   /// Countdown-Text für die laufende Heilung bzw. den Spritzen-Rückfall (V3).

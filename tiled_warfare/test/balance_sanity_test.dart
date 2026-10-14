@@ -102,6 +102,7 @@ void main() {
             spec.healTimeReductionPerLevel,
             spec.refillBonusPerLevel,
             spec.dailySinkReliefPerLevel,
+            spec.penaltyReductionPerLevel,
           ]) {
             expect(
               percent,
@@ -126,6 +127,30 @@ void main() {
       expect(spec.attractivenessBonusPerLevel, 0.0);
       expect(spec.satisfactionBonusPerLevel, 0.0);
       expect(spec.healTimeReductionPerLevel, 0.0);
+    });
+
+    test('Zertifizierung (P3) koppelt die Strafen-Minderung an die Inspektion',
+        () {
+      final spec = EconomyBalance.upgrades[UpgradeType.certification]!;
+      expect(spec.maxLevel, 3);
+      expect(spec.buyBaseCost, 200);
+      expect(spec.upkeepBaseCostPerWeek, 20);
+      // Entschiedene Wirkungs-Option: −5 % Strafen je Stufe, sonst nichts.
+      expect(spec.penaltyReductionPerLevel, 0.05);
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.healTimeReductionPerLevel, 0.0);
+      expect(spec.refillBonusPerLevel, 0.0);
+      expect(spec.dailySinkReliefPerLevel, 0.0);
+
+      // Die zweite Strafenquelle (Behörden-Inspektion) hat sinnvolle Werte.
+      expect(EconomyBalance.inspectionIntervalWeeks, greaterThanOrEqualTo(1));
+      expect(EconomyBalance.inspectionFineBase, greaterThan(0));
+      expect(
+        EconomyBalance.inspectionCorruptionSurchargePercent,
+        greaterThanOrEqualTo(0),
+      );
     });
   });
 
@@ -822,6 +847,53 @@ void main() {
       }
     });
 
+    test('Effektiver Einkommensfaktor ist das Produkt beider Stufen (Q10)', () {
+      const pp = 80;
+      const rivalAveragePp = 20.0;
+      final expected =
+          PowerProjectionService.incomeFactor(pp) *
+              PowerProjectionService.competitionPressureFactor(
+                playerPp: pp,
+                rivalAveragePp: rivalAveragePp,
+              );
+      final effective = PowerProjectionService.effectiveIncomeFactor(
+        playerPp: pp,
+        rivalAveragePp: rivalAveragePp,
+      );
+      expect(effective, closeTo(expected, 1e-9));
+      // Beide Spannen multiplizieren sich; das Ergebnis bleibt positiv.
+      expect(
+        effective,
+        inInclusiveRange(
+          EconomyBalance.powerProjectionIncomeFactorMin *
+              EconomyBalance.competitionPressureFactorMin,
+          EconomyBalance.powerProjectionIncomeFactorMax *
+              EconomyBalance.competitionPressureFactorMax,
+        ),
+      );
+    });
+
+    test('Konkurrenzdruck ist bei Gleichstand neutral und sonst monoton (Q10)',
+        () {
+      final leading = PowerProjectionService.competitionPressureFactor(
+        playerPp: EconomyBalance.powerProjectionDomainMax,
+        rivalAveragePp: 0,
+      );
+      final level = PowerProjectionService.competitionPressureFactor(
+        playerPp: 50,
+        rivalAveragePp: 50,
+      );
+      final trailing = PowerProjectionService.competitionPressureFactor(
+        playerPp: 0,
+        rivalAveragePp: EconomyBalance.powerProjectionDomainMax.toDouble(),
+      );
+      // Wer hinten liegt, erhält Aufhol-Bonus; wer führt, Gegenwind.
+      expect(leading, lessThan(level));
+      expect(level, lessThan(trailing));
+      expect(level, closeTo(1.0, 0.05));
+    });
+
+
     test(
       'Rivalen-Mini-PP ist deterministisch, domänentreu und prestige-monoton',
       () {
@@ -1003,6 +1075,71 @@ void main() {
       expect(
         FrtService.reduce(0, monstersKilled: 100, victory: true),
         EconomyBalance.frtCorruptionFloorPercent,
+      );
+    });
+  });
+
+  group('Balance-Tuning: Teamdynamik & Karriere-Neustart (P5)', () {
+    test('Affinitäts-Buckets sind geordnet und innerhalb des Modulos', () {
+      expect(
+        EconomyBalance.teamChemistryPositiveBound,
+        lessThan(EconomyBalance.teamChemistryNegativeBound),
+      );
+      expect(
+        EconomyBalance.teamChemistryNegativeBound,
+        lessThan(EconomyBalance.teamChemistryBucketModulo),
+      );
+      expect(EconomyBalance.teamChemistryAttractivenessWeight, greaterThan(0));
+      expect(EconomyBalance.teamChemistrySatisfactionWeight, greaterThan(0));
+    });
+
+    test('Team-Chemie bleibt ein moderater Eingangs-Anteil', () {
+      // Nie stärker als die mehrfache Persönlichkeits-Wirkung – die Chemie
+      // ist ein Nudge auf Stimmung/Attraktivität, kein dominanter Hebel.
+      expect(
+        EconomyBalance.teamChemistryAttractivenessWeight,
+        lessThan(EconomyBalance.personalityAttractivenessWeight * 4),
+      );
+      expect(
+        EconomyBalance.teamChemistryAttractivenessWeight,
+        lessThan(EconomyBalance.satisfactionHealthWeight * 4),
+      );
+    });
+
+    test('Karriere-Neustart ist level-abhängig und monoton', () {
+      expect(
+        EconomyService.careerRestartCost(level: 0),
+        EconomyBalance.careerRestartCostBase,
+      );
+      expect(
+        EconomyService.careerRestartCost(level: -3),
+        EconomyBalance.careerRestartCostBase,
+      );
+      expect(
+        EconomyService.careerRestartCost(level: 5),
+        greaterThan(EconomyService.careerRestartCost(level: 4)),
+      );
+      // Der Neustart ist nie billiger als die erste Fortbildungsstufe – er
+      // vernichtet mindestens so viel Wert, wie der Aufstieg gekostet hat.
+      expect(
+        EconomyBalance.careerRestartCostBase,
+        greaterThanOrEqualTo(EconomyBalance.upgradeToLineCookCost),
+      );
+    });
+
+    test('Pâtissier-Profil ist Support mit Kapazitäts-Orientierung', () {
+      expect(EconomyService.isSupportStation(kStationPatissier), isTrue);
+      expect(
+        EconomyService.stationAuraPercent(kStationPatissier, StationStat.attack),
+        0,
+      );
+      expect(
+        EconomyBalance.patissierStats.attack,
+        lessThan(EconomyBalance.chefDePartieStats.attack),
+      );
+      expect(
+        EconomyBalance.patissierStats.money,
+        greaterThan(EconomyBalance.chefDePartieStats.money),
       );
     });
   });

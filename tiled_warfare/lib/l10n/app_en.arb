@@ -276,6 +276,11 @@
   "@fire": {
     "description": "Button to fire personnel"
   },
+  "fireConfirm": "Really dismiss {name}? A dismissal is not refunded.",
+  "@fireConfirm": {
+    "description": "Confirmation dialog when dismissing personnel (P4)",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "hire": "Hire",
   "@hire": {
     "description": "Button to hire personnel"
@@ -426,6 +431,32 @@
   "@stationVariantOf": {
     "description": "Subtitle of a variant station",
     "placeholders": { "base": { "type": "String" } }
+  },
+  "careerRestart": "Career restart",
+  "@careerRestart": {
+    "description": "Label of the career restart (level 0, V10 § 6)"
+  },
+  "careerRestartAction": "Restart",
+  "@careerRestartAction": {
+    "description": "Action: restart the career"
+  },
+  "careerRestartHint": "Resets rank, level and condition to a fresh apprentice ({cost} €).",
+  "@careerRestartHint": {
+    "description": "Explanation of the career restart including cost",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "careerRestartConfirm": "Restart the career of {name}? Rank, level, station and condition will be reset. This costs {cost} € and is not refunded.",
+  "@careerRestartConfirm": {
+    "description": "Confirmation dialog of the career restart",
+    "placeholders": { "name": { "type": "String" }, "cost": { "type": "int" } }
+  },
+  "careerRestartDone": "Career restarted – the character is an apprentice again.",
+  "@careerRestartDone": {
+    "description": "Message after a successful career restart"
+  },
+  "careerRestartNotAllowed": "Restart not possible (rank, team or budget).",
+  "@careerRestartNotAllowed": {
+    "description": "Message when the career restart is rejected"
   },
   "promoteToChefDePartie": "Promote to Chef de partie",
   "@promoteToChefDePartie": {
@@ -694,6 +725,38 @@
   "@managementSabotageEffect": {
     "description": "Effect window of a successful sabotage",
     "placeholders": { "time": { "type": "String" } }
+  },
+  "managementFeatureConfirmTitle": "Activate feature?",
+  "@managementFeatureConfirmTitle": {
+    "description": "Title of the confirmation dialog before activating a feature (P4)"
+  },
+  "managementFeatureConfirmCarrier": "Carrier: {name}",
+  "@managementFeatureConfirmCarrier": {
+    "description": "Feature carrier in the confirmation dialog (P4)",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "managementFeatureConfirmCost": "One-time cost: {cost} € (immediate)",
+  "@managementFeatureConfirmCost": {
+    "description": "One-time cost in the confirmation dialog (P4)",
+    "placeholders": { "cost": { "type": "int" } }
+  },
+  "managementFeatureConfirmActive": "{days, plural, =1{Active: 1 day} other{Active: {days} days}}",
+  "@managementFeatureConfirmActive": {
+    "description": "Duration of the active phase in the confirmation dialog (P4)",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "managementFeatureConfirmAftermath": "{days, plural, =1{Aftermath: 1 day} other{Aftermath: {days} days}}",
+  "@managementFeatureConfirmAftermath": {
+    "description": "Duration of the aftermath phase in the confirmation dialog (P4)",
+    "placeholders": { "days": { "type": "int" } }
+  },
+  "managementFeatureConfirmNoAftermath": "no aftermath",
+  "@managementFeatureConfirmNoAftermath": {
+    "description": "Note: feature without aftermath phase (P4)"
+  },
+  "activeFeaturesTitle": "Running features",
+  "@activeFeaturesTitle": {
+    "description": "Heading of the feature countdowns in the restaurant screen (P4)"
   },
   "rivalsSection": "District competition",
   "@rivalsSection": {
@@ -1051,6 +1114,8 @@
   "@upgradeFirstAid": { "description": "Upgrade: first-aid station" },
   "upgradeLounge": "Rest lounge",
   "@upgradeLounge": { "description": "Upgrade: rest lounge" },
+  "upgradeCertification": "Certification/hygiene seal",
+  "@upgradeCertification": { "description": "Upgrade: certification/hygiene seal" },
   "upgradeLevel": "Level {level}/{max}",
   "@upgradeLevel": {
     "description": "Upgrade level",
@@ -1133,6 +1198,11 @@
     "description": "Undetected rival sabotage skims block income (V13, chapter 13)",
     "placeholders": { "loss": { "type": "int" } }
   },
+  "catchUpPrepaidFeatureCost": "Feature one-time costs (booked on activation): −{cost} €",
+  "@catchUpPrepaidFeatureCost": {
+    "description": "One-time costs of features activated in the block (P4)",
+    "placeholders": { "cost": { "type": "int" } }
+  },
   "rankingBadge": "Rank {rank} of {total} in {district}",
   "@rankingBadge": {
     "description": "Restaurant's placement in its district (chapter 12)",
@@ -1145,6 +1215,69 @@
   "weekReportTitle": "Weekly report",
   "@weekReportTitle": {
     "description": "Title of the weekly report with the ranking (chapter 12/13)"
+  },
+  "weekReportWeeksTitle": "Week breakdown",
+  "@weekReportWeeksTitle": {
+    "description": "Heading of the per-block breakdown in the weekly report (P6, 4.2/#5)"
+  },
+  "weekReportWeekHeader": "Week {index} ({start}–{end})",
+  "@weekReportWeekHeader": {
+    "description": "Header of a settled 7-day block in the weekly report (P6)",
+    "placeholders": {
+      "index": { "type": "int" },
+      "start": { "type": "String" },
+      "end": { "type": "String" }
+    }
+  },
+  "weekReportLineIncome": "Income +{value} €",
+  "@weekReportLineIncome": {
+    "description": "Income line of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineMedics": "Team medics −{value} €",
+  "@weekReportLineMedics": {
+    "description": "Team medic costs of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineStaff": "Staff −{value} €",
+  "@weekReportLineStaff": {
+    "description": "Weekly wages of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineUpkeep": "Upkeep −{value} €",
+  "@weekReportLineUpkeep": {
+    "description": "Upgrade upkeep of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineInterest": "Interest −{value} €",
+  "@weekReportLineInterest": {
+    "description": "Negative interest of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLinePenalties": "Penalties −{value} €",
+  "@weekReportLinePenalties": {
+    "description": "Penalties of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineFeatures": "Features −{value} €",
+  "@weekReportLineFeatures": {
+    "description": "Ongoing feature costs of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLinePrepaidFeatures": "Feature one-time costs (prepaid) −{value} €",
+  "@weekReportLinePrepaidFeatures": {
+    "description": "Feature one-time costs activated in the block (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineSabotage": "Rival sabotage −{value} €",
+  "@weekReportLineSabotage": {
+    "description": "Block income skimmed by undetected sabotage (P6)",
+    "placeholders": { "value": { "type": "int" } }
+  },
+  "weekReportLineBudgetAfter": "Budget after {value} €",
+  "@weekReportLineBudgetAfter": {
+    "description": "Balance at the end of a block in the weekly report (P6)",
+    "placeholders": { "value": { "type": "int" } }
   },
   "rankingSectionTitle": "District ranking",
   "@rankingSectionTitle": {

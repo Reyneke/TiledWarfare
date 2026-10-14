@@ -271,12 +271,13 @@ V6 ist umgesetzt.
 
 ### Bewusst nicht umgesetzt
 
-- **`path_provider`/AppData-Pfad (L6 voll):** Desktop-zentriert; bleibt als Folgepunkt offen.
+- **`path_provider`/AppData-Pfad (L6 voll):** **umgesetzt in P6 (4.2/#4)** – `ProfileStorage` löst das Basisverzeichnis einmalig über `getApplicationSupportDirectory()` auf (Unterordner `tiled_warfare_profiles`), migriert vorhandene Altbestände aus dem relativen `profiles/` per **Kopie** (der alte Ordner bleibt erhalten) und schreibt Bildpfade absolut; Legacy-Relativpfade löst `absolutePath()` beim Lesen auf. Fehlt der Plattformkanal (Unit-Tests), bleibt es beim relativen `profiles/`.
 - **`dispose`-Save:** verzichtet zugunsten des Lifecycle-Saves bei `paused`/`hidden` (vermeidet Schreiblast bei jeder Navigation).
 
 ## Anmerkungen
 
-- **Bestehende Spielstände:** Wer auf „Einzeldatei + Scan“ (L2) umstellt, muss Alt-Bestände mit `profiles/index.json` und vorhandenen `profiles/<id>/profile.json` einmalig migrieren. Die Ordnernamen sind bereits die Profil-IDs und eignen sich als natürlicher Join-Key.
-- **`path_provider` (L6):** bewusst als optional markiert, da das Projekt aktuell Desktop-/Windows-zentriert ist. Die Entscheidung sollte als Folgepunkt separat getroffen werden; V6 blockiert darauf nicht.
+- **Bestehende Spielstände:** Wer auf „Einzeldatei + Scan“ (L2) umstellt, muss Alt-Bestände mit `profiles/index.json` und vorhandenen `profiles/<id>/profile.json` einmalig migrieren. Die Ordnernamen sind bereits die Profil-IDs und eignen sich als natürlicher Join-Key. **P6** nutzt genau diesen Join-Key für den Umzug nach AppData (einmalige Kopie, nur solange am Ziel noch kein Spielstand liegt).
+- **`path_provider` (L6):** **entschieden und umgesetzt (P6, 4.2/#4)** – der relative `profiles/`-Pfad bleibt nur noch als Fallback für Umgebungen ohne Plattformkanal (Unit-Tests). Der Ordner ist weiterhin in `.gitignore` (`/profiles/`); der neue Speicherort liegt außerhalb des Repos und ist damit nie versioniert.
+- **Tick-Journal (P6/`8` P3):** `profiles/<id>/last_tick.json` wird als Write-ahead vor jedem fälligen Catch-up geschrieben und nach erfolgreichem Save entfernt; ein beim Laden vorgefundenes Journal meldet einen abgebrochenen Tick und wird aufgeräumt. Es enthält nur Anker (kein Spielzustand) und ist damit kein zweiter Spielstand.
 - **Backups:** Die `.bak`-Datei je Spielstand ist der Ausgangspunkt; eine Rotation der letzten N Versionen kann später folgen.
 - Offener Folgepunkt aus `0-Base.md`: wie aufgelöste Restaurants dargestellt bleiben (sichtbar/„aufgelöst“ vs. löschen) – V6 ändert daran nichts.

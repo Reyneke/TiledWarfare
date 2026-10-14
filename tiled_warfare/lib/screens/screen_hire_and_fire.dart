@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/l10n/management_feature_labels.dart';
+import 'package:tiled_warfare/l10n/management_feature_status.dart';
 import 'package:tiled_warfare/l10n/management_role_labels.dart';
 import 'package:tiled_warfare/l10n/support_role_labels.dart';
 import 'package:tiled_warfare/models/management_feature.dart';
@@ -57,6 +58,8 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   }
 
   Future<void> _fireMedic(ObjectTeamMedic medic) async {
+    if (!await _confirmFire(medic.name)) return;
+    if (!mounted) return;
     setState(() {
       _profile.fireMedic(medic);
     });
@@ -82,10 +85,94 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   /// Entlässt einen Nicht-Kampf-Personal-Eintrag beliebiger Kategorie
   /// (Option C, `11a`).
   Future<void> _fireStaffEntry(StaffEntryData entry) async {
+    if (!await _confirmFire(entry.name)) return;
+    if (!mounted) return;
     setState(() {
       _profile.fireStaffEntry(entry);
     });
     await _saveWithFeedback();
+  }
+
+  /// Bestätigt das Entlassen eines Nicht-Kampf-Personals (`11a` P4, Schritt 1).
+  ///
+  /// Eine Entlassung wird – wie der Verkauf einer Erweiterung – **nicht
+  /// erstattet**; der Dialog macht die Folge vorab sichtbar, damit ein
+  /// Fehlklick nicht still Rollen, Ärzte oder Charaktere entfernt.
+  Future<bool> _confirmFire(String name) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.fire),
+        content: Text(l10n.fireConfirm(name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.fire),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  /// Bestätigt die Aktivierung eines Features mit Wirkung, Kosten, Träger und
+  /// Dauer (`11a` P4, Schritt 2c).
+  ///
+  /// Die Aktivierung bucht die Einmalkosten **sofort** (`11a` E7–E9); der
+  /// Dialog fasst deshalb zusammen, was sie kostet und wie lange sie wirkt.
+  /// [cost] überschreibt die abgeleiteten Kosten (PR-Kampagne: `Level × 1000 €`
+  /// des **Ziels**), [targetLabel] benennt das Ziel bzw. die Mannschaft.
+  Future<bool> _confirmFeatureActivation(
+    ManagementFeature feature, {
+    int? cost,
+    String? targetLabel,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final owner = _profile.managementFeatureOwner(feature);
+    if (owner == null) return false;
+    final amount = cost ?? _profile.managementFeatureActivationCost(feature);
+    final activeDays = ManagementFeatureService.activeDurationOf(owner).inDays;
+    final aftermathDays = ManagementFeatureService.aftermathDurationOf(
+      owner,
+    ).inDays;
+    final lines = <String>[
+      managementFeatureEffectLabel(l10n, feature),
+      if (amount > 0)
+        l10n.managementFeatureConfirmCost(amount)
+      else
+        l10n.managementFeatureDailyCost(EconomyBalance.organisationCostPerDay),
+      l10n.managementFeatureConfirmCarrier(
+        targetLabel == null ? owner.name : '${owner.name} → $targetLabel',
+      ),
+      l10n.managementFeatureConfirmActive(activeDays),
+      if (aftermathDays > 0)
+        l10n.managementFeatureConfirmAftermath(aftermathDays)
+      else
+        l10n.managementFeatureConfirmNoAftermath,
+    ];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.managementFeatureConfirmTitle),
+        content: Text(lines.join('\n')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.managementFeatureActivate),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
   }
 
   /// Startet ein aktives Feature (`11a`): Ziel wählen → aktivieren → speichern.
@@ -179,6 +266,13 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       ),
     );
     if (team == null || !mounted) return;
+    final confirmed = await _confirmFeatureActivation(
+      ManagementFeature.unionWorkers,
+      targetLabel: team.isEmpty
+          ? null
+          : team.map((member) => member.name).join(', '),
+    );
+    if (!confirmed || !mounted) return;
     final ok = _profile.activateUnionWorkers(team);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,6 +287,8 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   /// Aktiviert ein ziel-loses Feature (Winkelzug, Kreative Buchführung).
   Future<void> _startUntargetedFeature(ManagementFeature feature) async {
     final l10n = AppLocalizations.of(context)!;
+    if (!await _confirmFeatureActivation(feature)) return;
+    if (!mounted) return;
     final ok = _profile.activateUntargetedFeature(feature);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -241,6 +337,13 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
       ),
     );
     if (target == null || !mounted) return;
+    if (!await _confirmFeatureActivation(
+      ManagementFeature.sabotage,
+      targetLabel: target.name,
+    )) {
+      return;
+    }
+    if (!mounted) return;
     final ok = _profile.activateSabotage(target);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -292,6 +395,14 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     );
 
     if (target == null || !mounted) return;
+    if (!await _confirmFeatureActivation(
+      feature,
+      cost: _profile.managementFeatureCostFor(target),
+      targetLabel: '${target.name} · Lv ${target.levelValue}',
+    )) {
+      return;
+    }
+    if (!mounted) return;
     final ok = _profile.activateManagementFeature(feature, target);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -304,57 +415,16 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
   }
 
   /// Kurztext des Feature-Status eines Personal-Eintrags (aktiv/Nachwirkung).
-  String? _featureStatusText(
-    AppLocalizations l10n,
-    StaffEntryData entry,
-    ManagementFeature feature,
-  ) {
-    if (entry.activeFeature != feature.name) return null;
-    final now = DateTime.now();
-    // `11a` E14: Die Sabotage hat ein eigenes Vokabular (Auflösung im Wochentick
-    // und Wirkungsfenster statt „Nachwirkung“).
-    if (feature == ManagementFeature.sabotage) {
-      if (_profile.managementFeatureIsActive(feature, now: now)) {
-        return l10n.managementSabotagePending(
-          _formatUntil(ManagementFeatureService.activeEndOf(entry)),
-        );
-      }
-      final until = _profile.sabotageAppliedUntil;
-      if (entry.featureResolvedAt != null &&
-          until != null &&
-          now.isBefore(until)) {
-        return l10n.managementSabotageEffect(_formatUntil(until));
-      }
-    }
-    // V13: „Rache ist Blutwurst“ ist reaktiv – solange scharf geschaltet, ist
-    // der Gegenschlag bereit; nach einem ausgeführten Gegenschlag läuft das
-    // Wirkungsfenster gegen den Angreifer (gleiches Vokabular wie die Sabotage).
-    if (feature == ManagementFeature.counterSabotage) {
-      if (_profile.managementFeatureIsActive(feature, now: now) &&
-          entry.featureResolvedAt == null) {
-        return l10n.managementCounterSabotagePending(
-          _formatUntil(ManagementFeatureService.activeEndOf(entry)),
-        );
-      }
-      final until = _profile.sabotageAppliedUntil;
-      if (entry.featureResolvedAt != null &&
-          until != null &&
-          now.isBefore(until)) {
-        return l10n.managementSabotageEffect(_formatUntil(until));
-      }
-    }
-    if (_profile.managementFeatureIsActive(feature, now: now)) {
-      return l10n.managementFeatureActive(
-        _formatUntil(ManagementFeatureService.activeEndOf(entry)),
+  ///
+  /// Delegiert an den gemeinsamen Helfer (`11a` P4), damit Personal- und
+  /// Restaurant-Screen dieselbe Sprache sprechen.
+  String? _featureStatusText(AppLocalizations l10n, StaffEntryData entry) =>
+      managementFeatureStatusLine(
+        l10n,
+        entry,
+        DateTime.now(),
+        sabotageAppliedUntil: _profile.sabotageAppliedUntil,
       );
-    }
-    if (_profile.managementFeatureIsInAftermath(feature, now: now)) {
-      return l10n.managementFeatureAftermath(
-        _formatUntil(ManagementFeatureService.aftermathEndOf(entry)),
-      );
-    }
-    return null;
-  }
 
   /// Icon je Feature (Aktivierungs-Button der Träger-Karte).
   IconData _featureIcon(ManagementFeature feature) => switch (feature) {
@@ -381,14 +451,6 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
     final cost = _profile.managementFeatureActivationCost(feature);
     if (cost <= 0) return l10n.managementFeatureActivate;
     return l10n.managementFeatureCost(cost);
-  }
-
-  /// Kompakte Zeitangabe (Tag.Monat Stunde:Minute) für Countdowns.
-  String _formatUntil(DateTime? until) {
-    if (until == null) return '—';
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${two(until.day)}.${two(until.month)} '
-        '${two(until.hour)}:${two(until.minute)}';
   }
 
   /// Gesamte Wochenlast: Arztkosten + Support-Löhne + Personal-Löhne (V10)
@@ -484,7 +546,9 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
                 ),
               ),
             ),
-            SizedBox(height: 220, child: _buildHiredSupportList(context)),
+            // Hoch genug für den Feature-Block der Management-Rollen
+            // (P4: Feature-Label + Wirkung + Status/Aktivierung + Entlassen).
+            SizedBox(height: 260, child: _buildHiredSupportList(context)),
             const Divider(),
           ],
           Padding(
@@ -594,7 +658,7 @@ class _ScreenHireAndFireState extends State<ScreenHireAndFire> {
         final feature = role == null ? null : managementFeatureOf(role);
         final featureStatus = feature == null
             ? null
-            : _featureStatusText(l10n, entry, feature);
+            : _featureStatusText(l10n, entry);
         return SizedBox(
           width: 220,
           child: Card(

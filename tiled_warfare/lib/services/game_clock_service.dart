@@ -12,6 +12,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/frt_service.dart';
+import 'package:tiled_warfare/services/inspection_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/power_projection_service.dart';
@@ -19,6 +20,7 @@ import 'package:tiled_warfare/services/rival_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/services/support_role_service.dart';
+import 'package:tiled_warfare/services/team_dynamics_service.dart';
 
 /// Abrechnung eines vollendeten 7-Tage-Blocks (Wochen-Zusammenfassung, § 6).
 class WeekSettlement {
@@ -53,6 +55,23 @@ class WeekSettlement {
   /// alles“ je aktivem Tag).
   final int featureCosts;
 
+  /// **Einmalkosten** der im Block aktivierten Features (`11a` P4).
+  ///
+  /// Sie wurden bereits **beim Aktivieren** sofort vom Budget abgebucht
+  /// (`11a` E9/E15/E16) und werden hier nur transparent ausgewiesen – die
+  /// Wochenzeile zeigt damit auch die aktivierungsgebundenen Kosten, ohne sie
+  /// ein zweites Mal zu buchen. Deterministisch aus dem Aktivierungsanker
+  /// abgeleitet (`ManagementFeatureService.prepaidActivationCosts`).
+  final int prepaidFeatureCosts;
+
+  /// Durch **unentdeckte Rivalen-Sabotage** in diesem Block abgeschöpftes
+  /// Einkommen (V13, Kapitel 13; P6 L2-Detaildialog).
+  ///
+  /// Positiver Verlustbetrag – bereits in [income] abgezogen, hier nur
+  /// transparent ausgewiesen, damit der Wochenbericht jeden Block (und nicht
+  /// nur die Gesamtsumme) aufschlüsseln kann.
+  final int rivalSabotageLoss;
+
   /// Budget nach der Abrechnung des Blocks.
   final int budgetAfter;
 
@@ -67,6 +86,8 @@ class WeekSettlement {
     required this.negativeInterest,
     this.penaltyCosts = 0,
     this.featureCosts = 0,
+    this.prepaidFeatureCosts = 0,
+    this.rivalSabotageLoss = 0,
     required this.budgetAfter,
   });
 }
@@ -96,6 +117,11 @@ class WeeklyTickResult {
 
   /// Abgebuchte **laufende Feature-Kosten** insgesamt (V12).
   final int featureCosts;
+
+  /// **Einmalkosten** der aktivierten Features insgesamt (`11a` P4) – Teilmenge
+  /// der Feature-Kosten des Zeitraums, aber **vorab** (bei der Aktivierung)
+  /// gebucht und daher hier nur informativ ausgewiesen.
+  final int prepaidFeatureCosts;
 
   /// Durch **unentdeckte Rivalen-Sabotage** abgeschöpftes Einkommen insgesamt
   /// (V13) – bereits in [passiveIncome] enthalten und dort abgezogen.
@@ -155,6 +181,7 @@ class WeeklyTickResult {
     required this.negativeInterest,
     this.penaltyCosts = 0,
     this.featureCosts = 0,
+    this.prepaidFeatureCosts = 0,
     this.rivalSabotageLosses = 0,
     this.frtSabotages = 0,
     this.powerProjection = 0,
@@ -726,6 +753,15 @@ class GameClockService {
     // Kapitel 14: Anzahl der in diesem Catch-up unentdeckt gebliebenen
     // FRT-Fehl-Attributionen (Korruptions-Anstieg je Angriff, Q6).
     var totalFrtSabotages = 0;
+    // `11a` P4: Einmalkosten der Feature-Aktivierungen je Block. Sie wurden beim
+    // Aktivieren bereits sofort abgebucht (E9/E15/E16); die Wochenzeile weist sie
+    // über den Aktivierungsanker zusätzlich aus (`prepaidFeatureCosts`), ohne das
+    // Budget ein zweites Mal zu belasten. Das Level des Kampagnen-Ziels wird
+    // einmalig vor der Tages-Schleife eingefroren (deterministisch).
+    final targetLevelById = <int, int>{
+      for (final member in restaurant.staff) member.id: member.levelValue,
+    };
+    var totalPrepaid = 0;
     final settlements = <WeekSettlement>[];
     var cursor = lastSeen;
     // Kapitel 14: Korruption wird über den Catch-up monoton fortgeschrieben.
@@ -850,6 +886,36 @@ class GameClockService {
         restaurant.dissolvedAt = cursor;
       }
 
+      // `11a` P3: Die **Behörden-Inspektion** ist die zweite (passive)
+      // Strafenquelle neben der aufgedeckten Sabotage. Deterministisch je
+      // Restaurant und Blockanker (idempotent, V8); die Strafe wird – wie jede
+      // andere – im lokalen Wochenbudget gebucht und um die Strafen-Minderung
+      // (Rechtsanwalt/Winkelzug **und** Zertifizierung) gemindert. Ein bereits
+      // verlorener/aufgelöster Stadtteil wird nicht mehr geprüft.
+      if (!restaurant.districtLost) {
+        final inspection = InspectionService.resolve(
+          restaurant,
+          weekAnchor,
+          now: cursor,
+          corruptionPercent: corruption,
+        );
+        final inspectionFine = inspection?.fine ?? 0;
+        if (inspectionFine > 0) {
+          budget -= inspectionFine;
+          penaltyForBlock += inspectionFine;
+        }
+      }
+
+      // `11a` P4: Einmalkosten der Features, die **in diesen Block** aktiviert
+      // wurden (Anker `featureActivatedAt`). Sie sind beim Aktivieren bereits
+      // abgebucht – die Zeile macht sie in der Wochenabrechnung sichtbar.
+      final prepaidForBlock = ManagementFeatureService.prepaidActivationCosts(
+        restaurant.staffEntries,
+        weekAnchor,
+        weekAnchor.add(week),
+        targetLevelById: targetLevelById,
+      );
+      totalPrepaid += prepaidForBlock;
       // Blockende: wöchentliche Kosten und Zinsen (§ 8/§ 10) – die Zinsen
       // werden auf den jeweiligen Saldo am Blockende angewandt.
       final blockMedic = _negateCostDays(reducedMedicPerWeek, negatedCostDays);
@@ -889,6 +955,10 @@ class GameClockService {
           negativeInterest: interest,
           penaltyCosts: penaltyForBlock,
           featureCosts: blockFeature,
+          prepaidFeatureCosts: prepaidForBlock,
+          // P6: Sabotage-Verlust **dieses** Blocks (bereits in `income`
+          // abgezogen) – für die Wochen-Aufschlüsselung im Detaildialog.
+          rivalSabotageLoss: rivalLossForBlock,
           budgetAfter: budget,
         ),
       );
@@ -929,6 +999,7 @@ class GameClockService {
       negativeInterest: totalInterest,
       penaltyCosts: totalPenalty,
       featureCosts: totalFeature,
+      prepaidFeatureCosts: totalPrepaid,
       rivalSabotageLosses: totalRivalLoss,
       frtSabotages: totalFrtSabotages,
       powerProjection: ppState.powerProjection,
@@ -1314,6 +1385,8 @@ class GameClockService {
     // V9 (Phase 3): Die Hilfsbereitschaft des Personals trägt zur Attraktivität bei.
     value += EconomyBalance.personalityAttractivenessWeight *
         _staffHelpfulnessAverage(restaurant);
+    // V9 (Teamdynamik): Ø-Paar-Affinität des Teams hebt/senkt die Attraktivität.
+    value += TeamDynamicsService.attractivenessBonus(restaurant.staff);
     // V10 (Phase 5): Ein aktiver Chef de cuisine führt das Restaurant.
     value *= _headChefManagementFactor(restaurant);
     // V10 (Phase 6): Commis und Garçon de cuisine heben die Attraktivität.
@@ -1364,6 +1437,8 @@ class GameClockService {
     value *= _headChefManagementFactor(restaurant);
     // V10 (Phase 6): Der Garçon de cuisine hebt die Zufriedenheit leicht.
     value += SupportRoleService.satisfactionBonus(restaurant.supportStaff);
+    // V9 (Teamdynamik): Ø-Paar-Affinität des Teams hebt/senkt die Zufriedenheit.
+    value += TeamDynamicsService.satisfactionBonus(restaurant.staff);
     // V12: Der Personalchef hebt die Zufriedenheit (binär).
     value += StaffRoleService.personnelManagerSatisfactionBonus(
       restaurant.staffEntries,
@@ -1454,6 +1529,7 @@ class GameClockService {
     DateTime? now,
   }) {
     final at = now ?? restaurant.lastSeenAt ?? DateTime.now();
+    final weekIndex = RivalService.weekIndexOf(restaurant.weekAnchorAt);
     final ratio = PowerProjectionService.ratioFromResult(
       restaurant.lastMatchResult,
     );
@@ -1466,6 +1542,7 @@ class GameClockService {
     final provisionalStandings = RivalService.standings(
       restaurant,
       playerPp: provisional,
+      weekIndex: weekIndex,
     );
     final competition = PowerProjectionService.competitionFromRank(
       provisionalStandings.playerRank,
@@ -1476,7 +1553,11 @@ class GameClockService {
       ratio: ratio,
       staffQuality: staffQuality,
     );
-    final standings = RivalService.standings(restaurant, playerPp: pp);
+    final standings = RivalService.standings(
+      restaurant,
+      playerPp: pp,
+      weekIndex: weekIndex,
+    );
     final factor = PowerProjectionService.effectiveIncomeFactor(
       playerPp: pp,
       rivalAveragePp: standings.rivalAveragePp,

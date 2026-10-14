@@ -10,6 +10,7 @@ import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/rival_restaurant.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
+import 'package:tiled_warfare/models/stations.dart';
 import 'package:tiled_warfare/models/support_role.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/objects/object_player.dart';
@@ -18,6 +19,7 @@ import 'package:tiled_warfare/objects/player_objects/object_apprentice.dart';
 import 'package:tiled_warfare/objects/player_objects/object_chef_de_partie.dart';
 import 'package:tiled_warfare/objects/player_objects/object_head_chef.dart';
 import 'package:tiled_warfare/objects/player_objects/object_line_cook.dart';
+import 'package:tiled_warfare/objects/player_objects/object_patissier.dart';
 import 'package:tiled_warfare/objects/player_objects/object_sous_chef.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/economy_service.dart';
@@ -756,6 +758,75 @@ class ObjectProfile {
     _personal.remove(character);
     _personal.add(promoted);
     return promoted;
+  }
+
+  /// Startet die Karriere von [character] auf **Level 0** neu (V10 § 6).
+  ///
+  /// Die einzige Rückholmöglichkeit eines „aktiv gewesenen“ Charakters: Rang →
+  /// Lehrling, Level/XP → frischer Start (`levelValue = 1`, `currentXPValue = 0`;
+  /// „Level 0“ ist die Design-Sprache für „von vorn“), Station und Doppelrolle →
+  /// keine, Zustand → `ready` (Verletzungen, Notfall-Spritze und Stress-Override
+  /// werden aufgehoben).
+  ///
+  /// Die **Identität bleibt** erhalten (stabile `id`, Persönlichkeit,
+  /// Match-Historie, Name und Grafik) – vernichtet wird nur der
+  /// Karriere-Fortschritt. Die Kosten trägt das Restaurant
+  /// ([EconomyService.careerRestartCost], Muster `transferCost*`).
+  ///
+  /// Abgelehnt (`null`, Zustand unverändert), wenn [character] nicht im Team ist,
+  /// bereits Lehrling ist oder das Budget die Kosten nicht deckt
+  /// ([EconomyService.canAfford]). War er der **aktive** Chef de cuisine, rückt
+  /// anschließend ein formeller Chef nach (wie bei Entlassung/Transfer).
+  ///
+  /// Gibt das neue Charakter-Objekt zurück – oder `null` bei Ablehnung.
+  ObjectApprentice? restartCareer(ObjectApprentice character) {
+    if (!_personal.contains(character)) return null;
+    if (character.rank == kRankApprentice) return null;
+
+    final cost = EconomyService.careerRestartCost(level: character.levelValue);
+    if (!EconomyService.canAfford(budget: budget, cost: cost)) return null;
+
+    final wasActiveHeadChef =
+        character.rank == kRankHeadChef &&
+        character.headChefRole == kHeadChefRoleActive;
+
+    budget -= cost;
+    final restarted = ObjectApprentice(
+      name: _rankPrefixedName(character.name, kRankApprentice),
+      imagePath: character.imagePath,
+    );
+    _transferIdentity(restarted, character);
+    // Karriere-Fortschritt, Station und Doppelrolle zurücksetzen.
+    restarted.rank = kRankApprentice;
+    restarted.levelValue = 1;
+    restarted.currentXPValue = 0;
+    restarted.station = null;
+    restarted.headChefRole = null;
+    restarted.assignedRestaurantId = null;
+    // Zustand heilen: Status, Verletzungsanker, Notfall-Spritze, Override.
+    restarted.status = CharacterStatus.ready;
+    restarted.woundValue = GameClockService.woundValueFor(CharacterStatus.ready);
+    restarted.injuryStartedAt = null;
+    restarted.injuryStartStatus = null;
+    restarted.emergencyShotAt = null;
+    restarted.suppressedStatus = null;
+    restarted.personalityOverrideId = -1;
+    restarted.personalityOverrideUntil = null;
+    restarted.personalityOverrideCause = null;
+    restarted.vitalityZeroSinceAt = null;
+    restarted.moraleZeroSinceAt = null;
+    // Ressourcen auf die Trait-Startwerte des Profils setzen.
+    final traits = PersonalityTraits.forProfile(
+      restarted.personalityId,
+      restarted.id,
+    );
+    restarted.vitalityCurrent = traits.vitality;
+    restarted.moraleCurrent = traits.morale;
+
+    _personal.remove(character);
+    _personal.add(restarted);
+    if (wasActiveHeadChef) nachrueckenHeadChef();
+    return restarted;
   }
 
   /// Erzeugt das Klassenobjekt zum Zielrang.
@@ -1715,6 +1786,11 @@ class ObjectProfile {
       return _buildApprentice<ObjectLineCook>(sd, ObjectLineCook());
     }
     if (rank == kRankChefDePartie) {
+      // Das Klassenprofil des Pâtissier ergibt sich aus der persistierten
+      // Station (V10 § 2) – kein eigenes Rang-/Schema-Feld nötig.
+      if (sd.station == kStationPatissier) {
+        return _buildApprentice<ObjectPatissier>(sd, ObjectPatissier());
+      }
       return _buildApprentice<ObjectChefDePartie>(sd, ObjectChefDePartie());
     }
     if (rank == kRankSousChef) {

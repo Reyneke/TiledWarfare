@@ -452,6 +452,12 @@ abstract class AppLocalizations {
   /// **'Entlassen'**
   String get fire;
 
+  /// Bestätigungsdialog beim Entlassen von Personal (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'{name} wirklich entlassen? Eine Entlassung wird nicht erstattet.'**
+  String fireConfirm(String name);
+
   /// Button zum Anstellen von Personal
   ///
   /// In de, this message translates to:
@@ -655,6 +661,42 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Variante von {base}'**
   String stationVariantOf(String base);
+
+  /// Bezeichnung des Karriere-Neustarts (Level 0, V10 § 6)
+  ///
+  /// In de, this message translates to:
+  /// **'Karriere-Neustart'**
+  String get careerRestart;
+
+  /// Aktion: Karriere neu starten
+  ///
+  /// In de, this message translates to:
+  /// **'Neu starten'**
+  String get careerRestartAction;
+
+  /// Erläuterung des Karriere-Neustarts inkl. Kosten
+  ///
+  /// In de, this message translates to:
+  /// **'Setzt Rang, Level und Zustand auf einen frischen Lehrling zurück ({cost} €).'**
+  String careerRestartHint(int cost);
+
+  /// Bestätigungsdialog des Karriere-Neustarts
+  ///
+  /// In de, this message translates to:
+  /// **'{name} die Karriere neu starten? Rang, Level, Station und Zustand werden zurückgesetzt. Das kostet {cost} € und wird nicht erstattet.'**
+  String careerRestartConfirm(String name, int cost);
+
+  /// Meldung nach erfolgreichem Karriere-Neustart
+  ///
+  /// In de, this message translates to:
+  /// **'Karriere neu gestartet – der Charakter ist wieder Lehrling.'**
+  String get careerRestartDone;
+
+  /// Meldung bei abgelehntem Karriere-Neustart
+  ///
+  /// In de, this message translates to:
+  /// **'Neustart nicht möglich (Rang, Team oder Budget).'**
+  String get careerRestartNotAllowed;
 
   /// Aktion: Beförderung zum Chef de partie
   ///
@@ -1135,6 +1177,48 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Sabotage wirkt bis {time}'**
   String managementSabotageEffect(String time);
+
+  /// Titel des Bestätigungsdialogs vor der Feature-Aktivierung (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'Feature aktivieren?'**
+  String get managementFeatureConfirmTitle;
+
+  /// Träger des Features im Bestätigungsdialog (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'Träger: {name}'**
+  String managementFeatureConfirmCarrier(String name);
+
+  /// Einmalkosten im Bestätigungsdialog (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'Einmalkosten: {cost} € (sofort)'**
+  String managementFeatureConfirmCost(int cost);
+
+  /// Dauer der aktiven Phase im Bestätigungsdialog (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'{days, plural, =1{Aktiv: 1 Tag} other{Aktiv: {days} Tage}}'**
+  String managementFeatureConfirmActive(int days);
+
+  /// Dauer der Nachteilphase im Bestätigungsdialog (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'{days, plural, =1{Nachwirkung: 1 Tag} other{Nachwirkung: {days} Tage}}'**
+  String managementFeatureConfirmAftermath(int days);
+
+  /// Hinweis: Feature ohne Nachteilphase (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'keine Nachwirkung'**
+  String get managementFeatureConfirmNoAftermath;
+
+  /// Überschrift der Feature-Countdowns im Restaurant-Screen (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'Laufende Features'**
+  String get activeFeaturesTitle;
 
   /// Abschnitt: Rivalen-Restaurants (Kapitel 13)
   ///
@@ -1695,6 +1779,12 @@ abstract class AppLocalizations {
   /// **'Ruheraum/Lounge'**
   String get upgradeLounge;
 
+  /// Erweiterung: Zertifizierung/Hygiene-Siegel
+  ///
+  /// In de, this message translates to:
+  /// **'Zertifizierung/Hygiene-Siegel'**
+  String get upgradeCertification;
+
   /// Ausbaustufe einer Erweiterung
   ///
   /// In de, this message translates to:
@@ -1821,6 +1911,12 @@ abstract class AppLocalizations {
   /// **'Rivalen-Sabotage: Einkommen −{loss} €'**
   String catchUpRivalSabotageLoss(int loss);
 
+  /// Einmalkosten der im Block aktivierten Features (P4)
+  ///
+  /// In de, this message translates to:
+  /// **'Feature-Einmalkosten (bei Aktivierung gebucht): −{cost} €'**
+  String catchUpPrepaidFeatureCost(int cost);
+
   /// Platzierung des Restaurants im Stadtteil (Kapitel 12)
   ///
   /// In de, this message translates to:
@@ -1832,6 +1928,78 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Wochenbericht'**
   String get weekReportTitle;
+
+  /// Überschrift der blockweisen Aufschlüsselung im Wochenbericht (P6, 4.2/#5)
+  ///
+  /// In de, this message translates to:
+  /// **'Wochen-Aufschlüsselung'**
+  String get weekReportWeeksTitle;
+
+  /// Kopfzeile eines abgerechneten 7-Tage-Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Woche {index} ({start}–{end})'**
+  String weekReportWeekHeader(int index, String start, String end);
+
+  /// Einkommenszeile eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Einkommen +{value} €'**
+  String weekReportLineIncome(int value);
+
+  /// Teamarzt-Kosten eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Teamärzte −{value} €'**
+  String weekReportLineMedics(int value);
+
+  /// Wochenlöhne eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Personal −{value} €'**
+  String weekReportLineStaff(int value);
+
+  /// Erweiterungs-Unterhalt eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Unterhalt −{value} €'**
+  String weekReportLineUpkeep(int value);
+
+  /// Negativzinsen eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Zinsen −{value} €'**
+  String weekReportLineInterest(int value);
+
+  /// Strafen eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Strafen −{value} €'**
+  String weekReportLinePenalties(int value);
+
+  /// Laufende Feature-Kosten eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Features −{value} €'**
+  String weekReportLineFeatures(int value);
+
+  /// Im Block aktivierte Feature-Einmalkosten im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Feature-Einmalkosten (vorab gebucht) −{value} €'**
+  String weekReportLinePrepaidFeatures(int value);
+
+  /// Abgeschöpftes Blockeinkommen durch unentdeckte Sabotage (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Rivalen-Sabotage −{value} €'**
+  String weekReportLineSabotage(int value);
+
+  /// Kontostand am Ende eines Blocks im Wochenbericht (P6)
+  ///
+  /// In de, this message translates to:
+  /// **'Budget danach {value} €'**
+  String weekReportLineBudgetAfter(int value);
 
   /// Überschrift der Stadtteil-Rangliste im Wochenbericht
   ///

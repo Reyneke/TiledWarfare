@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:tiled_warfare/l10n/staff_rank.dart';
+import 'package:tiled_warfare/l10n/management_feature_labels.dart';
+import 'package:tiled_warfare/l10n/management_feature_status.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/map_data.dart';
@@ -130,14 +132,39 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     }
   }
 
+  /// Schreibt das Write-ahead-Journal vor einer Catch-up-Mutation (P6/`8` P3).
+  ///
+  /// Ohne fälligen vollen Tag verändert der Tick nichts (die Heilung ist aus
+  /// `injuryStartedAt` ableitbar und damit wiederholbar) – dann entfällt das
+  /// Journal. Nach erfolgreichem Save räumt der Aufrufer es über
+  /// [ProfileStorage.clearTickJournal] wieder weg.
+  Future<void> _beginTickJournal(DateTime now) async {
+    final lastSeenAt = _profile.lastSeenAt;
+    if (lastSeenAt == null ||
+        GameClockService.daysElapsed(lastSeenAt, now) <= 0) {
+      return;
+    }
+    await ProfileStorage.writeTickJournal(
+      _profile.id,
+      restaurantId: _profile.activeRestaurantId,
+      lastSeenAt: lastSeenAt,
+      weekAnchorAt: _profile.weekAnchorAt,
+    );
+  }
+
   /// Holt beim Wiederaufnehmen der App fällige Wochen nach (V8) **und** die
   /// Echtzeit-Heilung/den Spritzen-Rückfall (V3); aktualisiert die Ansicht
   /// (inkl. Bankrott-Prüfung) und zeigt die Buchungen an (L2/§ 6).
   Future<void> _runResumeCatchUp() async {
     if (!mounted) return;
+    // P6: Write-ahead vor der Mutation – ein Abbruch dazwischen bleibt so
+    // erkennbar (die Buchungen selbst holt der nächste Tick idempotent nach).
+    final now = DateTime.now();
+    await _beginTickJournal(now);
     // V3: Heilung läuft auch ohne fällige Woche weiter, daher immer speichern.
-    final result = _profile.runCatchUp(DateTime.now());
-    await _saveState();
+    final result = _profile.runCatchUp(now);
+    final saved = await _saveState();
+    if (saved) await ProfileStorage.clearTickJournal(_profile.id);
     if (!mounted) return;
     setState(() {});
     _showCatchUpResult(result);
@@ -151,12 +178,19 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
   /// (Reentranz-Schutz über [_isSaving], vgl. [_saveOnBackground]).
   Future<void> _runTick() async {
     if (!mounted || _isSaving) return;
-    final result = _profile.runCatchUp(DateTime.now());
+    final now = DateTime.now();
+    await _beginTickJournal(now);
+    final result = _profile.runCatchUp(now);
     final changed = result.weeks > 0 || result.leftoverDays > 0;
     if (changed) {
-      await _saveState();
+      final saved = await _saveState();
+      if (saved) await ProfileStorage.clearTickJournal(_profile.id);
       if (!mounted) return;
       _showCatchUpResult(result);
+    } else {
+      // Ohne Mutation ist das Journal erledigt (der Save kommt aus anderen
+      // Anlässen; ein übrig gebliebenes Journal wäre hier irreführend).
+      await ProfileStorage.clearTickJournal(_profile.id);
     }
     if (!mounted) return;
     setState(() {});
@@ -223,6 +257,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (result.rivalSabotageLosses > 0) {
       lines.add(l10n.catchUpRivalSabotageLoss(result.rivalSabotageLosses));
     }
+    // `11a` P4: Einmalkosten der im Block aktivierten Features – sie sind bei
+    // der Aktivierung bereits abgebucht und werden hier transparent ausgewiesen.
+    if (result.prepaidFeatureCosts > 0) {
+      lines.add(l10n.catchUpPrepaidFeatureCost(result.prepaidFeatureCosts));
+    }
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -235,6 +274,16 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(lines.join('\n')),
+                if (result.settlements.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.weekReportWeeksTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  for (final settlement in result.settlements)
+                    _buildWeekBreakdown(theme, l10n, settlement),
+                ],
                 if (standings != null) ...[
                   const SizedBox(height: 16),
                   Text(
@@ -266,6 +315,67 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       },
     );
   }
+
+  /// Ein Block der Wochen-Aufschlüsselung (P6, 4.2/#5).
+  ///
+  /// Bewusst initial **eingeklappt**: Der Bericht kann bis zu
+  /// [EconomyBalance.maxCatchUpWeeks] Blöcke umfassen; der Kopf zeigt deshalb
+  /// bereits das Budget nach dem Block, die Details (Einkommen, Ärzte,
+  /// Personal, Unterhalt, Zinsen, Strafen, Features, Sabotage) erst beim
+  /// Aufklappen.
+  Widget _buildWeekBreakdown(
+    ThemeData theme,
+    AppLocalizations l10n,
+    WeekSettlement settlement,
+  ) {
+    final rows = <String>[
+      l10n.weekReportLineIncome(settlement.income),
+      if (settlement.medicCosts != 0)
+        l10n.weekReportLineMedics(settlement.medicCosts),
+      if (settlement.staffCosts != 0)
+        l10n.weekReportLineStaff(settlement.staffCosts),
+      if (settlement.upgradeUpkeep != 0)
+        l10n.weekReportLineUpkeep(settlement.upgradeUpkeep),
+      if (settlement.negativeInterest != 0)
+        l10n.weekReportLineInterest(settlement.negativeInterest),
+      if (settlement.penaltyCosts != 0)
+        l10n.weekReportLinePenalties(settlement.penaltyCosts),
+      if (settlement.featureCosts != 0)
+        l10n.weekReportLineFeatures(settlement.featureCosts),
+      if (settlement.prepaidFeatureCosts != 0)
+        l10n.weekReportLinePrepaidFeatures(settlement.prepaidFeatureCosts),
+      if (settlement.rivalSabotageLoss != 0)
+        l10n.weekReportLineSabotage(settlement.rivalSabotageLoss),
+      l10n.weekReportLineBudgetAfter(settlement.budgetAfter),
+    ];
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(left: 16, bottom: 8),
+      title: Text(
+        l10n.weekReportWeekHeader(
+          settlement.weekIndex + 1,
+          _formatReportDate(settlement.periodStart),
+          _formatReportDate(settlement.periodEnd),
+        ),
+        style: theme.textTheme.bodyMedium,
+      ),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            rows.join('\n'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Datum im Bericht – bewusst ohne `DateFormat`, weil dafür die
+  /// intl-Locale-Daten initialisiert sein müssten (Konvention wie
+  /// `screen_character_detail.dart`).
+  String _formatReportDate(DateTime date) =>
+      '${date.day}.${date.month}.${date.year}';
 
   /// Eine Zeile der Rangliste: „1. Name — PP 63 (Verbündet) · Sie“.
   String _standingLabel(AppLocalizations l10n, RivalStanding row) {
@@ -357,8 +467,21 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         );
     WeeklyTickResult? catchUp;
     if (target != null) {
-      catchUp = GameClockService.catchUp(target, DateTime.now());
-      await ProfileStorage.saveProfile(data);
+      // P6: Write-ahead-Journal für den gewechselten Spielstand (Anker vor dem
+      // Tick); aufgeräumt wird es nur nach erfolgreichem Save.
+      final before = target.lastSeenAt;
+      final now = DateTime.now();
+      if (before != null && GameClockService.daysElapsed(before, now) > 0) {
+        await ProfileStorage.writeTickJournal(
+          data.id,
+          restaurantId: target.id,
+          lastSeenAt: before,
+          weekAnchorAt: target.weekAnchorAt,
+        );
+      }
+      catchUp = GameClockService.catchUp(target, now);
+      final saved = await ProfileStorage.saveProfile(data);
+      if (saved) await ProfileStorage.clearTickJournal(data.id);
     }
 
     _profile.loadFromData(data, restaurantId: restaurantId);
@@ -486,7 +609,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       try {
-        final profileDir = Directory('profiles/${_profile.id}');
+        // P6: Spielstände (und damit Logos) liegen im aufgelösten
+        // Basisverzeichnis – nicht mehr zwingend relativ zu `profiles/`.
+        await ProfileStorage.ensureInitialized();
+        final profileDir =
+            Directory('${ProfileStorage.baseDirName}/${_profile.id}');
         if (!await profileDir.exists()) {
           await profileDir.create(recursive: true);
         }
@@ -495,7 +622,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
             ? '.${image.name.split('.').last}'
             : '.png';
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final destPath = '${profileDir.path}/restaurant_$timestamp$imageExtension';
+        // Neue Bilder werden **absolut** gespeichert (P6), damit sie auch nach
+        // einem Wechsel des Speicherorts gefunden werden.
+        final destPath = File(
+          '${profileDir.path}/restaurant_$timestamp$imageExtension',
+        ).absolute.path;
         final destFile = File(destPath);
 
         // Alte Logos erst NACH erfolgreichem Schreiben entfernen (V4/P6): die
@@ -798,7 +929,7 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                         builder: (ctx) => AlertDialog(
                           title: Text(l10n.fire),
                           content: Text(
-                            '${character.name} ${l10n.fire}?',
+                            l10n.fireConfirm(character.name),
                           ),
                           actions: [
                             TextButton(
@@ -1208,6 +1339,8 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         return l10n.upgradeFirstAid;
       case UpgradeType.lounge:
         return l10n.upgradeLounge;
+      case UpgradeType.certification:
+        return l10n.upgradeCertification;
     }
   }
 
@@ -1397,7 +1530,52 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
               ),
             ),
           ),
+        _buildActiveFeaturesInfo(theme, l10n),
       ],
+    );
+  }
+
+  /// Countdown der **laufenden Features** (`11a` P4, Schritt 2a).
+  ///
+  /// Die Personal-Karte zeigt den Feature-Status nur im Personal-Screen; hier
+  /// steht er **außerhalb der Personal-Karte** direkt unter der Wirtschaftszeile
+  /// des Restaurant-Screens. Die Auswertung ist anker-basiert und wird mit dem
+  /// Personal-Screen geteilt (`managementFeatureStatusLine`), damit beide
+  /// dieselbe Sprache sprechen.
+  ///
+  /// Bewusst **eine** kompakte Zeile (mit Ellipse): Der Kopfbereich ist nicht
+  /// scrollbar, deshalb darf die Anzeige ihre Höhe nicht ausdehnen. Laufen mehr
+  /// als zwei Features, nennt sie die ersten beiden und die Restanzahl.
+  Widget _buildActiveFeaturesInfo(ThemeData theme, AppLocalizations l10n) {
+    final now = DateTime.now();
+    final labels = <String>[];
+    for (final entry in _profile.staffEntries) {
+      final status = managementFeatureStatusLine(
+        l10n,
+        entry,
+        now,
+        sabotageAppliedUntil: _profile.sabotageAppliedUntil,
+      );
+      if (status == null) continue;
+      final label = managementFeatureLabelFor(l10n, entry.activeFeature ?? '');
+      labels.add('${entry.name} · ${label ?? entry.role} · $status');
+    }
+    if (labels.isEmpty) return const SizedBox.shrink();
+    final shown = labels.take(2).join('   ·   ');
+    final extra = labels.length - 2;
+    final text = extra > 0
+        ? '${l10n.activeFeaturesTitle}: $shown (+$extra)'
+        : '${l10n.activeFeaturesTitle}: $shown';
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.primary,
+        ),
+      ),
     );
   }
 
@@ -1480,7 +1658,9 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
                     borderRadius: BorderRadius.circular(12),
                     child: _profile.hasCustomImage
                         ? Image.file(
-                            File(_profile.headerImagePath),
+                            // P6: Legacy-Relativpfade werden aufgelöst.
+                            File(ProfileStorage.absolutePath(
+                                _profile.headerImagePath)),
                             width: 200,
                             height: 200,
                             fit: BoxFit.cover,

@@ -398,7 +398,14 @@ Fehler/Warnungen im neuen Code.
 - Die Tournant-Erleichterung wirkt dort, wo das Restaurant bekannt ist (Wochen-Proben); der Kampf-Malus bleibt
   unverändert (Durchreichung wäre ein eigener Schritt).
 - Der „Neustart des Charakters bei Level 0“ (einzige Rückholmöglichkeit eines aktiven Chefs laut V10 § 6) ist
-  nicht implementiert.
+  **umgesetzt (P5):** `ObjectProfile.restartCareer` setzt Rang → Lehrling, Level/XP → Start, Station und
+  Doppelrolle → keine und den Zustand → `ready` (Verletzungen, Notfall-Spritze, Stress-/Ruhe-Override); die
+  Identität (`id`, Persönlichkeit, Match-Historie, Name/Grafik) bleibt erhalten. Die Kosten sind level-abhängig
+  (`EconomyBalance.careerRestartCostBase`/`careerRestartCostPerLevel` → `EconomyService.careerRestartCost`,
+  Prüfung mit `canAfford`); fällt ein **aktiver** Chef de cuisine weg, rückt ein formeller Chef nach (§ 6).
+  UI: Karte + Bestätigungsdialog auf der Charakter-Detailseite (ab jedem Rang über dem Lehrling, keine
+  Rückerstattung). Tests: `test/career_restart_test.dart`,
+  `test/screen_character_detail_career_restart_test.dart`.
 
 ## Anhang: Belege
 

@@ -217,6 +217,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get fire => 'Entlassen';
 
   @override
+  String fireConfirm(String name) {
+    return '$name wirklich entlassen? Eine Entlassung wird nicht erstattet.';
+  }
+
+  @override
   String get hire => 'Anstellen';
 
   @override
@@ -335,6 +340,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String stationVariantOf(String base) {
     return 'Variante von $base';
   }
+
+  @override
+  String get careerRestart => 'Karriere-Neustart';
+
+  @override
+  String get careerRestartAction => 'Neu starten';
+
+  @override
+  String careerRestartHint(int cost) {
+    return 'Setzt Rang, Level und Zustand auf einen frischen Lehrling zurück ($cost €).';
+  }
+
+  @override
+  String careerRestartConfirm(String name, int cost) {
+    return '$name die Karriere neu starten? Rang, Level, Station und Zustand werden zurückgesetzt. Das kostet $cost € und wird nicht erstattet.';
+  }
+
+  @override
+  String get careerRestartDone =>
+      'Karriere neu gestartet – der Charakter ist wieder Lehrling.';
+
+  @override
+  String get careerRestartNotAllowed =>
+      'Neustart nicht möglich (Rang, Team oder Budget).';
 
   @override
   String get promoteToChefDePartie => 'Zum Chef de partie befördern';
@@ -627,6 +656,47 @@ class AppLocalizationsDe extends AppLocalizations {
   String managementSabotageEffect(String time) {
     return 'Sabotage wirkt bis $time';
   }
+
+  @override
+  String get managementFeatureConfirmTitle => 'Feature aktivieren?';
+
+  @override
+  String managementFeatureConfirmCarrier(String name) {
+    return 'Träger: $name';
+  }
+
+  @override
+  String managementFeatureConfirmCost(int cost) {
+    return 'Einmalkosten: $cost € (sofort)';
+  }
+
+  @override
+  String managementFeatureConfirmActive(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Aktiv: $days Tage',
+      one: 'Aktiv: 1 Tag',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String managementFeatureConfirmAftermath(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Nachwirkung: $days Tage',
+      one: 'Nachwirkung: 1 Tag',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get managementFeatureConfirmNoAftermath => 'keine Nachwirkung';
+
+  @override
+  String get activeFeaturesTitle => 'Laufende Features';
 
   @override
   String get rivalsSection => 'Konkurrenz im Stadtteil';
@@ -957,6 +1027,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get upgradeLounge => 'Ruheraum/Lounge';
 
   @override
+  String get upgradeCertification => 'Zertifizierung/Hygiene-Siegel';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Stufe $level/$max';
   }
@@ -1057,12 +1130,75 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String catchUpPrepaidFeatureCost(int cost) {
+    return 'Feature-Einmalkosten (bei Aktivierung gebucht): −$cost €';
+  }
+
+  @override
   String rankingBadge(int rank, int total, String district) {
     return 'Platz $rank von $total in $district';
   }
 
   @override
   String get weekReportTitle => 'Wochenbericht';
+
+  @override
+  String get weekReportWeeksTitle => 'Wochen-Aufschlüsselung';
+
+  @override
+  String weekReportWeekHeader(int index, String start, String end) {
+    return 'Woche $index ($start–$end)';
+  }
+
+  @override
+  String weekReportLineIncome(int value) {
+    return 'Einkommen +$value €';
+  }
+
+  @override
+  String weekReportLineMedics(int value) {
+    return 'Teamärzte −$value €';
+  }
+
+  @override
+  String weekReportLineStaff(int value) {
+    return 'Personal −$value €';
+  }
+
+  @override
+  String weekReportLineUpkeep(int value) {
+    return 'Unterhalt −$value €';
+  }
+
+  @override
+  String weekReportLineInterest(int value) {
+    return 'Zinsen −$value €';
+  }
+
+  @override
+  String weekReportLinePenalties(int value) {
+    return 'Strafen −$value €';
+  }
+
+  @override
+  String weekReportLineFeatures(int value) {
+    return 'Features −$value €';
+  }
+
+  @override
+  String weekReportLinePrepaidFeatures(int value) {
+    return 'Feature-Einmalkosten (vorab gebucht) −$value €';
+  }
+
+  @override
+  String weekReportLineSabotage(int value) {
+    return 'Rivalen-Sabotage −$value €';
+  }
+
+  @override
+  String weekReportLineBudgetAfter(int value) {
+    return 'Budget danach $value €';
+  }
 
   @override
   String get rankingSectionTitle => 'Rangliste im Stadtteil';

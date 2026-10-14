@@ -77,6 +77,26 @@ enum UpgradeType {
   /// Sink-Faktor `2`). Das Plongeur-Muster – „der Baustein wird erst mit der
   /// Rolle wertvoll“ – ist hier bewusst gewollt.
   lounge,
+
+  /// Zertifizierung/Hygiene-Siegel – erlittene Strafen.
+  ///
+  /// Gruppe D aus `11b_Restauranterweiterungen.md` (⚙-Hook): mindert **alle**
+  /// erlittenen Strafen um `penaltyReductionPerLevel` je Stufe, kaufmännisch
+  /// gerundet. Die Minderung stapelt **additiv** mit dem Rechtsanwalt
+  /// (`StaffRoleService.penaltyReductionPercent`, `11a` E12) und dem aktiven
+  /// „Winkelzug“ (E15) und wird wie diese auf **100 %** gedeckelt.
+  ///
+  /// **Strafenquelle (`11a` „Behörden/Inspektionen“, P3):** Der Baustein war
+  /// ohne eigene Strafenquelle wirkungslos, weil bis dato nur aufgedeckte
+  /// Sabotage Strafen erzeugte. Seit P3 liefert die **deterministische
+  /// Behörden-Inspektion** (`InspectionService`, alle
+  /// `EconomyBalance.inspectionIntervalWeeks` Blöcke) eine passive, nicht an
+  /// aggressives Spiel gebundene Strafbuchung (`penaltyCosts`) – damit ist der
+  /// Baustein auch für defensive Spielweisen wertvoll.
+  ///
+  /// **Abgrenzung:** Der Hebel wirkt **ausschließlich** auf Strafen, nicht auf
+  /// laufende Kosten (Buchhalter) oder Mitarbeiterlöhne (Chefsekretärin).
+  certification,
 }
 
 /// Balance-Definition einer Restaurant-Erweiterung (§ 10).
@@ -122,6 +142,13 @@ class UpgradeSpec {
   /// Nulltage bleibt unberührt.
   final double dailySinkReliefPerLevel;
 
+  /// Minderung **erlittener Strafen** je Stufe (relativ, z. B. `0.05` = −5 %).
+  /// Wirkt **nicht** über die drei Eingangswerte, sondern an der Strafbuchung
+  /// (`StaffRoleService.reducedPenalty`, § 10, `certification`); stapelt dort
+  /// additiv mit dem Rechtsanwalt und dem „Winkelzug“ und wird auf 100 %
+  /// gedeckelt.
+  final double penaltyReductionPerLevel;
+
   const UpgradeSpec({
     required this.maxLevel,
     required this.buyBaseCost,
@@ -132,5 +159,6 @@ class UpgradeSpec {
     this.healTimeReductionPerLevel = 0.0,
     this.refillBonusPerLevel = 0.0,
     this.dailySinkReliefPerLevel = 0.0,
+    this.penaltyReductionPerLevel = 0.0,
   });
 }

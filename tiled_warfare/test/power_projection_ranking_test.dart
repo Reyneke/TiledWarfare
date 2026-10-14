@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
+import 'package:tiled_warfare/services/power_projection_service.dart';
 import 'package:tiled_warfare/services/rival_service.dart';
 
 /// Tests der PP-/Ranking-Auswertung (Kapitel 12/13): `PowerProjectionState`,
@@ -113,19 +114,45 @@ void main() {
       final r = restaurant(staff: [cook()]);
       final result =
           GameClockService.catchUp(r, base.add(const Duration(days: 7)));
+      final weekIndex = RivalService.weekIndexOf(base);
       for (final entry in result.standings!.entries) {
         if (entry.isPlayer) {
           expect(entry.insolvent, isFalse);
         } else {
+          final rival = RivalService.byId(
+            RivalService.candidatePool('Midtown'),
+            entry.id,
+          )!;
           expect(
             entry.insolvent,
-            RivalService.rivalPowerProjection(
-                    RivalService.byId(RivalService.rosterOf('Midtown'), entry.id)!,
-                    playerPp: result.powerProjection) <
+            RivalService.simulatedRivalPp(
+                  rival,
+                  playerPp: result.powerProjection,
+                  weekIndex: weekIndex,
+                ) <
                 EconomyBalance.rivalPpBankruptThreshold,
           );
         }
       }
+    });
+    test('Wochen-Tick verdrahtet den Konkurrenzdruck in den Einkommensfaktor',
+        () {
+      final r = restaurant(staff: [cook()]);
+      final result =
+          GameClockService.catchUp(r, base.add(const Duration(days: 7)));
+      expect(result.standings, isNotNull);
+      // Frisches Restaurant ⇒ Korruption zu Beginn 0, also ist der gebuchte
+      // Faktor exakt das Produkt aus PP- und Konkurrenzdruck-Stufe (Q10).
+      expect(
+        result.incomeFactor,
+        closeTo(
+          PowerProjectionService.effectiveIncomeFactor(
+            playerPp: result.powerProjection,
+            rivalAveragePp: result.standings!.rivalAveragePp,
+          ),
+          1e-9,
+        ),
+      );
     });
   });
 }
