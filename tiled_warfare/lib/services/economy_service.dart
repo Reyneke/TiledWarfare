@@ -33,14 +33,21 @@ class EconomyService {
   /// Bei negativem Bestand: `budget − ceil(|budget| × negativeInterestRate)`,
   /// sonst unverändert.
   ///
+  /// [reliefPercent] ist die Senkung des Zins-**Satzes** in Prozent (0–100) aus
+  /// dem Tresor (`vault`, § 10): `satzEffektiv = negativeInterestRate ×
+  /// (100 − reliefPercent)/100`. Der Satz wird auf 0 % gedeckelt, die Zinsen
+  /// können also nie negativ werden.
+  ///
   /// Rundung: bewusst `.ceil()` (aufrunden) statt kaufmännisch – der Zins wird
   /// nie zu Gunsten des Schuldners abgerundet. Die Verkaufs-Erstattung
   /// (`sellRefund`) rundet dagegen kaufmännisch, weil dort Geld an den Spieler
   /// zurückfließt.
-  static int applyNegativeInterest(int budget) {
+  static int applyNegativeInterest(int budget, {int reliefPercent = 0}) {
     if (budget >= 0) return budget;
-    final interest =
-        (budget.abs() * EconomyBalance.negativeInterestRate).ceil();
+    final relief = reliefPercent.clamp(0, 100);
+    final rate =
+        EconomyBalance.negativeInterestRate * (100 - relief) / 100;
+    final interest = (budget.abs() * rate).ceil();
     return budget - interest;
   }
 
@@ -270,6 +277,14 @@ class EconomyService {
   /// (`GameClockService._refillStaffResources`/`_applyDailyResourceSink`).
   /// `penaltyReduction` ist die Summe der Strafen-Minderungen (`certification`,
   /// § 10): Sie wirkt an der Strafbuchung (`StaffRoleService.reducedPenalty`).
+  /// `negativeInterestRelief` (`vault`), `trainingCostReduction` (`school`),
+  /// `detectionBonus` (`security`), `prestigeBonus` und `sabotageTargetRelief`
+  /// (`stars`) sind die übrigen ⚙-Hooks aus `11b` (P3): Sie wirken ebenfalls
+  /// **nicht** auf die drei Eingangswerte, sondern an ihren jeweiligen
+  /// Wirkungsstellen (`EconomyService.applyNegativeInterest`,
+  /// `ObjectProfile.promoteToRank`, `RivalService.incomingDetectionPercent`,
+  /// `GameClockService.powerProjectionState`,
+  /// `RivalService.incomingChancePercent`).
   static ({
     double capacity,
     double attractiveness,
@@ -278,6 +293,11 @@ class EconomyService {
     double refill,
     double dailySinkRelief,
     double penaltyReduction,
+    double negativeInterestRelief,
+    double trainingCostReduction,
+    double detectionBonus,
+    double prestigeBonus,
+    double sabotageTargetRelief,
   }) upgradeEffects(Map<UpgradeType, int> levels) {
     var capacity = 0.0;
     var attractiveness = 0.0;
@@ -286,6 +306,11 @@ class EconomyService {
     var refill = 0.0;
     var dailySinkRelief = 0.0;
     var penaltyReduction = 0.0;
+    var negativeInterestRelief = 0.0;
+    var trainingCostReduction = 0.0;
+    var detectionBonus = 0.0;
+    var prestigeBonus = 0.0;
+    var sabotageTargetRelief = 0.0;
     levels.forEach((type, level) {
       final spec = EconomyBalance.upgrades[type];
       if (spec == null || level <= 0) return;
@@ -296,6 +321,11 @@ class EconomyService {
       refill += spec.refillBonusPerLevel * level;
       dailySinkRelief += spec.dailySinkReliefPerLevel * level;
       penaltyReduction += spec.penaltyReductionPerLevel * level;
+      negativeInterestRelief += spec.negativeInterestReliefPerLevel * level;
+      trainingCostReduction += spec.trainingCostReductionPerLevel * level;
+      detectionBonus += spec.detectionBonusPerLevel * level;
+      prestigeBonus += spec.prestigeBonusPerLevel * level;
+      sabotageTargetRelief += spec.sabotageTargetReliefPerLevel * level;
     });
     return (
       capacity: capacity,
@@ -305,6 +335,11 @@ class EconomyService {
       refill: refill,
       dailySinkRelief: dailySinkRelief,
       penaltyReduction: penaltyReduction,
+      negativeInterestRelief: negativeInterestRelief,
+      trainingCostReduction: trainingCostReduction,
+      detectionBonus: detectionBonus,
+      prestigeBonus: prestigeBonus,
+      sabotageTargetRelief: sabotageTargetRelief,
     );
   }
 

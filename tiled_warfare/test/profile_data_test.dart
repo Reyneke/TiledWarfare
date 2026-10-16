@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/cuisine.dart';
 import 'package:tiled_warfare/models/match_record.dart';
@@ -184,8 +186,55 @@ void main() {
     expect(lineCook.rank, kRankLineCook);
   });
 
-  test('kProfileSchemaVersion ist 10 (FRT: Korruption, Kapitel 14)', () {
-    expect(kProfileSchemaVersion, 10);
+  test('kProfileSchemaVersion ist 11 (FRT-Fehde, Kapitel 14 C2)', () {
+    expect(kProfileSchemaVersion, 11);
+  });
+
+  test('frtFeudUntilWeekById persistiert und ist tolerant (Schema 11, C2)', () {
+    // Round-trip über echtes JSON.
+    final slot = RestaurantData(
+      id: 5,
+      name: 'Test',
+      district: 'Midtown',
+      frtFeudUntilWeekById: const {7: 12, 3: 4},
+    );
+    final json = jsonDecode(jsonEncode(slot.toJson())) as Map<String, dynamic>;
+    expect(RestaurantData.fromJson(json).frtFeudUntilWeekById, {7: 12, 3: 4});
+
+    // Toleranz: String-Schlüssel/-Werte (Alt-Bestände/JSON-Randfälle).
+    expect(
+      RestaurantData.fromJson({
+        'name': 'Test',
+        'frtFeudUntilWeekById': {'7': '12'},
+      }).frtFeudUntilWeekById,
+      {7: 12},
+    );
+    // Fehlendes oder unlesbares Feld ⇒ leere Map (kein Fehler).
+    expect(
+      RestaurantData.fromJson({'name': 'Test'}).frtFeudUntilWeekById,
+      isEmpty,
+    );
+    expect(
+      RestaurantData.fromJson({
+        'name': 'Test',
+        'frtFeudUntilWeekById': 'kaputt',
+      }).frtFeudUntilWeekById,
+      isEmpty,
+    );
+    expect(
+      RestaurantData.fromJson({
+        'name': 'Test',
+        'frtFeudUntilWeekById': {'x': 'y'},
+      }).frtFeudUntilWeekById,
+      isEmpty,
+    );
+    // Leere Fehde wird nicht serialisiert (schlanke Speicherstände).
+    expect(
+      RestaurantData(name: 'Test').toJson().containsKey(
+            'frtFeudUntilWeekById',
+          ),
+      isFalse,
+    );
   });
 
   test('RestaurantData.copyWith ersetzt nur staff/budget (V10)', () {

@@ -246,11 +246,21 @@ Kategorie-Zuordnung (`support` vs. `management`) ist noch offen (E6):
 |---|---|---|
 | **Teamarzt** (V8, umgesetzt) | **Erste-Hilfe-Station** (`firstAid`) – **Erweiterung umgesetzt** ✅ | Verkürzt die vom Arzt **gesetzte** Stufenzeit (`healTimePerStage`) prozentual (max. −15 %); der **Rettungswurf** bleibt allein die Arzt-Domäne (die Alternative „+1 Rettungswurf-Zielwert“ wurde bewusst verworfen). |
 | **Sommelier** (offen) | **Wein-/Getränkekeller** (`cellar`) – **Erweiterung umgesetzt** ✅ | Der Zufriedenheits-Zuschlag des Sommeliers greift nur mit gebautem Keller – die Wirkungsbasis steht seit dem V1-Paket (`11b`), der **Sommelier selbst ist noch offen**. |
-| **Caissier** (offen) | **Tresor/Kassenraum** (`vault`) | Senkung der Negativzinsen stapelt **additiv** mit der Erweiterung. |
+| **Caissier** (offen) | **Tresor/Kassenraum** (`vault`) – **Erweiterung umgesetzt** ✅ | Senkung der Negativzinsen stapelt **additiv** mit der Erweiterung. |
 | **Lagerist** (V12) | **Kühlhaus/Kühlkette** (`coldRoom`) – **Erweiterung umgesetzt** ✅ | Mehr Kapazitäts-Basis für das aktive „Lagertetris“ – die Basis steht seit dem V1-Paket (`11b`); ohne Personal bleibt sie wirkungslos (`capacityOf` = 0). |
 | **Communard / Pâtissier** (V10 umgesetzt) · **Gewerkschaftschef** (V12) · **Tournant** (V10) | **Ruheraum/Lounge** (`lounge`) – **Erweiterung umgesetzt** ✅ | Der Ruheraum hebt das **Refill-Ziel**, auf das Communard (+15 %) und Pâtissier (+10 %) additiv aufsetzen (und von dem der Pâtissier sich selbst ausnimmt – das Gebäude nicht); die **Sink-Erleichterung** stapelt **additiv** mit dem Gewerkschaftschef (−24 % bei Kompetenz 4) und wird auf 100 % gedeckelt. Der **Erschöpfungs-Malus der Nulltage** bleibt allein die Domäne des **Tournant**. |
 | **Rechtsanwalt** (V11) | **Zertifizierung/Hygiene-Siegel** (`certification`) – **Erweiterung umgesetzt** ✅ | Strafen-Minderung **setzt eine Strafenquelle** voraus – **entschieden & umgesetzt (P3):** die deterministische **Behörden-Inspektion** (`InspectionService`, fällig alle `inspectionIntervalWeeks` Blöcke) bucht ihre Strafe als `penaltyCosts` im Wochen-Tick; die Minderung stapelt dort **additiv** mit Rechtsanwalt-Passiv und „Winkelzug“ (100 %-Deckel). |
-| **Sicherheitschef** (V13) | **Sicherheitstechnik/Alarmanlage** (`security`) | Entdeckung/Abschöpfung eingehender Sabotage. |
+| **Sicherheitschef** (V13) | **Sicherheitstechnik/Alarmanlage** (`security`) – **Erweiterung umgesetzt** ✅ | Entdeckung (P3: +5 Prozentpunkte/Stufe) eingehender Sabotage; stapelt mit der passiven Entdeckung des Sicherheitschefs. |
+
+> **Abgesichert (P7-Werte-Pass):** Jede Zeile dieser Zuordnung ist in `balance_sanity_test.dart`
+> (Gruppe „Balance-Tuning: Werte-Pass (P7, 4.2/#10)“) als **Anker-Effekt** festgeschrieben: Die genannte
+> Erweiterung muss den Effekt tragen, auf dem die Rolle aufsetzt (`anchored(...)`). Zusätzlich sind die
+> übrigen P3-Anschaffungen (`firstAid`, `school`, `security`, `stars`) als echte Wirkungsbasen verankert,
+> und jeder dieser Hebel (`negativeInterestRelief`, `trainingCostReduction`, `detectionBonus`,
+> `sabotageTargetRelief`, `dailySinkRelief`, `healTimeReduction`) gehört **genau einer** Erweiterung
+> (`uniqueLever(...)`) – sonst gäbe es zwei Erweiterungen für dieselbe Rolle. Rollen ohne Erweiterung
+> (`socialMediaManager`, Buchhalter, Chefsekretärin …) wirken dagegen direkt auf Kosten/Strafen und
+> brauchen keine Wirkungsbasis.
 
 ## Verwaltungsrollen (umgesetzt V11)
 

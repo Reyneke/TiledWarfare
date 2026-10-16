@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
+import 'package:tiled_warfare/services/economy_balance.dart';
 import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 
@@ -419,6 +420,51 @@ void main() {
       expect(result.negativeInterest, 210);
       expect(r.budget, -1210);
       expect(result.bankrupt, false);
+    });
+
+    test('der Tresor (P3) senkt die Negativzinsen des Ticks (§ 10)', () {
+      // 3 Stufen ⇒ −30 % des Satzes (10 % → 7 %). Der Unterhalt (60 €/Woche)
+      // wird **vor** den Zinsen gebucht, die Zinsen laufen also auf −1060.
+      final r = restaurant(
+        budget: -1000,
+        upgrades: const {UpgradeType.vault: 3},
+      );
+      final result = GameClockService.catchUp(
+        r,
+        base.add(const Duration(days: 7)),
+      );
+      expect(result.weeks, 1);
+      expect(result.upgradeUpkeep, 60);
+      expect(result.negativeInterest, 75); // ceil(1060 × 0,07)
+      expect(r.budget, -1135);
+      // Ohne Tresor wären es ceil(1060 × 0,10) = 106 Zinsen.
+      final plain = restaurant(budget: -1000);
+      final plainResult = GameClockService.catchUp(
+        plain,
+        base.add(const Duration(days: 7)),
+      );
+      expect(plainResult.negativeInterest, greaterThan(result.negativeInterest));
+    });
+
+    test('die Sterneküche (P3) hebt die Power Projection des Ticks (§ 10)', () {
+      final plain = restaurant();
+      final starred = restaurant(upgrades: const {UpgradeType.stars: 5});
+      final plainPp = GameClockService.powerProjectionState(
+        plain,
+        now: base,
+      ).powerProjection;
+      final starredPp = GameClockService.powerProjectionState(
+        starred,
+        now: base,
+      ).powerProjection;
+      // prestigeBonus 0.01 × 5 Stufen × PP-Domäne 100 = 5 Punkte (gedeckelt).
+      expect(
+        starredPp,
+        plainPp + 5 <= EconomyBalance.powerProjectionDomainMax
+            ? plainPp + 5
+            : EconomyBalance.powerProjectionDomainMax,
+      );
+      expect(starredPp, greaterThanOrEqualTo(plainPp));
     });
 
     test('greift auf Stadtteil/Prestige zu (Attraktivität)', () {

@@ -122,6 +122,28 @@ class EconomyBalance {
   /// behauptete Rivale wird deterministisch aus dem Stadtteil-Roster gewählt.
   static const int frtSabotageSharePercent = 30;
 
+  // ── FRT: Fehde & Angriffsziel (Kapitel 14, C2/Q7b) ────────────────────
+  //
+  // Die FRT agiert **abseits der Rangliste** (kein Rivale im Sinne von `13`).
+  // Zwei Größen bilden das ab: die **Fehde** (eine aufgedeckte Fehl-Attribution
+  // verschiebt die Haltung des *behaupteten* Rivalen dauerhaft Richtung Feind)
+  // und der **offene Angriff** der FRT auf einen Rivalen des Stadtteils (Q7b),
+  // der dessen Power Projection sinken lässt – der Spieler sieht also, dass das
+  // Umfeld reagiert, ohne dass er selbst angreifen muss.
+
+  /// Wochen, die eine **aufgedeckte** FRT-Fehl-Attribution als Fehde nachwirkt
+  /// (C2): Der behauptete Rivale bleibt so viele Wochen-Index-Schritte lang um
+  /// **eine Stufe** feindlicher gestimmt (Hysterese über den Wochen-Index,
+  /// damit die Ableitung ohne Datums-Drift reproduzierbar bleibt).
+  static const int frtFeudWeeks = 4;
+
+  /// Anteil der Rivalen, die die FRT je Woche **offen** angreift (Q7b;
+  /// deterministisch je Rivale/Wochen-Index, kein Zufall).
+  static const int frtRivalAttackSharePercent = 25;
+
+  /// PP-Verlust eines von der FRT angegriffenen Rivalen je Woche (Q7b).
+  static const double frtRivalAttackPpLoss = 4.0;
+
   // ── Einmalige Kosten ──────────────────────────────────────────────────
 
   static const int hireApprenticeCost = 100;
@@ -176,6 +198,16 @@ class EconomyBalance {
   /// Modifikatoren je Station (Werte sind Tuning und gedeckelt über
   /// [stationBonusMaxPercent]). Varianten ersetzen den Bonus ihrer
   /// [StationSpec.baseStation] (kein Stapeln).
+  ///
+  /// **Tuning-Regeln (P7-Werte-Pass, 4.2/#10)** – sie werden in
+  /// `balance_sanity_test.dart` festgeschrieben:
+  /// 1. Eine Variante **ersetzt den Fokus** ihrer Basis, sie verstärkt ihn
+  ///    nicht (Primärwert der Variante ≤ Primärwert der Basis).
+  /// 2. Keine Station **dominiert** eine andere ihrer Familie strikt
+  ///    (gleiche Werte und in mindestens einem Wert besser) – sonst wäre die
+  ///    Wahl der Station entwertet.
+  /// 3. Die Aura eines Stationsinhabers ist **nie stärker** als seine eigene
+  ///    Spezialisierung; die Reichweite trägt bewusst **keine** Aura.
   static const Map<String, StationSpec> stationSpecs = {
     kStationSaucier: StationSpec(attackBonusPercent: 15, auraAttackPercent: 5),
     kStationPoissonnier: StationSpec(
@@ -188,16 +220,18 @@ class EconomyBalance {
       damageBonusPercent: 15,
       auraDamagePercent: 5,
     ),
+    // Nahkampf-Zweig (P7): tauscht 5 % Schaden gegen Angriffswert – damit
+    // dominiert er den Fernkampf-Zweig nicht strikt (Tuning-Regel 2).
     kStationGrillardin: StationSpec(
       baseStation: kStationRotisseur,
-      attackBonusPercent: 5,
-      damageBonusPercent: 15,
+      attackBonusPercent: 10,
+      damageBonusPercent: 10,
       auraDamagePercent: 5,
     ),
+    // Fernkampf-Zweig (P7): tauscht 5 % Schaden gegen Reichweite.
     kStationFriturier: StationSpec(
       baseStation: kStationRotisseur,
-      attackBonusPercent: 5,
-      damageBonusPercent: 15,
+      damageBonusPercent: 10,
       rangeBonusPercent: 10,
       auraDamagePercent: 5,
     ),
@@ -205,17 +239,24 @@ class EconomyBalance {
       defenseBonusPercent: 15,
       auraDefensePercent: 5,
     ),
+    // Suppen-/Flächenwirkung (10 § 2, P7): die Aura trägt **zusätzlich**
+    // Schaden – dadurch ist der Zweig vom Légumier unterscheidbar
+    // (Tuning-Regel 2).
     kStationPotager: StationSpec(
       baseStation: kStationEntremetier,
       defenseBonusPercent: 10,
       damageBonusPercent: 5,
       auraDefensePercent: 5,
+      auraDamagePercent: 5,
     ),
+    // Gemüse-/Zutateneffekte (10 § 2, P7): die Zutaten-Vorbereitung bündelt
+    // ihren Nutzen in einer **stärkeren Team-Aura** statt in einer eigenen
+    // Zweitwirkung – damit bleibt sie von der Flächenwirkung des Potager und
+    // von der Basis (höhere Selbst-Verteidigung) unterscheidbar.
     kStationLegumier: StationSpec(
       baseStation: kStationEntremetier,
       defenseBonusPercent: 10,
-      damageBonusPercent: 5,
-      auraDefensePercent: 5,
+      auraDefensePercent: 10,
     ),
     kStationGardeManger: StationSpec(
       defenseBonusPercent: 20,
@@ -641,6 +682,10 @@ class EconomyBalance {
   static const int resourceSinkPerDay = 5;
 
   /// Ressourcen-Sink je Gefechtseinsatz (V9, § 2/§ 6).
+  ///
+  /// Bewusst genau das **Doppelte** des Tagessinks („ein Einsatz ≈ zwei
+  /// Ruhetage“); die Relation ist im P7-Werte-Pass über
+  /// `balance_sanity_test.dart` festgeschrieben.
   static const int resourceSinkPerBattle = 10;
 
   /// Gewicht der Personal-Hilfsbereitschaft auf die Attraktivität (V9, Phase 3).
@@ -673,6 +718,10 @@ class EconomyBalance {
   // ── Stress & Ruhe / Erschöpfung (V9, § 6) ─────────────────────────────
 
   /// Ruhe-Marge: Unterschreitung der Probe, ab der „Ruhe“ ausgelöst wird (§ 6).
+  ///
+  /// P7-Werte-Pass: `0 < ruheMargin ≤ 50` (halbe Trait-Domäne), damit Ruhe für
+  /// den Median-Zielwert (50) erreichbar bleibt und die neutrale Zone zwischen
+  /// Stress-Überwurf und Ruhe nicht leer wird (vgl. `balance_sanity_test`).
   static const int ruheMargin = 20;
 
   /// Dauer eines „Einzelticks“ – reine Zeiteinheit, kein eigener Tick (§ 6).
@@ -1239,6 +1288,50 @@ class EconomyBalance {
       buyBaseCost: 200,
       upkeepBaseCostPerWeek: 20,
       penaltyReductionPerLevel: 0.05,
+    ),
+    // Gruppe A (`11b_Restauranterweiterungen.md`): reiner **Verlustbegrenzer**
+    // an der Zinsbuchung (−10 % des Negativzins-Satzes je Stufe). Speist
+    // keinen der drei Eingangswert-Boni und erzeugt **keinen** Einkommenshebel –
+    // er wirkt nur, solange das Budget negativ ist (Wirkungsbasis des Caissiers,
+    // `11a` V12). Deckelung auf 100 % an der Wirkungsstelle
+    // (`EconomyService.applyNegativeInterest`).
+    UpgradeType.vault: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 200,
+      upkeepBaseCostPerWeek: 20,
+      negativeInterestReliefPerLevel: 0.10,
+    ),
+    // Gruppe B (`11b_Restauranterweiterungen.md`): ⚙-Hook auf die
+    // **Beförderungskosten** (−5 %/Stufe). Bewusst der Kosten-Hebel statt
+    // „Sieg-XP +2 %“ – die XP-Seite ist durch die PR-Kampagne des Social Media
+    // Managers belegt, die Fortbildungskosten waren bis dahin ungehebelt.
+    UpgradeType.school: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 300,
+      upkeepBaseCostPerWeek: 30,
+      trainingCostReductionPerLevel: 0.05,
+    ),
+    // Gruppe B (`11b_Restauranterweiterungen.md`): ⚙-Hook auf die
+    // **Entdeckung** eingehender Sabotage (+5 Prozentpunkte/Stufe), additiv zum
+    // Sicherheitschef (`11a` V13). Macht die Gegenschlag-Kette wertvoller statt
+    // nur Verluste zu mildern; Deckelung auf 100 an der Wirkungsstelle.
+    UpgradeType.security: UpgradeSpec(
+      maxLevel: 3,
+      buyBaseCost: 220,
+      upkeepBaseCostPerWeek: 22,
+      detectionBonusPerLevel: 0.05,
+    ),
+    // Gruppe D (`11b_Restauranterweiterungen.md`): Auszeichnung mit **zwei**
+    // Effekten (§ 10) – Prestige-Beitrag zur Power Projection (+1 % der
+    // PP-Domäne je Stufe) **und** selteneres Sabotage-Ziel (−5 Prozentpunkte
+    // Angriffswahrscheinlichkeit je Stufe). Speist keinen der drei
+    // Eingangswert-Boni.
+    UpgradeType.stars: UpgradeSpec(
+      maxLevel: 5,
+      buyBaseCost: 400,
+      upkeepBaseCostPerWeek: 40,
+      prestigeBonusPerLevel: 0.01,
+      sabotageTargetReliefPerLevel: 0.05,
     ),
   };
 }

@@ -143,6 +143,18 @@ class ObjectProfile {
   /// Zeitpunkt, ab dem der Stadtteil als verloren gilt (Q4); sonst `null`.
   DateTime? districtLostAt;
 
+  /// Kapitel 14 (**C2**): laufende **FRT-Fehden** des aktiven Stadtteils –
+  /// Rivale → letzter Wochen-Index, bis zu dem seine Haltung zum Spieler um
+  /// eine Stufe Richtung Feind verschoben ist.
+  ///
+  /// Zustandsfeld wie [corruptionPercent]: Es entsteht beim Aufdecken einer
+  /// FRT-Fehl-Attribution im Wochen-Tick und wird über
+  /// [activeRestaurantSnapshot]/[runCatchUp]/[toProfileData] mit dem
+  /// `RestaurantData`-Slot synchronisiert. Der Wert ist ein **Wochen-Index**
+  /// (`RivalService.weekIndexOf`), kein Datum – so bleibt die Wirkung
+  /// reproduzierbar und driftfrei (V8).
+  Map<int, int> frtFeudUntilWeekById = {};
+
   /// `true`, wenn das aktive Restaurant **aufgelöst** ist (z. B. durch einen
   /// verlorenen Stadtteil, Kapitel 14/Q4). Wird – wie die Korruption – über
   /// [loadFromData]/[runCatchUp]/[toProfileData] mit dem Slot synchronisiert,
@@ -694,13 +706,32 @@ class ObjectProfile {
   /// Bildet einen Lehrling zu einem [ObjectLineCook] fort, sofern er
   /// Level 5 oder höher erreicht hat.
   ///
-  /// Dünner Wrapper um [promoteToRank]; die Kosten bleiben als Parameter
-  /// erhalten (Alt-Aufrufer/Tests), Standard ist
-  /// `EconomyBalance.upgradeToLineCookCost`.
+  /// Dünner Wrapper um [promoteToRank]; der Kosten-Parameter bleibt für
+  /// Alt-Aufrufer/Tests erhalten. Ohne [cost] gilt der Preis nach Abzug des
+  /// **Schulungsraums** ([promotionPurchaseCost], § 10).
   ObjectApprentice? upgradeToLineCook(
     ObjectApprentice apprentice, {
-    int cost = EconomyBalance.upgradeToLineCookCost,
+    int? cost,
   }) => promoteToRank(apprentice, kRankLineCook, cost: cost);
+
+  /// Prozentuale Minderung der Fortbildungs-/Beförderungskosten durch den
+  /// **Schulungsraum/Trainingsküche** (`school`, § 10; kaufmännisch gerundet,
+  /// auf 100 % gedeckelt).
+  int get trainingCostReductionPercent =>
+      (EconomyService.upgradeEffects(activeUpgrades).trainingCostReduction * 100)
+          .round()
+          .clamp(0, 100);
+
+  /// Kaufpreis einer Beförderung in den Zielrang [rank] **nach** dem Abzug des
+  /// Schulungsraums (`school`, § 10).
+  ///
+  /// Einzige Quelle für Anzeige **und** Buchung (`promoteToRank`,
+  /// `ScreenRestaurant._promoteCharacter`): Bruttopreis kommt zentral aus
+  /// `EconomyService.promotionCost`, der Abzug aus [trainingCostReductionPercent].
+  int promotionPurchaseCost(String rank) => StaffRoleService.reduceByPercent(
+        EconomyService.promotionCost(rank),
+        trainingCostReductionPercent,
+      );
 
   /// Befördert [character] in den Zielrang [targetRank] (Karrierepfade, V10).
   ///
@@ -731,7 +762,7 @@ class ObjectProfile {
     )) {
       return null; // Level-Gate nicht erreicht
     }
-    final promotionCost = cost ?? EconomyService.promotionCost(targetRank);
+    final promotionCost = cost ?? promotionPurchaseCost(targetRank);
     if (!EconomyService.canAfford(budget: budget, cost: promotionCost)) {
       return null; // Budget reicht nicht
     }
@@ -1055,10 +1086,23 @@ class ObjectProfile {
 
   /// Berechnet Negativzinsen, falls das Budget negativ ist (§ 2.2).
   ///
-  /// Wird nach jedem Gefecht aufgerufen.
+  /// Wird nach jedem Gefecht aufgerufen. Der Zinssatz wird um den **Tresor**
+  /// (`vault`, § 10) gemindert – dieselbe Quelle wie im Wochen-Tick
+  /// (`GameClockService.catchUp`), damit beide Pfade identisch rechnen.
   void applyNegativeInterest() {
-    budget = EconomyService.applyNegativeInterest(budget);
+    budget = EconomyService.applyNegativeInterest(
+      budget,
+      reliefPercent: negativeInterestReliefPercent,
+    );
   }
+
+  /// Prozentuale Minderung des **Negativzins-Satzes** durch den Tresor
+  /// (`vault`, § 10; kaufmännisch gerundet, auf 100 % gedeckelt).
+  int get negativeInterestReliefPercent =>
+      (EconomyService.upgradeEffects(activeUpgrades).negativeInterestRelief *
+              100)
+          .round()
+          .clamp(0, 100);
 
   /// Führt für alle Einheiten, die im Gefecht gefallen sind (`woundValue ≤ 0`),
   /// einen Rettungswurf (W100) durch und aktualisiert den [CharacterStatus].
@@ -1318,6 +1362,7 @@ class ObjectProfile {
     corruptionPercent = 0;
     districtLost = false;
     districtLostAt = null;
+    frtFeudUntilWeekById = {};
     // Ein neu gegründetes Restaurant ist nicht aufgelöst. Das **alte**
     // Restaurant wurde oben bereits entschädigungslos aufgelöst.
     isDissolved = false;
@@ -1363,6 +1408,7 @@ class ObjectProfile {
       corruptionPercent = 0;
       districtLost = false;
       districtLostAt = null;
+      frtFeudUntilWeekById = {};
       isDissolved = false;
       dissolvedAt = null;
       _personal.clear();
@@ -1388,6 +1434,7 @@ class ObjectProfile {
     corruptionPercent = restaurant.corruptionPercent;
     districtLost = restaurant.districtLost;
     districtLostAt = restaurant.districtLostAt;
+    frtFeudUntilWeekById = Map.of(restaurant.frtFeudUntilWeekById);
     isDissolved = restaurant.isDissolved;
     dissolvedAt = restaurant.dissolvedAt;
 
@@ -1517,6 +1564,7 @@ class ObjectProfile {
       corruptionPercent: corruptionPercent,
       districtLost: districtLost,
       districtLostAt: districtLostAt,
+      frtFeudUntilWeekById: Map.of(frtFeudUntilWeekById),
     );
 
     if (existingIndex >= 0) {
@@ -1563,6 +1611,7 @@ class ObjectProfile {
     corruptionPercent: corruptionPercent,
     districtLost: districtLost,
     districtLostAt: districtLostAt,
+    frtFeudUntilWeekById: Map.of(frtFeudUntilWeekById),
     isDissolved: isDissolved,
     dissolvedAt: dissolvedAt,
   );
@@ -1648,6 +1697,9 @@ class ObjectProfile {
     corruptionPercent = snapshot.corruptionPercent;
     districtLost = snapshot.districtLost;
     districtLostAt = snapshot.districtLostAt;
+    // Kapitel 14/C2: aufgedeckte FRT-Fehl-Attributionen des Ticks übernehmen –
+    // sonst ginge die Fehde beim nächsten Save verloren.
+    frtFeudUntilWeekById = Map.of(snapshot.frtFeudUntilWeekById);
     // Kapitel 14/Q4: Erreicht die Korruption die Verlustschwelle, löst der Tick
     // das Restaurant auf – die Auflösung muss ebenfalls zurückgeschrieben werden.
     isDissolved = snapshot.isDissolved;
@@ -1665,8 +1717,13 @@ class ObjectProfile {
   /// wird er durch den Aufrufer (das Gefechtsergebnis ruft diese Methode vor
   /// `saveToStorage`). Fällt die Korruption wieder unter die Verlustschwelle,
   /// gilt der Stadtteil wieder als bespielbar (Q4-Hysterese).
-  void reduceCorruption({int monstersKilled = 0, bool victory = false}) {
-    if (monstersKilled <= 0 && !victory) return;
+  ///
+  /// Gibt `true` zurück, wenn **dieser** Aufruf den Stadtteil befreit hat
+  /// (Korruption fiel von ≥ Verlustschwelle unter die Schwelle) – die UI zeigt
+  /// darüber den „Befreiung“-Hinweis im Gefechtsergebnis (C2).
+  bool reduceCorruption({int monstersKilled = 0, bool victory = false}) {
+    if (monstersKilled <= 0 && !victory) return false;
+    final wasLost = districtLost;
     corruptionPercent = FrtService.reduce(
       corruptionPercent,
       monstersKilled: monstersKilled,
@@ -1676,6 +1733,7 @@ class ObjectProfile {
       districtLost = false;
       districtLostAt = null;
     }
+    return wasLost && !districtLost;
   }
 
   /// Schreibt den durch den Catch-up veränderten Heilungs-/Spritzenzustand aus

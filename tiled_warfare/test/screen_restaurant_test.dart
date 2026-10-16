@@ -203,6 +203,127 @@ void main() {
     expect(profile.budget, 10000 - 180);
   });
 
+  testWidgets('Tresor-Kachel ist ausbaubar (P3, § 10)', (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final card = find.ancestor(
+      of: find.text('Tresor/Kassenraum'),
+      matching: find.byType(Card),
+    );
+    expect(card, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: card,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.vault), 1);
+    expect(profile.budget, 10000 - 200);
+  });
+
+  testWidgets('Schulungsraum-Kachel ist ausbaubar (P3, § 10)', (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final card = find.ancestor(
+      of: find.text('Schulungsraum/Trainingsküche'),
+      matching: find.byType(Card),
+    );
+    expect(card, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: card,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.school), 1);
+    expect(profile.budget, 10000 - 300);
+  });
+
+  testWidgets('Sicherheitstechnik-Kachel ist ausbaubar (P3, § 10)',
+      (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final card = find.ancestor(
+      of: find.text('Sicherheitstechnik/Alarmanlage'),
+      matching: find.byType(Card),
+    );
+    expect(card, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: card,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.security), 1);
+    expect(profile.budget, 10000 - 220);
+  });
+
+  testWidgets('Sterneküche-Kachel ist ausbaubar (P3, § 10)', (tester) async {
+    loadProfile();
+    final profile = ObjectProfile();
+
+    await tester.pumpWidget(app(const ScreenRestaurant()));
+    await tester.pump();
+
+    await tester.tap(find.text('Erweiterungen'));
+    await tester.pumpAndSettle();
+
+    final card = find.ancestor(
+      of: find.text('Sterneküche/Auszeichnung'),
+      matching: find.byType(Card),
+    );
+    expect(card, findsOneWidget);
+
+    final buyButton = find.descendant(
+      of: card,
+      matching: find.widgetWithText(FilledButton, 'Ausbauen'),
+    );
+    await tester.ensureVisible(buyButton);
+    await tester.pumpAndSettle();
+    await tester.tap(buyButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(profile.upgradeLevel(UpgradeType.stars), 1);
+    expect(profile.budget, 10000 - 400);
+  });
+
   testWidgets('Verkaufen fragt nach und erstattet erst nach Bestätigung',
       (tester) async {
     loadProfile(upgrades: const {UpgradeType.signage: 1});

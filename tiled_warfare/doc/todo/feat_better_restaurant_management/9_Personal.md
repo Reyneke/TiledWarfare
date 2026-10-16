@@ -295,7 +295,7 @@ effektiver W100-Zielwert = clamp( Zielwert − malusPercent(t), 0, 100 )
 - `test/resource_state_test.dart` (neu): Tages-Sink ist idempotent (Catch-up ohne Doppelbuchung), Wochen-Refill setzt auf den Trait-Basiswert, Einsatz-Sink greift nach dem Gefecht, Clamp 0–100; der Erschöpfungs-Malus wächst **kumulativ** je Nulltag (beide auf 0 doppelt), ist **ohne Cap** und wird im Wochen-Refill auf 0 zurückgesetzt.
 - `test/stress_ruhe_test.dart` (neu): W100-Proben (Überwurf/Ruhe-Marge), Dauerstaffel-Buckets (1W6×3 h … 1W4 Monate), Override ersetzt/läuft ab, Catch-up = genau ein Proben-Paar, deterministisch via injiziertem `Random`/`now`; der Erschöpfungs-Malus wirkt auch auf diese Proben (Zielwert 0 ⇒ garantiert Stress).
 - `test/object_team_medic_test.dart` (erweitern): ein injizierter `Random` bestimmt Profil und Qualität (Determinismus, behebt P7).
-- `test/balance_sanity_test.dart` (erweitern): Trait-Stützwerte, Modifikator-Grenzen, Dauerstaffel-Buckets (aufsteigend) und Erschöpfungs-Konstanten (`resourceZeroMalusPerDay = 5` < `resourceZeroMalusPerDayBoth = 10`) eingehalten; Heilzeit bleibt persönlichkeitsunabhängig.
+- `test/balance_sanity_test.dart` (erweitern): Trait-Stützwerte, Modifikator-Grenzen, Dauerstaffel-Buckets (aufsteigend) und Erschöpfungs-Konstanten (`resourceZeroMalusPerDay = 5` < `resourceZeroMalusPerDayBoth = 10`) eingehalten; Heilzeit bleibt persönlichkeitsunabhängig. **✅ erledigt (P7):** die Verträge stehen in der Gruppe „Balance-Tuning: Werte-Pass (P7, 4.2/#10)“ – symmetrische Varianz (`personalityVarianceModulo = 2 × range + 1`), kollisionsfreie Profil-Sockel, Trait-Grenzen, aufsteigende Dauerleiter, `ruheMargin`-Korridor (erreichbar für den Median-Zielwert), Sink-/Erschöpfungs-Spirale (Σ 7Tages-Sinks = Wochenwert).
 - `test/game_clock_service_test.dart` (erweitern): der Persönlichkeitsanteil an der Kapazität verändert das passive Einkommen nachvollziehbar.
 - `test/upgrade_line_cook_test.dart` (erweitern): Fortbildung erhält `id` und Persönlichkeit (Identität, V5-F1).
 
@@ -351,7 +351,7 @@ Alle sieben Phasen aus „Umsetzungsschritte“ sind umgesetzt; die Validierung 
 
 **Tests (neu):** `test/personality_test.dart` (7), `test/resource_state_test.dart` (6), `test/stress_ruhe_test.dart` (11), `test/personality_combat_test.dart` (3), `test/host_personality_test.dart` (4), `test/screen_character_detail_personality_test.dart` (1); `profile_data_test`, `upgrade_line_cook_test`, `object_team_medic_test` wurden an die neuen Regeln angepasst.
 
-**Weiterhin offen:** Die **Konsequenz unentdeckter** Rivalen-Sabotage (die Entdeckung selbst ist seit V13 umgesetzt, s. o.) und Teamdynamik (Affinitäten/Konflikte); die Balance-Zahlen (`ruheMargin`, Sink-Werte, Trait-Prozente, Lohn-Spanne) sind Tuning-Werte in `EconomyBalance`.
+**Weiterhin offen:** Die **Konsequenz unentdeckter** Rivalen-Sabotage (die Entdeckung selbst ist seit V13 umgesetzt, s. o.); die **Teamdynamik** ist seit **P5** umgesetzt (`TeamDynamicsService`). **Erledigt (P7-Werte-Pass):** Die Balance-Zahlen dieses Kapitels sind geprüft und festgeschrieben – `ruheMargin = 20` (Ruhe greift tiefer als die erste Stress-Staffel und bleibt für den Median-Zielwert 50 erreichbar), Sink-Werte `5`/Tag bzw. `10`/Einsatz (= zwei Ruhetage; eine Woche ohne Gefecht räumt keinen Median-Charakter leer), Trait-Prozente (`combatTraitMaxPercent = 15` ≤ `stationBonusMaxPercent`), Lohn-Spanne `thriftinessWageSpread = 0.2` (±20 %, symmetrisch, für Brigade **und** Teamarzt).
 
 ## Anhang: Belegstellen
 

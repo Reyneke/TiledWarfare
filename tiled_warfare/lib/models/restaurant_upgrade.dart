@@ -97,6 +97,69 @@ enum UpgradeType {
   /// **Abgrenzung:** Der Hebel wirkt **ausschließlich** auf Strafen, nicht auf
   /// laufende Kosten (Buchhalter) oder Mitarbeiterlöhne (Chefsekretärin).
   certification,
+
+  /// Tresor/Kassenraum – Negativzinsen (§ 10, `11b` Gruppe A, **⚙-Hook**).
+  ///
+  /// Senkt den **Zinssatz** der Negativzinsen je Stufe um
+  /// [UpgradeSpec.negativeInterestReliefPerLevel] (z. B. `0.10` = −10 % des
+  /// Satzes). Wirkt an der Zinsbuchung im Wochen-Tick
+  /// (`EconomyService.applyNegativeInterest`, `GameClockService.catchUp`,
+  /// `ObjectProfile.applyNegativeInterest`) und **nicht** auf einen der drei
+  /// Eingangswerte.
+  ///
+  /// **Entschiedene Wirkungs-Option:** Zinssatz-Senkung (nicht der alternativ
+  /// diskutierte „Rettungswurf“). Der Tresor ist ein reiner Verlustbegrenzer:
+  /// Er erzeugt **keinen** Einkommenshebel, sondern wirkt nur, solange das
+  /// Budget negativ ist – die Wirkungsbasis des **Caissiers** (`11a`, V12,
+  /// stapelt additiv).
+  vault,
+
+  /// Schulungsraum/Trainingsküche – Fortbildungskosten (§ 10, `11b` Gruppe B,
+  /// **⚙-Hook**).
+  ///
+  /// Senkt die **Einmalkosten** jeder Karriere-Beförderung um
+  /// [UpgradeSpec.trainingCostReductionPerLevel] (z. B. `0.05` = −5 %). Wirkt an
+  /// der Kostenbuchung der Beförderung (`ObjectProfile.promoteToRank`, der
+  /// gemeinsame Pfad von `upgradeToLineCook` und allen Karriereaufstiegen) –
+  /// damit zugleich auf Anzeige- und Buchungswert.
+  ///
+  /// **Entschiedene Wirkungs-Option:** Fortbildungskosten (nicht der alternativ
+  /// diskutierte „Sieg-XP +2 %“) – die XP-Seite ist bereits durch die
+  /// PR-Kampagne des Social Media Managers und den Kompetenz-Zuschlag belegt,
+  /// während die Beförderungskosten bis dahin **ungehebelt** waren.
+  school,
+
+  /// Sicherheitstechnik/Alarmanlage – Entdeckung eingehender Sabotage (§ 10,
+  /// `11b` Gruppe B, **⚙-Hook**).
+  ///
+  /// Erhöht die Entdeckungswahrscheinlichkeit eingehender Sabotageversuche je
+  /// Stufe um [UpgradeSpec.detectionBonusPerLevel] Prozentpunkte
+  /// (z. B. `0.05` = +5). Wirkt in `RivalService.incomingDetectionPercent`
+  /// additiv zum passiven Sicherheitschef (`11a` V13) und wird dort auf `100`
+  /// gedeckelt.
+  ///
+  /// **Entschiedene Wirkungs-Option:** Entdeckung (nicht der alternativ
+  /// diskutierte „Abschöpfung −5 %“) – so macht die Erweiterung die
+  /// **Gegenschlag**-Kette (V13) wertvoller statt nur Verluste zu mildern, und
+  /// sie stapelt sichtbar mit dem Sicherheitschef.
+  security,
+
+  /// Sterneküche/Auszeichnung – Prestige-Beitrag & selteneres Sabotage-Ziel
+  /// (§ 10, `11b` Gruppe D, **⚙-Hook**).
+  ///
+  /// Hebt die **Power Projection** je Stufe um
+  /// `prestigeBonus × powerProjectionDomainMax` Punkte – ein Auszeichnungs-
+  /// Beitrag, der sich direkt in der **Ranglisten-Position** niederschlägt
+  /// (`GameClockService.powerProjectionState`) – und senkt zugleich die
+  /// Wahrscheinlichkeit, dass das Restaurant überhaupt **Ziel** einer
+  /// eingehenden Rivalen-Sabotage wird (`sabotageTargetRelief` je Stufe,
+  /// `RivalService.incomingChancePercent`).
+  ///
+  /// **Entschiedene Wirkungs-Option:** beide Effekte („Prestige-Beitrag **und**
+  /// selteneres Ziel“, wie in der Tabellen-Zeile) – die Auszeichnung ist damit
+  /// vorbereitend für `12` (Mini-PP, „Platz X von Y“) und `13` (Rivalen), ohne
+  /// einen der drei Eingangswerte zu speisen.
+  stars,
 }
 
 /// Balance-Definition einer Restaurant-Erweiterung (§ 10).
@@ -149,6 +212,36 @@ class UpgradeSpec {
   /// gedeckelt.
   final double penaltyReductionPerLevel;
 
+  /// Minderung des **Negativzins-Satzes** je Stufe (relativ, z. B. `0.10` =
+  /// −10 % des Satzes). Wirkt **nicht** über die drei Eingangswerte, sondern an
+  /// der Zinsbuchung (`EconomyService.applyNegativeInterest`, § 10, `vault`);
+  /// stapelt additiv mit dem Caissier (`11a`) und wird auf 100 % gedeckelt.
+  final double negativeInterestReliefPerLevel;
+
+  /// Minderung der **Fortbildungs-/Beförderungskosten** je Stufe (relativ,
+  /// z. B. `0.05` = −5 %). Wirkt **nicht** über die drei Eingangswerte, sondern
+  /// an der Kostenbuchung der Beförderung (`ObjectProfile.promoteToRank`,
+  /// § 10, `school`).
+  final double trainingCostReductionPerLevel;
+
+  /// Entdeckungs-Zuschlag auf eingehende Sabotage je Stufe in
+  /// **Prozentpunkten** (relativ, z. B. `0.05` = +5). Wirkt **nicht** über die
+  /// drei Eingangswerte, sondern in `RivalService.incomingDetectionPercent`
+  /// (§ 10, `security`); stapelt additiv zum Sicherheitschef (`11a` V13).
+  final double detectionBonusPerLevel;
+
+  /// **Prestige-Beitrag** zur Power Projection je Stufe (relativ, z. B.
+  /// `0.01` = +1 % der PP-Domäne pro Stufe). Wirkt **nicht** über die drei
+  /// Eingangswerte, sondern in `GameClockService.powerProjectionState`
+  /// (§ 10, `stars`).
+  final double prestigeBonusPerLevel;
+
+  /// Senkung der Wahrscheinlichkeit, **Ziel** einer eingehenden
+  /// Rivalen-Sabotage zu werden, je Stufe in **Prozentpunkten** (relativ,
+  /// z. B. `0.05` = −5). Wirkt **nicht** über die drei Eingangswerte, sondern in
+  /// `RivalService.incomingChancePercent` (§ 10, `stars`).
+  final double sabotageTargetReliefPerLevel;
+
   const UpgradeSpec({
     required this.maxLevel,
     required this.buyBaseCost,
@@ -160,5 +253,10 @@ class UpgradeSpec {
     this.refillBonusPerLevel = 0.0,
     this.dailySinkReliefPerLevel = 0.0,
     this.penaltyReductionPerLevel = 0.0,
+    this.negativeInterestReliefPerLevel = 0.0,
+    this.trainingCostReductionPerLevel = 0.0,
+    this.detectionBonusPerLevel = 0.0,
+    this.prestigeBonusPerLevel = 0.0,
+    this.sabotageTargetReliefPerLevel = 0.0,
   });
 }

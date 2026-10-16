@@ -227,8 +227,8 @@ void main() {
       expect(low.corruptionPercent, 0);
     });
 
-    test('Schema-Version ist 10', () {
-      expect(kProfileSchemaVersion, 10);
+    test('Schema-Version ist 11 (FRT-Fehde, C2)', () {
+      expect(kProfileSchemaVersion, 11);
     });
   });
 }

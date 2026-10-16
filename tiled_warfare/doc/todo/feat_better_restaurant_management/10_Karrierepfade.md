@@ -119,11 +119,11 @@ Gefecht, seine Aura ist damit gegenstandslos.
 | Saucier | Sauté chef | – | Höchster Posten: Bonus auf Angriff/Zielwert (W100). |
 | Poissonnier | Fish cook | – | Bonus auf Fernkampf/Reichweite; verbessert Fisch-Zerlegung (Loot/Beute). |
 | Rôtisseur | Roast cook | – | Bonus auf Schaden. |
-| Grillardin | Grill cook | Rôtisseur | Bonus auf Schaden und Nahkampfangriffe. |
-| Friturier | Fry cook | Rôtisseur | Bonus auf Schaden und Fernkampfangriffe. |
+| Grillardin | Grill cook | Rôtisseur | Nahkampf-Zweig: +10 % Angriff, +10 % Schaden (tauscht 5 % Schaden gegen Angriffswert, P7). |
+| Friturier | Fry cook | Rôtisseur | Fernkampf-Zweig: +10 % Schaden, +10 % Reichweite (tauscht 5 % Schaden gegen Reichweite, P7). |
 | Entremétier | Entrée preparer | – | Bonus auf Verteidigung (robuste „Allrounder“-Station). |
-| Potager | Soup cook | Entremétier | Bonus auf Suppen-/Flächenwirkung. |
-| Légumier | Vegetable cook | Entremétier | Bonus auf Gemüse-/Zutateneffekte. |
+| Potager | Soup cook | Entremétier | Suppen-/Flächenwirkung: +10 % Verteidigung, +5 % Schaden; Aura +5 % Verteidigung **und** +5 % Schaden (P7). |
+| Légumier | Vegetable cook | Entremétier | Gemüse-/Zutateneffekte: +10 % Verteidigung, dafür Aura **+10 % Verteidigung** (bündelt den Nutzen im Team, P7). |
 | Garde manger | Pantry chef | – | Bonus auf Verteidigung/LP-nahe Effekte (kaltblütig, schwer aus der Ruhe zu bringen). |
 | Charcutier | Charcuterie specialist | Garde manger | Bonus auf Charcuterie-/Dauerwirkung (Terrinen, Confit). |
 | Pâtissier | Pastry chef | – | Support-Station: verbessert Moral/Wochen-Refill der Kollegen (keine Kampf-Aura). |
@@ -134,6 +134,13 @@ Gefecht, seine Aura ist damit gegenstandslos.
 - **Unterränge aus der Referenztabelle werden als Varianten abgebildet:** Grillardin/Friturier →
   `Rôtisseur`, Potager/Légumier → `Entremétier`, Charcutier → `Garde manger`. Eine Variante ist wählbar,
   sobald die Basis-Station gewählt wurde, und **ersetzt** deren Bonus (kein Stapeln).
+- **Tuning-Regeln der Varianten (P7-Werte-Pass, 4.2/#10):** (1) Eine Variante **ersetzt den Fokus** ihrer
+  Basis, sie verstärkt ihn nicht (höchster Selbstwert der Variante ≤ höchster Selbstwert der Basis –
+  z. B. `Rôtisseur` 15 % Schaden gegenüber `Grillardin`/`Friturier` je 10 %). (2) Keine Station
+  **dominiert** eine andere ihrer Familie strikt (gleiche Werte und in mindestens einem Wert besser) –
+  sonst wäre die Stationswahl entwertet. (3) Die **Aura** ist nie stärker als die eigene Spezialisierung
+  und die **Reichweite** trägt bewusst keine Aura. Alle drei Regeln sind in `balance_sanity_test.dart`
+  festgeschrieben (Gruppe „Balance-Tuning: Werte-Pass (P7, 4.2/#10)“).
 - **Aura-Auswertung:** Eine Einheit ist betroffen, wenn `HexGrid.distance(...)` zur Aura-Quelle
   ≤ `Aura-Radius` ist. Default sind **Verbündeten-Buffs**; **Debuff-Auren sind möglich** und wirken derzeit
   gegen **beide** Gegner-Kategorien (*Minion* **und** *Bossmonster*), nicht nach Monstertyp

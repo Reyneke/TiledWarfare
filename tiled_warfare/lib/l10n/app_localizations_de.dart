@@ -105,6 +105,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String districtLiberatedMessage(String district) {
+    return 'Der Stadtteil $district ist befreit! Die Korruption ist unter die Verlustschwelle gefallen – dort kann wieder gegründet werden.';
+  }
+
+  @override
   String corruptionLabel(int percent) {
     return 'Korruption: $percent %';
   }
@@ -1030,6 +1035,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get upgradeCertification => 'Zertifizierung/Hygiene-Siegel';
 
   @override
+  String get upgradeVault => 'Tresor/Kassenraum';
+
+  @override
+  String get upgradeSchool => 'Schulungsraum/Trainingsküche';
+
+  @override
+  String get upgradeSecurity => 'Sicherheitstechnik/Alarmanlage';
+
+  @override
+  String get upgradeStars => 'Sterneküche/Auszeichnung';
+
+  @override
   String upgradeLevel(int level, int max) {
     return 'Stufe $level/$max';
   }
@@ -1127,6 +1144,11 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String catchUpRivalSabotageLoss(int loss) {
     return 'Rivalen-Sabotage: Einkommen −$loss €';
+  }
+
+  @override
+  String catchUpFrtRivalAttacks(int count) {
+    return 'FRT-Angriffe auf Rivalen: $count';
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/rival_restaurant.dart';
 import 'package:tiled_warfare/models/staff_entry.dart';
 import 'package:tiled_warfare/services/economy_balance.dart';
+import 'package:tiled_warfare/services/economy_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 import 'package:tiled_warfare/services/staff_role_service.dart';
 import 'package:tiled_warfare/utils/crc32.dart';
@@ -384,7 +385,11 @@ class RivalService {
     );
     final states = <RivalWeekState>[];
     for (final rival in pool) {
-      final pp = simulatedRivalPp(
+      // Q7b: Die angezeigte PP des Rivalen ist um einen offenen FRT-Angriff
+      // gemindert ([_ppUnderFrtPressure]); das Roster-Modell (Pleite,
+      // Nachrücken, Rang für die Aktiv-Entscheidung) bleibt unverändert beim
+      // reinen Wachstums-Modell, damit die 1-Tick-Verzögerung stabil bleibt.
+      final pp = _ppUnderFrtPressure(
         rival,
         playerPp: playerPp,
         weekIndex: weekIndex,
@@ -631,11 +636,33 @@ class RivalService {
   ///
   /// Deterministisch (`CRC32('rival-attack:<anchor>:<rivalId>')`) – kein Zufall
   /// im Catch-up (V8-Idempotenz), gleiche Werte bei jedem Laden.
-  static bool incomingAttemptOccurs(int rivalId, DateTime blockAnchor) {
+  ///
+  /// [chancePercent] überschreibt die Basis-Wahrscheinlichkeit
+  /// ([incomingChancePercent], § 10 `stars`): Ohne Angabe gilt
+  /// `incomingSabotageChanceBasePercent` (Alt-Verhalten).
+  static bool incomingAttemptOccurs(
+    int rivalId,
+    DateTime blockAnchor, {
+    int? chancePercent,
+  }) {
     final stamp = blockAnchor.toIso8601String();
     return CRC32.compute('rival-attack:$stamp:$rivalId').abs() % 100 <
-        EconomyBalance.incomingSabotageChanceBasePercent;
+        (chancePercent ?? EconomyBalance.incomingSabotageChanceBasePercent)
+            .clamp(0, 100);
   }
+
+  /// Wahrscheinlichkeit (Prozent), dass **überhaupt** ein Rivalen-Angriff beim
+  /// Spieler eingeht (§ 10, `stars`): Basis-Wahrscheinlichkeit minus
+  /// Sabotage-Ziel-Schutz der Auszeichnung
+  /// (`sabotageTargetRelief` je Stufe), geklemmt auf `0–100`.
+  static int incomingChancePercent(RestaurantData restaurant) =>
+      (EconomyBalance.incomingSabotageChanceBasePercent -
+              (EconomyService
+                          .upgradeEffects(restaurant.upgrades)
+                          .sabotageTargetRelief *
+                      100)
+                  .round())
+          .clamp(0, 100);
 
   /// `true`, wenn der Versuch des Rivalen [rivalId] im Block [blockAnchor]
   /// **entdeckt** wird (Wurf `< detectionPercent`).
@@ -687,6 +714,113 @@ class RivalService {
     return roster[index].id;
   }
 
+  // ── FRT-Fehde & offener Angriff auf Rivalen (Kapitel 14, C2/Q7b) ───────
+
+  /// `true`, wenn die FRT den Rivalen [rivalId] in Woche [weekIndex] **offen**
+  /// angreift (Q7b).
+  ///
+  /// Deterministisch (`CRC32('frt-rival-attack:<week>:<id>')`) und damit
+  /// idempotent über den Wochen-Index (V8) – kein neuer Persistenzzustand.
+  /// Negative Wochen-Indizes (Vorwochen-Näherung vor dem Epoch) greifen nicht.
+  static bool frtAttacksRival(int rivalId, int weekIndex) =>
+      weekIndex >= 0 &&
+      CRC32.compute('frt-rival-attack:$weekIndex:$rivalId').abs() % 100 <
+          EconomyBalance.frtRivalAttackSharePercent;
+
+  /// Power-Projection-Verlust, den ein **offener FRT-Angriff** dem Rivalen
+  /// [rivalId] in Woche [weekIndex] zufügt (`0` ohne Angriff, Q7b).
+  static double frtAttackPpLoss(int rivalId, int weekIndex) =>
+      frtAttacksRival(rivalId, weekIndex)
+          ? EconomyBalance.frtRivalAttackPpLoss
+          : 0.0;
+
+  /// Anzahl der Rivalen des Stadtteils, die die FRT in Woche [weekIndex] offen
+  /// angreift (Kennzahl der Wochenabrechnung, Q7b).
+  static int frtAttackedRivalCount(String? district, int weekIndex) =>
+      rosterOf(district).where((r) => frtAttacksRival(r.id, weekIndex)).length;
+
+  /// Simulierte PP **unter FRT-Druck** (Q7b): der offene FRT-Angriff senkt die
+  /// PP des Rivalen, lässt ihn aber nicht unter die Pleite-Schwelle fallen –
+  /// die Pleite bleibt dem Wachstums-/Roster-Modell ([simulatedRivalPp], 1-Tick-
+  /// Verzögerung) vorbehalten. Dadurch bleiben die Invarianten „aktiv ⇒ gesund“
+  /// und „insolvent ⇔ PP unter der Schwelle“ erhalten, während das Umfeld des
+  /// Spielers sichtbar reagiert.
+  static double _ppUnderFrtPressure(
+    RivalRestaurant rival, {
+    required int playerPp,
+    required int weekIndex,
+  }) {
+    final base = simulatedRivalPp(
+      rival,
+      playerPp: playerPp,
+      weekIndex: weekIndex,
+    );
+    final loss = frtAttackPpLoss(rival.id, weekIndex);
+    if (loss <= 0) return base;
+    final threshold = EconomyBalance.rivalPpBankruptThreshold;
+    final floor = base >= threshold ? threshold : base;
+    final attacked = base - loss;
+    return attacked < floor ? floor : attacked;
+  }
+
+  /// Verschiebt [stance] um **eine Stufe** Richtung Feind (Fehde, C2):
+  /// `ally → neutral → enemy`; `enemy` bleibt `enemy`.
+  static RivalStance escalateStance(RivalStance stance) => switch (stance) {
+        RivalStance.ally => RivalStance.neutral,
+        RivalStance.neutral => RivalStance.enemy,
+        RivalStance.enemy => RivalStance.enemy,
+      };
+
+  /// `true`, wenn gegen den Rivalen [rivalId] in [weekIndex] eine **FRT-Fehde**
+  /// läuft (Kapitel 14, C2: Der Spieler hat die Fehl-Attribution aufgedeckt und
+  /// gibt dem behaupteten Rivalen die Schuld).
+  static bool feudActiveFor(
+    RestaurantData restaurant,
+    int rivalId,
+    int weekIndex,
+  ) {
+    final until = restaurant.frtFeudUntilWeekById[rivalId];
+    return until != null && weekIndex <= until;
+  }
+
+  /// Wendet die **aufgedeckten** FRT-Fehl-Attributionen des Blocks
+  /// [blockAnchor] als **Fehde** an (Kapitel 14, C2).
+  ///
+  /// Betroffen ist jeweils der *behauptete* Rivale ([attributedRivalId]) des
+  /// aufgedeckten Angriffs; seine Haltung bleibt
+  /// `EconomyBalance.frtFeudWeeks` Wochen lang um eine Stufe feindlicher.
+  /// **Nur aufgedeckte** Angriffe erzeugen eine Fehde – was unbemerkt bleibt,
+  /// kann der Spieler nicht verfolgen (die Korruption steigt stattdessen,
+  /// Q6/Q8). Die Fortschreibung ist idempotent je Blockanker (V8) und fasst
+  /// ausschließlich [RestaurantData.frtFeudUntilWeekById] an; persistiert wird
+  /// der Zustand über den Snapshot des Catch-ups.
+  static void applyFrtFeud(
+    RestaurantData restaurant, {
+    required IncomingSabotageOutcome? incoming,
+    required DateTime blockAnchor,
+  }) {
+    final row = incoming;
+    if (row == null || row.frtAttackerIds.isEmpty) return;
+    final detected = row.detectedIds.toSet();
+    final week = weekIndexOf(blockAnchor);
+    final until = week + EconomyBalance.frtFeudWeeks;
+    Map<int, int>? updated;
+    for (final rivalId in row.frtAttackerIds) {
+      if (!detected.contains(rivalId)) continue;
+      final blamed = attributedRivalId(restaurant, rivalId, blockAnchor);
+      final current = restaurant.frtFeudUntilWeekById[blamed];
+      if (current == null || current < until) {
+        // Bewusst eine **frische** Map statt In-Place-Mutation: So bleibt der
+        // Aufruf auch dann sicher, wenn der Spielstand eine unveränderliche Map
+        // mitbringt (z. B. `const {}` aus Tests oder einer kompakten
+        // Deserialisierung).
+        updated ??= Map.of(restaurant.frtFeudUntilWeekById);
+        updated[blamed] = until;
+      }
+    }
+    if (updated != null) restaurant.frtFeudUntilWeekById = updated;
+  }
+
   /// Durchschnittliche `shadiness` des Kampfpersonals des Restaurants (0–100).
   ///
   /// Charaktere ohne Persönlichkeits-Profil (`personalityId < 0`) zählen nicht;
@@ -711,7 +845,9 @@ class RivalService {
   ///
   /// Ø-`shadiness` des Personals × `incomingDetectionShadinessToPercent`/100
   /// plus Kompetenz-Bonus des passiven Sicherheitschefs
-  /// (`securityChiefDetectionBonusPercentPerCompetence`), auf `100` gedeckelt.
+  /// (`securityChiefDetectionBonusPercentPerCompetence`) plus dem
+  /// Erweiterungs-Zuschlag der **Sicherheitstechnik** (`security`, § 10;
+  /// `detectionBonus` je Stufe), auf `100` gedeckelt.
   static int incomingDetectionPercent(RestaurantData restaurant) =>
       ((averageShadiness(restaurant) *
                       EconomyBalance.incomingDetectionShadinessToPercent /
@@ -719,17 +855,29 @@ class RivalService {
                   .round() +
               StaffRoleService.securityChiefDetectionBonusPercent(
                 restaurant.staffEntries,
-              ))
+              ) +
+              (EconomyService.upgradeEffects(restaurant.upgrades).detectionBonus *
+                      100)
+                  .round())
           .clamp(0, 100);
 
   /// Rivalen-IDs aller Angreifer des Blocks [blockAnchor] (Roster-Reihenfolge).
+  ///
+  /// Die Angriffs-Wahrscheinlichkeit kommt aus [incomingChancePercent] – so
+  /// wirkt der Sabotage-Ziel-Schutz der Auszeichnung (`stars`, § 10) auf
+  /// **alle** Konsumenten (Auflösung, Entdeckung, FRT-Attribution, Rangliste)
+  /// gleichzeitig.
   static List<int> incomingAttackerIds(
     RestaurantData restaurant,
     DateTime blockAnchor,
-  ) => [
-    for (final rival in rosterOf(restaurant.district))
-      if (incomingAttemptOccurs(rival.id, blockAnchor)) rival.id,
-  ];
+  ) {
+    final chance = incomingChancePercent(restaurant);
+    return [
+      for (final rival in rosterOf(restaurant.district))
+        if (incomingAttemptOccurs(rival.id, blockAnchor, chancePercent: chance))
+          rival.id,
+    ];
+  }
 
   /// Rivalen-IDs der **entdeckten** Angreifer des Blocks [blockAnchor].
   static List<int> detectedAttackerIds(
@@ -1022,8 +1170,15 @@ class RivalService {
         : {for (final s in sim.activeStates) s.rival.id};
     double ppOf(RivalRestaurant r) => sim == null
         ? rivalPowerProjection(r, playerPp: playerPp)
-        : simulatedRivalPp(r, playerPp: playerPp, weekIndex: weekIndex!);
+        : _ppUnderFrtPressure(
+            r,
+            playerPp: playerPp,
+            weekIndex: weekIndex!,
+          );
     final pps = <int, double>{for (final r in roster) r.id: ppOf(r)};
+    // C2: Die Fehde-Länge ist in Wochen-Indizes gespeichert; ohne expliziten
+    // [weekIndex] zählt der Index des aktuellen Wochenankers.
+    final feudWeek = weekIndex ?? weekIndexOf(restaurant.weekAnchorAt);
     final rows = <RivalStanding>[
       RivalStanding(
         id: kPlayerStandingId,
@@ -1041,6 +1196,7 @@ class RivalService {
     for (final r in roster) {
       final rawPp = pps[r.id]!;
       final rivalPp = rawPp.round();
+      final stance = stanceForRival(rivalPp: rivalPp, playerPp: playerPp);
       rows.add(
         RivalStanding(
           id: r.id,
@@ -1050,7 +1206,12 @@ class RivalService {
             EconomyBalance.powerProjectionDomainMax,
           ),
           isPlayer: false,
-          stance: stanceForRival(rivalPp: rivalPp, playerPp: playerPp),
+          // C2: Eine laufende FRT-Fehde stimmt den behaupteten Rivalen um eine
+          // Stufe feindlicher – sichtbar in der Rangliste **und** im Gefecht
+          // (`battleParticipants`).
+          stance: feudActiveFor(restaurant, r.id, feudWeek)
+              ? escalateStance(stance)
+              : stance,
           insolvent: rawPp < EconomyBalance.rivalPpBankruptThreshold,
           rank: 0,
         ),
@@ -1170,16 +1331,22 @@ class RivalService {
       participantCount: ids.length,
       availableSpawns: availableSpawns,
     );
+    // C2: Eine laufende FRT-Fehde stimmt den behaupteten Rivalen auch im
+    // Gefecht eine Stufe feindlicher (konsistent zur Rangliste).
+    final feudWeek = weekIndexOf(restaurant.weekAnchorAt);
     return [
       for (var i = 0; i < ids.length; i++)
         () {
           final rival = byId(roster, ids[i])!;
           final pp = rivalPowerProjection(rival, playerPp: playerPp);
           final rounded = pp.round();
+          final stance = stanceForRival(rivalPp: rounded, playerPp: playerPp);
           return BattleRivalParticipant(
             rivalId: rival.id,
             name: rival.name,
-            stance: stanceForRival(rivalPp: rounded, playerPp: playerPp),
+            stance: feudActiveFor(restaurant, rival.id, feudWeek)
+                ? escalateStance(stance)
+                : stance,
             teamSize: battleTeamSizeForPp(pp),
             spawnIndex: spawns[i],
           );

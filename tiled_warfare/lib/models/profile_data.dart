@@ -27,9 +27,12 @@ const int kDefaultRestaurantBudget = EconomyBalance.startBudget;
 /// Version 10 = FRT/Korruption (Kapitel 14): `RestaurantData.corruptionPercent`,
 /// `districtLost` und `districtLostAt` (additiv/tolerant – fehlende Felder
 /// ergeben `0`/`false`/`null`).
+/// Version 11 = FRT-Fehde (Kapitel 14, **C2**):
+/// `RestaurantData.frtFeudUntilWeekById` (Rivale → letzter Wochen-Index der
+/// Fehde; additiv/tolerant – fehlend ⇒ leere Map).
 /// Die Deserialisierung ist bewusst toleranter als die Version: fehlende oder
 /// unbekannte Felder führen zu Defaults statt zu Fehlern.
-const int kProfileSchemaVersion = 10;
+const int kProfileSchemaVersion = 11;
 
 /// Liest eine Liste von JSON-Objekten tolerant nach [T] (V6).
 ///
@@ -572,6 +575,15 @@ class RestaurantData {
   /// Zeitpunkt, an dem der Stadtteil verloren ging (optional, für Anzeige).
   DateTime? districtLostAt;
 
+  /// Kapitel 14 (**C2**): laufende **FRT-Fehden** – Rivale → letzter
+  /// Wochen-Index, bis zu dem seine Haltung zum Spieler um **eine Stufe**
+  /// Richtung Feind verschoben ist.
+  ///
+  /// Der Wert ist ein **Wochen-Index** (`RivalService.weekIndexOf`), kein Datum:
+  /// Damit ist die Wirkung unabhängig von der Uhr reproduzierbar und läuft nicht
+  /// in Datums-Rundungsdrift (V8). Alt-Stände ohne Feld laden mit leerer Map.
+  Map<int, int> frtFeudUntilWeekById;
+
   RestaurantData({
     this.id = -1,
     required this.name,
@@ -595,10 +607,12 @@ class RestaurantData {
     this.corruptionPercent = 0,
     this.districtLost = false,
     this.districtLostAt,
+    Map<int, int>? frtFeudUntilWeekById,
   }) : staff = staff ?? [],
        medics = medics ?? [],
        supportStaff = supportStaff ?? [],
        staffEntries = _resolveStaffEntries(staffEntries, supportStaff),
+       frtFeudUntilWeekById = frtFeudUntilWeekById ?? {},
        upgrades = upgrades ?? {};
 
   /// Vereinheitlicht [staffEntries] und die Alt-Bestände aus [supportStaff]
@@ -650,6 +664,11 @@ class RestaurantData {
     'districtLost': districtLost,
     if (districtLostAt != null)
       'districtLostAt': districtLostAt!.toIso8601String(),
+    if (frtFeudUntilWeekById.isNotEmpty)
+      'frtFeudUntilWeekById': {
+        for (final entry in frtFeudUntilWeekById.entries)
+          entry.key.toString(): entry.value,
+      },
   };
 
   /// Tolerante Deserialisierung (V6): fehlende/falsche Felder → Defaults.
@@ -678,7 +697,23 @@ class RestaurantData {
     corruptionPercent: _clampCorruption(readDouble(json['corruptionPercent'])),
     districtLost: readBool(json['districtLost']) ?? false,
     districtLostAt: readDateTime(json['districtLostAt']),
+    frtFeudUntilWeekById: _feudsFromJson(json['frtFeudUntilWeekById']),
   );
+
+  /// Liest die laufenden FRT-Fehden tolerant (V6/C2): Schlüssel und Werte
+  /// dürfen als Zahl **oder** String vorliegen; unlesbare Paare werden
+  /// übersprungen statt zu werfen.
+  static Map<int, int> _feudsFromJson(dynamic json) {
+    final result = <int, int>{};
+    if (json is Map) {
+      json.forEach((key, value) {
+        final rivalId = key is int ? key : int.tryParse(key.toString());
+        final week = value is int ? value : int.tryParse(value.toString());
+        if (rivalId != null && week != null) result[rivalId] = week;
+      });
+    }
+    return result;
+  }
 
   /// Klemmt einen (tolerant gelesenen) Korruptionswert auf 0–100 (V6).
   static double _clampCorruption(double? value) {
@@ -735,6 +770,7 @@ class RestaurantData {
         corruptionPercent: corruptionPercent,
         districtLost: districtLost,
         districtLostAt: districtLostAt,
+        frtFeudUntilWeekById: Map.of(frtFeudUntilWeekById),
       );
 
   @override

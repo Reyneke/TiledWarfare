@@ -124,6 +124,11 @@
     "placeholders": { "district": { "type": "String" } }
   },
   "districtLostMessage": "Der Stadtteil {district} ist verloren (Korruption). Solange er nicht befreit ist, kann dort kein Restaurant gegründet werden.",
+  "districtLiberatedMessage": "Der Stadtteil {district} ist befreit! Die Korruption ist unter die Verlustschwelle gefallen – dort kann wieder gegründet werden.",
+  "@districtLiberatedMessage": {
+    "description": "Hinweis im Gefechtsergebnis, wenn ein verlorener Stadtteil befreit wurde (C2)",
+    "placeholders": { "district": { "type": "String" } }
+  },
   "@districtLostMessage": {
     "description": "Error when founding in a corrupted (lost) district",
     "placeholders": { "district": { "type": "String" } }
@@ -1116,6 +1121,14 @@
   "@upgradeLounge": { "description": "Erweiterung: Ruheraum/Lounge" },
   "upgradeCertification": "Zertifizierung/Hygiene-Siegel",
   "@upgradeCertification": { "description": "Erweiterung: Zertifizierung/Hygiene-Siegel" },
+  "upgradeVault": "Tresor/Kassenraum",
+  "@upgradeVault": { "description": "Erweiterung: Tresor/Kassenraum" },
+  "upgradeSchool": "Schulungsraum/Trainingsküche",
+  "@upgradeSchool": { "description": "Erweiterung: Schulungsraum/Trainingsküche" },
+  "upgradeSecurity": "Sicherheitstechnik/Alarmanlage",
+  "@upgradeSecurity": { "description": "Erweiterung: Sicherheitstechnik/Alarmanlage" },
+  "upgradeStars": "Sterneküche/Auszeichnung",
+  "@upgradeStars": { "description": "Erweiterung: Sterneküche/Auszeichnung" },
   "upgradeLevel": "Stufe {level}/{max}",
   "@upgradeLevel": {
     "description": "Ausbaustufe einer Erweiterung",
@@ -1197,6 +1210,11 @@
   "@catchUpRivalSabotageLoss": {
     "description": "Unentdeckte Rivalen-Sabotage schöpft Blockeinkommen ab (V13, Kapitel 13)",
     "placeholders": { "loss": { "type": "int" } }
+  },
+  "catchUpFrtRivalAttacks": "FRT-Angriffe auf Rivalen: {count}",
+  "@catchUpFrtRivalAttacks": {
+    "description": "Wochenbericht: Anzahl der von der FRT offen angegriffenen Rivalen (Kapitel 14, Q7b)",
+    "placeholders": { "count": { "type": "int" } }
   },
   "catchUpPrepaidFeatureCost": "Feature-Einmalkosten (bei Aktivierung gebucht): −{cost} €",
   "@catchUpPrepaidFeatureCost": {

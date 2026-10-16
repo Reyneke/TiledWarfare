@@ -31,15 +31,15 @@ Der Sprint schließt diese Lücke: Das Restaurantmanagement läuft jetzt cross-p
 | `4_Zustaende.md` | V4 (→ P4) | ✅ | Ein Bildzustand (`hasCustomImage`/`headerImagePath`), `_pickImage` atomar |
 | `5_Halbfertige_Features.md` | V5 (→ P5) | ✅ | Fortbildung Line Cook aktiviert, Teamarzt-Fuzzy-Engine entfernt, toter Code entfernt |
 | `6_Persistenz.md` | V6 (→ P6) | ✅ | Eine Datei je Spielstand + Verzeichnis-Scan, atomares Schreiben + `.bak`, sichtbare Fehler, Schema-Versionierung |
-| `7_Wirtschaftswerte_zentralisieren.md` | V7 (→ P7) | ✅ | `EconomyBalance` als einzige Balance-Quelle (L1–L8 umgesetzt, L9 zurückgestellt) |
+| `7_Wirtschaftswerte_zentralisieren.md` | V7 (→ P7) | ✅ | `EconomyBalance` als einzige Balance-Quelle (L1–L8 umgesetzt, L9 zurückgestellt); der **Werte-Pass (P7, 4.2/#10)** hat die Tuning-Größen durchgesehen (u. a. ist `negativeLimit` aus `startBudget` abgeleitet und per Vertrag gesichert) |
 | `8_Echtzeit-Zeitsystem.md` | V8 (→ V2/V3) | ✅ | Anker `lastSeenAt`/`weekAnchorAt`, Tagesschritt, 60-s-UI-Tick, idempotenter Catch-up |
-| `9_Personal.md` | V9 (→ P9) | ✅ | Attribute, Persönlichkeit (`PersonalityTraits`), Ressourcen, Stress/Ruhe, Host-Fuzzy verdrahtet |
-| `10_Karrierepfade.md` | V10 | ✅ | Ränge bis Chef de partie, Stationen, Doppelrolle formell/aktiv, Hilfs-/Service-Rollen, Wochenlöhne, Personal-Transfer |
-| `11a_Hilfs_und_Servicerollen.md` | V11–V13 | ~ | Support-Rollen + Verwaltungsrollen (Chefsekretärin, Rechtsanwalt, Buchhalter, Oberkellner, Personalchef, Lagerist, Gewerkschaftschef, Sicherheitschef) + Features (PR-Kampagne); die früher offene **Strafenquelle „Behörden/Inspektionen“ ist entschieden & umgesetzt (P3)** (`InspectionService`); **Detail-Entscheidungen E1/E2/E6 entschieden (P4, `11a` E18)** |
-| `11b_Restauranterweiterungen.md` | V2 § 10 / V1-Paket | ~ | 10 Erweiterungen spezifiziert; `cellar`, `coldRoom`, `firstAid`, `lounge` und **`certification` (P3, inkl. Behörden-Inspektion als Strafenquelle)** umgesetzt; `vault`, `school`/`security`, `stars` offen |
+| `9_Personal.md` | V9 (→ P9) | ✅ | Attribute, Persönlichkeit (`PersonalityTraits`), Ressourcen, Stress/Ruhe, Host-Fuzzy verdrahtet; **Werte-Pass (P7):** `ruheMargin`, Sink-Werte, Trait-Prozente und Lohn-Spanne sind bestätigt und als Vertrag festgeschrieben |
+| `10_Karrierepfade.md` | V10 | ✅ | Ränge bis Chef de partie, Stationen, Doppelrolle formell/aktiv, Hilfs-/Service-Rollen, Wochenlöhne, Personal-Transfer; **Werte-Pass (P7):** die Varianten-Familien wurden entzerrt (`Grillardin`/`Friturier` nicht mehr dominierend, `Potager`/`Légumier` unterscheidbar) und die Stations-/Aura-Regeln als Vertrag festgeschrieben |
+| `11a_Hilfs_und_Servicerollen.md` | V11–V13 | ✅ | Support-Rollen + Verwaltungsrollen (Chefsekretärin, Rechtsanwalt, Buchhalter, Oberkellner, Personalchef, Lagerist, Gewerkschaftschef, Sicherheitschef) + Features (PR-Kampagne); die früher offene **Strafenquelle „Behörden/Inspektionen“ ist entschieden & umgesetzt (P3)** (`InspectionService`); **Detail-Entscheidungen E1/E2/E6 entschieden (P4, `11a` E18)**; die **Zuordnung Rolle ↔ Erweiterung** ist seit **P7** als Anker-Effekt-Vertrag in `balance_sanity_test.dart` gesichert |
+| `11b_Restauranterweiterungen.md` | V2 § 10 / V1-Paket | ✅ | 14 Erweiterungen spezifiziert und **umgesetzt**: `cellar`, `coldRoom`, `firstAid`, `lounge`, `certification` (P3, inkl. Behörden-Inspektion als Strafenquelle) sowie **`vault`, `school`, `security`, `stars` (P3)**; offen nur die nicht entschiedenen Zeitfenster der Gruppe C (`weeklyMenu`, `terrace`, `delivery`) |
 | `12_Power_Projection.md` | – | ✅ | Power Projection (Fuzzy), Stadtteil-Ranking, PP-Einkommensfaktor umgesetzt & validiert |
-| `13_Gegner_Restaurants.md` | – | ✅ | Rivalen-Roster + Sabotage-Minimal-Modul (V11/V13), Mini-PP, Rangliste, Stance, Gefechtsteilnahme **und** die **Voll-Simulation** des Wochen-Ticks (persönlichkeitsgetriebener Rivalen-Zustand, Roster-Dynamik mit Pleite/Nachrücken samt 1-Tick-Verzögerung, Ranking-Badge) umgesetzt; offen nur noch Fein-Tuning |
-| `14_FRT.md` | – | ~ | FRT-Triumvirat, Korruptionsmeter und Sabotagen-Modell; **Kern umgesetzt**: `FrtService`, `frt*`-Werte, `RestaurantData`-Felder (Schema 10) und Wochen-Tick-Integration (Anstieg, Einkommens-Malus, entschädigungsloses Schließen) grün getestet; offen: Laufzeit-Verdrahtung (Monster-Skalierung in `object_host.dart`, Fehl-Attribution/Senkung in `rival_service.dart`), Gründungssperre + Erholung, UI-Strings, Werte-Tuning (Q2) und PP-Formel (Q8) |
+| `13_Gegner_Restaurants.md` | – | ✅ | Rivalen-Roster + Sabotage-Minimal-Modul (V11/V13), Mini-PP, Rangliste, Stance, Gefechtsteilnahme **und** die **Voll-Simulation** des Wochen-Ticks (persönlichkeitsgetriebener Rivalen-Zustand, Roster-Dynamik mit Pleite/Nachrücken samt 1-Tick-Verzögerung, Ranking-Badge) umgesetzt; das Fein-Tuning (Rivalen-Anzahl, PP-Domäne/-Streuung, Ranglisten-Sortierung) ist im **P7-Werte-Pass ✅** bestätigt und festgeschrieben |
+| `14_FRT.md` | – | ✅ | FRT-Triumvirat, Korruptionsmeter und Sabotagen-Modell; **Kern, Laufzeit-Verdrahtung und der C2-Feinschliff umgesetzt**: `FrtService`, `frt*`-Werte, `RestaurantData`-Felder (Schema 10 → **11**: Fehde), Wochen-Tick-Integration (Anstieg, Einkommens-Malus, entschädigungsloses Schließen), Monster-Skalierung in `object_host.dart`, Fehl-Attribution **und Fehde** (`applyFrtFeud`/`escalateStance`) in `rival_service.dart`, ranglose Angriffe auf Rivalen (Q7b), Befreiung mit UI-Hinweis; Werte-Tuning (Q2) im **P7-Werte-Pass ✅** bestätigt |
 
 ---
 
@@ -80,14 +80,14 @@ Der Sprint schließt diese Lücke: Das Restaurantmanagement läuft jetzt cross-p
 | 10 | **Gegenwirkungs-Formel:** exakte Formel für den Konkurrenzdruck- bzw. `powerProjectionIncomeFactor`. **Entschieden/umgesetzt:** zweite Mini-Fuzzy-Stufe (`PowerProjectionService.competitionPressureFactor`, Span 0.85–1.15) über dem relativen PP-Abstand zum Feld-Ø; `faktorEffektiv = PP-Faktor × Konkurrenzdruck` (`effectiveIncomeFactor`), gespeist aus dem **aktiven** Rivalen-Ø der Wochen-Simulation. | `13` → 5 | Umgesetzt (Fuzzy) |
 | 11 | **Folgen unentdeckter Sabotage:** V13 bucht die Einkommens-Abschöpfung (10 % je unentdecktem Angreifer, Deckel 30 %); offen bleiben Kunden-/Ansehensverlust, Erweiterungsschäden („Reparatur“), höhere laufende Kosten oder Strafzahlungen – hier greift später die „Schwere der Tat“. | `13` → 7 | Vorschlag, abgesehen davon, dass eine unentdeckte Sabotage erfolgreich war und damit volle Wirkung zeigt. |
 | 12 | **FRT-Werte-Tuning (Q2):** konkrete Beträge für `frtCorruptionPerWeekPercent` (Vorschlag 1), `frtCorruptionReducePer*`, `frtMonsterStrengthScalePercent`, `frtCorruptionIncomePenaltyMaxPercent`, `frtPowerProjectionPenaltyPercent` sowie Sabotage-/Eliminierungs-Anstiege. | `14_FRT.md` → Offene Fragen 1 | Vorschlag? |
-| 13 | **FRT – Erholung verlorener Stadtteile (Q4b):** „Befreiungs-Gefechte“ zulassen oder natürlichen Verfall einführen (ohne eigenes Restaurant fehlt eine Senkungsquelle)? | `14` → 2 | Befreiungsgefechte sind erlaubt. |
+| 13 | **FRT – Erholung verlorener Stadtteile (Q4b):** „Befreiungs-Gefechte“ zulassen oder natürlichen Verfall einführen (ohne eigenes Restaurant fehlt eine Senkungsquelle)? | `14` → 2 | Befreiungsgefechte sind erlaubt. **Umgesetzt (C2):** `ObjectProfile.reduceCorruption` meldet die Befreiung, `ScreenBattleResult` zeigt `districtLiberatedMessage`, die Q4-Hysterese hebt `districtLost` unter der Schwelle auf. |
 | 14 | **FRT – Monster-Skalierung (Q3b):** Skalieren auch Bewegungs-/LP-Werte oder nur Angriff/Verteidigung/Schaden; Rundung je Stat deterministisch festhalten? | `14` → 3 | Alle Werte skalieren. |
 | 15 | **FRT – Power-Projection-Formel (Q8):** exakte Formel und Ort des Korruptions-Abzugs am PP-Einkommensfaktor. | `14` → 4 | Vorschlag? Eventuell Fuzzy-Logik? |
-| 16 | **FRT – Fehl-Attribution (Q6b):** deterministische Wahl der „behaupteten“ Rivalen-ID, Entdeckungswahrscheinlichkeit und ob FRT-Sabotage zusätzlich die V13-Abschöpfung auslöst. | `14` → 5 | Der Rivale, welcher in direkter Konkurrenz zum betroffenen Ziel steht, sowohl nach oben als auch nach unten. |
-| 17 | **FRT – Stance/Angriffsziel (Q7b):** wie Rivalen eine ranglose Fraktion angreifen (Gefecht/Gegensabotage) und welche Schwellen/Parameter dazu in `EconomyBalance` kommen. | `14` → 6 | Die FRT bzw. ihre Truppen gelten für alle als Feind. |
+| 16 | **FRT – Fehl-Attribution (Q6b):** deterministische Wahl der „behaupteten“ Rivalen-ID, Entdeckungswahrscheinlichkeit und ob FRT-Sabotage zusätzlich die V13-Abschöpfung auslöst. | `14` → 5 | Der Rivale, welcher in direkter Konkurrenz zum betroffenen Ziel steht, sowohl nach oben als auch nach unten. **Umgesetzt (C2):** `attributedRivalId` (Roster-Index per CRC32), Entdeckungswahrscheinlichkeit jetzt über die **Sicherheitstechnik** (`security`, P3) mitgehoben; eine unentdeckte FRT-Sabotage zählt weiterhin wie jede unentdeckte Rivalen-Sabotage (Abschöpfung **und** Korruption). |
+| 17 | **FRT – Stance/Angriffsziel (Q7b):** wie Rivalen eine ranglose Fraktion angreifen (Gefecht/Gegensabotage) und welche Schwellen/Parameter dazu in `EconomyBalance` kommen. | `14` → 6 | Die FRT bzw. ihre Truppen gelten für alle als Feind. **Umgesetzt (C2):** die FRT greift Rivalen **offen** an (`frtAttacksRival`/`frtRivalAttackPpLoss`, `frtRivalAttackSharePercent`/`frtRivalAttackPpLoss`), deren PP sinkt sichtbar in der Rangliste; eine aufgedeckte Fehl-Attribution erzeugt die persistente **Fehde** (`frtFeudUntilWeekById`, `frtFeudWeeks`). |
 | 18 | **Strafenquelle „Behörden/Inspektionen“ (P3):** Welche Quelle erzeugt passive Strafen, damit die Erweiterung `certification` (Rechtsanwalt) wirkt – Behörden-Inspektion, Rufschädigung oder beides? | `11a` → Offene Punkte (Rechtsanwalt), `11b` Gruppe D | **Entschieden/umgesetzt:** deterministische **Behörden-Inspektion** (`InspectionService`, CRC32 aus Restaurant-ID + Blockanker, alle `inspectionIntervalWeeks` Blöcke, Grundstrafe + Korruptions-Zuschlag nach Kap. 14); gebucht als `penaltyCosts` im Wochen-Tick, gemindert **additiv** (Rechtsanwalt + Winkelzug + Zertifizierung, 100 %-Deckel). Rufschädigung bleibt offen. |
 
-> **Umsetzungsstand (Kap. 12–14):** Die Zeilen 1–10 (PP-Eingänge, PP/Rang der Rivalen, Gegenwirkungs-Formel, Rivalen-Skalierung und **Voll-Simulation**) sind in `12`/`13` umgesetzt – Zeile 7 über `RivalService.simulateField`/`activeRosterOf` (persönlichkeitsgetriebener Zustand, Pleite/Nachrücken mit 1-Tick-Verzögerung) und die im Wochen-Tick genutzte `standings`. Zeilen 13/14 (Erholung, Monster-Skalierung „alle Werte“) sind **verdrahtet** – `FrtService.monsterStrengthFactor`/`scaleStat` speisen `ObjectHost.monsterStrengthFactor` (Zombies **und** Spawner). Zeile 12 (FRT-Werte-Tuning Q2) und Zeile 15 (PP-Formel Q8) sind entschieden und in `EconomyBalance` bzw. `GameClockService.catchUp` verankert; Zeile 16/17 (FRT-Fehl-Attribution/Angriffsziel) ist als deterministische Fehl-Attribution in `rival_service.dart` verdrahtet; **Zeile 18** ist als passive **Behörden-Inspektion** (`InspectionService`, P3) samt `penaltyCosts`-Buchung im Wochen-Tick umgesetzt. **Offen bleiben:** reines Zahlen-Tuning (Zeile 6) sowie der C2-Feinschliff von Q6b/Q7b.
+> **Umsetzungsstand (Kap. 12–14):** Die Zeilen 1–10 (PP-Eingänge, PP/Rang der Rivalen, Gegenwirkungs-Formel, Rivalen-Skalierung und **Voll-Simulation**) sind in `12`/`13` umgesetzt – Zeile 7 über `RivalService.simulateField`/`activeRosterOf` (persönlichkeitsgetriebener Zustand, Pleite/Nachrücken mit 1-Tick-Verzögerung) und die im Wochen-Tick genutzte `standings`. Zeilen 13/14 (Erholung, Monster-Skalierung „alle Werte“) sind **verdrahtet** – `FrtService.monsterStrengthFactor`/`scaleStat` speisen `ObjectHost.monsterStrengthFactor` (Zombies **und** Spawner). Zeile 12 (FRT-Werte-Tuning Q2) und Zeile 15 (PP-Formel Q8) sind entschieden und in `EconomyBalance` bzw. `GameClockService.catchUp` verankert; Zeile 16/17 (FRT-Fehl-Attribution/Angriffsziel) ist als deterministische Fehl-Attribution in `rival_service.dart` verdrahtet; **Zeile 18** ist als passive **Behörden-Inspektion** (`InspectionService`, P3) samt `penaltyCosts`-Buchung im Wochen-Tick umgesetzt. **Offen bleiben:** reines Zahlen-Tuning (Zeile 6) sowie der C2-Feinschliff von Q6b/Q7b. **Nachgezogen (C2, P2):** Die Zeilen 13, 16 und 17 sind umgesetzt – persistente **Fehde** (`frtFeudUntilWeekById`, Schema **11**) mit Stance-Verschiebung in Rangliste/Gefecht, **ranglose FRT-Angriffe auf Rivalen** (Q7b, PP-Schwund mit Pleite-Boden) und die **Befreiung** verlorener Stadtteile samt UI-Hinweis; damit bleibt in diesem Kapitel nur noch das Werte-Tuning (Zeile 12/Q2) – das im **P7-Werte-Pass ✅** abgeschlossen wurde (FRT-Maluskurve/Korruptionswerte unverändert bestätigt, alle `frt*`-Verträge grün).
 
 ### 4.2 Offene Implementierungs- und Folgepunkte (Kapitel 1–11)
 
@@ -101,8 +101,8 @@ Der Sprint schließt diese Lücke: Das Restaurantmanagement läuft jetzt cross-p
 | 6 | **Personal:** Teamdynamik (Affinitäten/Konflikte zwischen Persönlichkeiten); eigene Klassen-Profile für Sous-chef/Pâtissier. **Erledigt (P5):** `TeamDynamicsService` (deterministische Paar-Affinität aus Persönlichkeits- **und** Charakter-IDs, RNG-frei) wirkt additiv auf `attractivenessOf`/`satisfactionOf`; Sous-chef-Profil (`ObjectSousChef`, V10) und neues Support-Profil `ObjectPatissier` (Rang `chef_de_partie`, Station `kStationPatissier`, eigene `patissierStats`, kein Schema-Feld). | `9` → Offene Punkte |
 | 7 | **Karrierepfade-Abweichungen:** Nachrücken des aktiven Chefs (`nachrueckenHeadChef`) und Tournant-Erleichterung (`tournantExhaustionReliefPercent`, 25 %) umgesetzt; **„Neustart des Charakters bei Level 0“ erledigt (P5):** `ObjectProfile.restartCareer` (level-abhängige Kosten, Zustands-Reset, Identitätserhalt, Nachrücken) + Bestätigungsdialog in `ScreenCharacterDetail`. | `10` → Bewusste Abweichungen |
 | 8 | **Hilfs-/Service-Rollen:** **Mehrfach-Anstellung derselben Rolle unterbunden** (`hireSupportRole`/`hireManagementRole` idempotent + UI-Sperre „Bereits angestellt“, `11a` E11; Test `role_single_employment_test.dart`). Offen: Lohn-Thriftiness, falls Rollen später Persönlichkeit erhalten; Bestätigungsdialog beim Entlassen; Taxonomie-Detailentscheidungen E1/E2/E6 (Teamarzt-Einordnung, Kategorie-Name/-Zuschnitt, Zuordnung der Erweiterungsvorschläge); Feature-Feinschliff (UI-Countdown, `WeekSettlement`-Zeile für Einmalkosten, Bestätigung vor Aktivierung). | `11a` → Offene Punkte |
-| 9 | **Erweiterungen:** `vault` (macht den Caissier wertvoll) und die offenen Wirkungs-Optionen für `school`/`security`; `stars` erst nach Klärung von 12/13. **Erledigt (P3):** `certification` (Rechtsanwalt) ist mit der **Strafenquelle Behörden/Inspektionen** (`InspectionService`, deterministisch, `penaltyCosts` im Wochen-Tick) umgesetzt. | `11a`/`11b` → Erweiterungsvorschläge |
-| 10 | **Balance-Tuning:** zahlreiche Werte (Stations-/Aura-/Buff-Werte, Lohn-Spanne, `ruheMargin`, Sink-Werte, Trait-Prozente, Rolle-Erweiterungs-Zuordnung) sind Tuning-Größen, werden in `EconomyBalance` justiert und über `balance_sanity_test.dart` abgesichert. | `10`, `11a`, `11b` |
+| 9 | **Erweiterungen:** **Erledigt (P3):** `certification` (mit der **Strafenquelle Behörden/Inspektionen**, `InspectionService`) sowie `vault` (Negativzins-Satz −10 %/Stufe), `school` (−5 % Fortbildungskosten/Stufe), `security` (+5 Prozentpunkte Entdeckung/Stufe) und `stars` (Prestige-Beitrag zur PP **und** selteneres Sabotage-Ziel) – alle als ⚙-Hooks über `upgradeEffects`-Summen, mit Kacheln, l10n und `balance_sanity_test`-Verträgen. **Offen:** nur die nicht entschiedenen Gruppe-C-Zeitfenster (`weeklyMenu`, `terrace`, `delivery`). | `11a`/`11b` → Erweiterungsvorschläge |
+| 10 | **Balance-Tuning:** zahlreiche Werte (Stations-/Aura-/Buff-Werte, Lohn-Spanne, `ruheMargin`, Sink-Werte, Trait-Prozente, Rolle-Erweiterungs-Zuordnung) sind Tuning-Größen, werden in `EconomyBalance` justiert und über `balance_sanity_test.dart` abgesichert. **✅ erledigt (P7):** Werte-Pass mit 10 neuen Verträgen in der Gruppe „Balance-Tuning: Werte-Pass (P7, 4.2/#10)“; die beiden Varianten-Familien wurden dabei korrigiert (siehe P7). | `10`, `11a`, `11b` |
 
 ### 4.3 Bewusst zurückgestellt (nicht blockierend)
 
@@ -116,11 +116,11 @@ Der Sprint schließt diese Lücke: Das Restaurantmanagement läuft jetzt cross-p
 ## 5. Nächste Schritte (Empfehlung)
 
 1. **Kapitel-12/13-Stand committen: ✅ erledigt** (Commit `4f2c300`). Die Umsetzung (PP, Rangliste, Stance, Gefechtsteilnahme) liegt in `power_projection_service.dart` sowie den Erweiterungen in `economy_balance.dart`, `game_clock_service.dart` und `rival_service.dart` (inkl. Tests). **P2-Verifikation nachgezogen:** `PowerProjectionService.effectiveIncomeFactor` (Produkt PP-Faktor × Konkurrenzdruck) und die Catch-up-Verdrahtung sind in `balance_sanity_test.dart` bzw. `power_projection_ranking_test.dart` abgesichert; die unbenutzte `competitionFromPp`-Variante wurde entfernt.
-2. **Kapitel 13 vollenden (FRT verdrahtet):** Die **Laufzeit-Verdrahtung** der FRT ist erledigt (Monster-Skalierung in `object_host.dart` aus `FrtService.monsterStrengthFactor`, Gefechts-Senkung über `ObjectProfile.reduceCorruption`, Fehl-Attribution in `rival_service.dart`, Gründungssperre/Anzeige in den Screens; Q2/Q8 in `EconomyBalance` bzw. `catchUp` verankert). **Erledigt:** die Rivalen-**Voll-Simulation** (persönlichkeitsgetriebener Zustand + Roster-Dynamik mit Pleite/Nachrücken und 1-Tick-Verzögerung in `RivalService.simulateField`/`activeRosterOf`, im Wochen-Tick über `standings` genutzt; Ranking-Badge im `ScreenRestaurant`). **Offen:** der C2-Feinschliff (persistente Fehde/Stance bei entdeckter FRT, Befreiungs-Gefechte, Q6b/Q7b-Details) und reines Zahlen-Tuning.
-3. **Kleine Folgepunkte schließen:** `team_rules.md`-Update (4.2/1), Zeitsystem-Feinschliff (4.2/5) sowie die Erweiterung `vault` (4.2/9). **Erledigt (P3):** `certification` samt **Strafenquelle** (deterministische Behörden-Inspektion, `penaltyCosts` im Wochen-Tick, additive Strafminderung) – siehe 4.1/18 und `11b`. **Erledigt (P6):** Zeitsystem-/Pfad-Feinschliff 4.2/#5 (Wochen-Detaildialog + `last_tick.json`-Journal) und 4.2/#4 (`path_provider`/AppData samt Migration).
-4. **Absicherung:** jede Änderung über `EconomyBalance` + `balance_sanity_test.dart` und die bestehenden Service-/Widget-Tests abdecken; `flutter analyze` und `flutter test` müssen grün bleiben.
-5. **4.2/#8 + `11a` – Rollen-Feinschliff: ✅ umgesetzt (P4)** – Bestätigungsdialog beim Entlassen (Ärzte/Rollen/Charaktere), Taxonomie **E1/E2/E6** entschieden (`11a` E18), Feature-Feinschliff (UI-Countdown, `prepaidFeatureCosts`-Zeile im `WeekSettlement`, Bestätigung vor Aktivierung), Lohn-Thriftiness **verworfen** (`11a` E19). Offen bleibt nur allgemeines **Zahlen-Tuning** (`4.2/#10`).
-6. **4.2/#7 + #6 – Karrierepfade & Personal: ✅ umgesetzt (P5)** – Karriere-Neustart auf Level 0 (`ObjectProfile.restartCareer` + Dialog), Teamdynamik (`TeamDynamicsService` auf Attraktivität/Zufriedenheit) und das Support-Profil `ObjectPatissier`. **4.2/#5 + #4 – Zeitsystem- & Pfad-Feinschliff: ✅ umgesetzt (P6)** – Wochen-Detaildialog, `last_tick.json`-Journal, `path_provider`/AppData samt Migration. Nächste offene Pakete: **P1** (Rivalen-Voll-Simulation, falls noch nicht abgeschlossen), **P3** (`vault`/`school`/`security`/`stars`) und **P7** (Balance-Tuning).
+2. **Kapitel 13 vollenden (FRT verdrahtet):** Die **Laufzeit-Verdrahtung** der FRT ist erledigt (Monster-Skalierung in `object_host.dart` aus `FrtService.monsterStrengthFactor`, Gefechts-Senkung über `ObjectProfile.reduceCorruption`, Fehl-Attribution in `rival_service.dart`, Gründungssperre/Anzeige in den Screens; Q2/Q8 in `EconomyBalance` bzw. `catchUp` verankert). **Erledigt:** die Rivalen-**Voll-Simulation** (persönlichkeitsgetriebener Zustand + Roster-Dynamik mit Pleite/Nachrücken und 1-Tick-Verzögerung in `RivalService.simulateField`/`activeRosterOf`, im Wochen-Tick über `standings` genutzt; Ranking-Badge im `ScreenRestaurant`). **Erledigt (P2/C2):** der C2-Feinschliff – persistente Fehde (`frtFeudUntilWeekById`, Schema 11) samt Stance-Verschiebung, ranglose FRT-Angriffe auf Rivalen (Q7b) und Befreiungs-Hinweis. **Erledigt (P7):** reines Zahlen-Tuning – Fehde-Dauer (4 Wochen), Angriffsanteil (25 %) und PP-Verlust (4/Woche) sind unverändert bestätigt und als Vertrag festgeschrieben.
+3. **Kleine Folgepunkte schließen:** `team_rules.md`-Update (4.2/1), Zeitsystem-Feinschliff (4.2/5) sowie die Erweiterung `vault` (4.2/9). **Erledigt (P3):** `certification` samt **Strafenquelle** (deterministische Behörden-Inspektion, `penaltyCosts` im Wochen-Tick, additive Strafminderung) – siehe 4.1/18 und `11b`; ebenso **`vault`, `school`, `security` und `stars`** mit entschiedenen Wirkungen. **Erledigt (P6):** Zeitsystem-/Pfad-Feinschliff 4.2/#5 (Wochen-Detaildialog + `last_tick.json`-Journal) und 4.2/#4 (`path_provider`/AppData samt Migration).
+4. **Absicherung:** jede Änderung über `EconomyBalance` + `balance_sanity_test.dart` und die bestehenden Service-/Widget-Tests abdecken; `flutter analyze` und `flutter test` müssen grün bleiben. **✅ (P7):** Der Werte-Pass hat genau das getan – 10 neue Verträge in `balance_sanity_test.dart` (Bereiche, Monotonie, Dominanz-Freiheit, „Σ Blocktag = Wochenwert“), `flutter analyze` ohne neue Warnungen.
+5. **4.2/#8 + `11a` – Rollen-Feinschliff: ✅ umgesetzt (P4)** – Bestätigungsdialog beim Entlassen (Ärzte/Rollen/Charaktere), Taxonomie **E1/E2/E6** entschieden (`11a` E18), Feature-Feinschliff (UI-Countdown, `prepaidFeatureCosts`-Zeile im `WeekSettlement`, Bestätigung vor Aktivierung), Lohn-Thriftiness **verworfen** (`11a` E19). Das verbliebene **Zahlen-Tuning** (`4.2/#10`) ist **✅ (P7)** erledigt – inklusive der Zuordnung Rolle ↔ Erweiterung, die jetzt als Anker-Effekt-Vertrag in `balance_sanity_test.dart` steht.
+6. **4.2/#7 + #6 – Karrierepfade & Personal: ✅ umgesetzt (P5)** – Karriere-Neustart auf Level 0 (`ObjectProfile.restartCareer` + Dialog), Teamdynamik (`TeamDynamicsService` auf Attraktivität/Zufriedenheit) und das Support-Profil `ObjectPatissier`. **4.2/#5 + #4 – Zeitsystem- & Pfad-Feinschliff: ✅ umgesetzt (P6)** – Wochen-Detaildialog, `last_tick.json`-Journal, `path_provider`/AppData samt Migration. Nächste offene Pakete: **keine** – P1 (Rivalen-Voll-Simulation), P3 (`vault`/`school`/`security`/`stars`) und **P7** (Balance-Tuning) sind umgesetzt; offen ist allein die nicht entschiedene Gruppe-C-Zeitfenster-Idee aus `11b`.
 
 ---
 
@@ -145,8 +145,8 @@ Ich habe jetzt alle relevanten Dokumente und den Code-Stand analysiert. Hier ist
 
 | Offener Punkt | Ist-Stand im Code | Rest-Arbeit |
 |---|---|---|
-| 4.1/#6 Rivalen-Skalierung (`rivalCountFromPrestige`) | ✅ **umgesetzt** – `RivalService.countFor()` + `EconomyBalance` (S↔8/A↔6/B↔5/C↔4/D↔3, Caps 3–8) | Werte final bestätigen/balancieren + `balance_sanity_test`-Abdeckung |
-| 4.1/#10 Gegenwirkungs-Formel | ✅ **umgesetzt** – `PowerProjectionService.competitionPressureFactor` + `effectiveIncomeFactor` (Mini-Fuzzy, 0.85–1.15) | Formel fixieren & dokumentieren; Tuning |
+| 4.1/#6 Rivalen-Skalierung (`rivalCountFromPrestige`) | ✅ **umgesetzt** – `RivalService.countFor()` + `EconomyBalance` (S↔8/A↔6/B↔5/C↔4/D↔3, Caps 3–8) | Werte final bestätigen/balancieren + `balance_sanity_test`-Abdeckung – **✅ (P7):** Rivalen-Anzahl ist als geordneter, gedeckelter Vertrag festgeschrieben |
+| 4.1/#10 Gegenwirkungs-Formel | ✅ **umgesetzt** – `PowerProjectionService.competitionPressureFactor` + `effectiveIncomeFactor` (Mini-Fuzzy, 0.85–1.15) | Formel fixieren & dokumentieren; Tuning – **✅ (P2/P7):** Spannen/Monotonie sind in `balance_sanity_test` verankert |
 | 4.1/#7 Teil „Ranking-Badge" | ✅ **umgesetzt** – `screen_restaurant.dart:1423` (`rankingBadge`), Wochenbericht zeigt Rangliste (Z. 206–271) | nur Voll-Simulation bleibt (s. u.) |
 | 4.1/#12–17 FRT (Kern + Laufzeit) | ✅ **umgesetzt** | nur C2-Feinschliff (s. u.) |
 
@@ -162,7 +162,7 @@ Ich habe jetzt alle relevanten Dokumente und den Code-Stand analysiert. Hier ist
 8. **4.2/#5 + `8` – Zeitsystem-Feinschliff**: **L2-Detaildialog** (Wochen-Aufschlüsselung je `settlement`); **P3-Journal `last_tick.json`** (Write-ahead gegen die Save-Lücke).
 9. **4.2/#4 + `6` – Pfad-Ablösung**: `path_provider`/AppData statt relativem `profiles/`-Pfad (mit Migration).
 10. **4.2/#3 + `1` – Doku**: Aufgelöste-Restaurants-Verhalten (blockiert Stadtteil, löschbar) dokumentarisch nachziehen.
-11. **4.2/#10 – Balance-Tuning**: laufende Tuning-Größen in `EconomyBalance` (Stations-/Aura-/Buff-Werte, Löhne, `ruheMargin`, Sinks, Trait-Prozente, Rolle↔Erweiterung).
+11. **4.2/#10 – Balance-Tuning**: laufende Tuning-Größen in `EconomyBalance` (Stations-/Aura-/Buff-Werte, Löhne, `ruheMargin`, Sinks, Trait-Prozente, Rolle↔Erweiterung). **✅ erledigt (P7):** Werte durchgesehen, Stations-Varianten entzerrt und als Verträge in `balance_sanity_test.dart` festgeschrieben.
 12. **Doku-Schuld**: `15_Zusammenfassung.md` § 5 Nr. 1 veraltet (Committen ist bereits erledigt), 4.2/#1 als „erledigt" einordnen.
 13. **4.3** (bewusst zurückgestellt): L9-Layering, `dispose`-Save, Teamarzt-Fuzzy – **nur** als Entscheidung im Abschlussdokument festhalten, nicht umsetzen.
 
@@ -185,25 +185,79 @@ Ich habe jetzt alle relevanten Dokumente und den Code-Stand analysiert. Hier ist
 - **Dateien:** `lib/services/rival_service.dart`, `lib/services/game_clock_service.dart`, `lib/services/economy_balance.dart`, `lib/models/rival_restaurant.dart` (ggf. +`insolventSince`/`nextRivalIndex`), Tests s. o.
 - **Abnahme:** Rivalen handeln deterministisch im Catch-up; Pleite/Nachrücken mit 1-Tick-Lücke; `flutter test` grün.
 
-## P2 – FRT C2-Feinschliff (4.1/C2)
+## P2 – FRT C2-Feinschliff (4.1/C2) – ✅ umgesetzt
 - **Ziel:** Entdeckung hat Konsequenzen; verlorene Stadtteile sind zurückeroberbar.
 - Schritte:
-  1. **Persistente Fehde/Stance** bei *entdeckter* Fehl-Attribution: neues `RestaurantData`-Feld (Schema 10 → **11**) z. B. `frtFeudUntil`/`stanceBiasById` – bei Aufdeckung verschiebt die Stance des „behaupteten" Rivalen Richtung Feind (für N Wochen, danach Abklingen). Tolerante Deserialisierung + Migration (`profile_data_test`).
-  2. **Ranglose Angriffs-Simulation (Q7b)**: FRT „greift" auch **Rivalen** an (deterministisch je Block) → Rivalen-PP sinkt, Spieler-Ranglistenumfeld reagiert; für den Spieler nur indirekt sichtbar (Rangliste/Catch-up-Hinweis). Keine Zustandspersistenz nötig (aus Anker ableitbar).
-  3. **Befreiungs-Gefechte (Q4b)**: In `districtLost`-Stadtteilen bleibt die Karte bespielbar; Siege senken Korruption (bestehender Pfad `reduceCorruption`); fällt sie unter die Schwelle → `districtLost` wird aufgehoben (Erholung ist da), Stadtteil wieder gründbar; UI: Hinweis „Befreiung" im Wochenbericht/Gefechtsergebnis.
-- **Dateien:** `lib/models/profile_data.dart` (Schema 11), `lib/services/frt_service.dart`, `lib/services/rival_service.dart`, `screen_battle_result.dart`/`widget_caretaker.dart`, l10n (DE/EN).
-- **Tests:** `frt_runtime_test`, `profile_data_test`, `rival_stance_test` erweitern; neuer `frt_feud_test`.
+  1. **Persistente Fehde/Stance: ✅** Neues `RestaurantData`-Feld `frtFeudUntilWeekById`
+     (Rivale → letzter **Wochen-Index** der Fehde; Schema 10 → **11**, additiv/tolerant,
+     `Map.of`-Kopie beim Laden/Sichern). `RivalService.applyFrtFeud` setzt die Fehde beim
+     **Aufdecken** einer FRT-Fehl-Attribution für den *behaupteten* Rivalen
+     (`attributedRivalId`) auf `weekIndexOf(blockAnchor) + frtFeudWeeks`; die Wirkung liest
+     `RivalService.standings` **und** `battleParticipants` über `escalateStance`
+     (`ally → neutral → enemy`, `enemy` bleibt). Der Wochen-Index statt eines Datums hält die
+     Stance driftfrei (V8); nur **aufgedeckte** Angriffe erzeugen eine Fehde.
+  2. **Ranglose Angriffs-Simulation (Q7b): ✅** `RivalService.frtAttacksRival` (CRC32 je
+     Rivale/Wochen-Index) markiert offene FRT-Angriffe; `_ppUnderFrtPressure` senkt die
+     **angezeigte** Rivalen-PP in `simulateField` und `standings` um
+     `frtRivalAttackPpLoss` – mit Schwund-Boden auf `rivalPpBankruptThreshold`, damit die
+     Invarianten „aktiv ⇒ gesund" und „insolvent ⇔ unter der Schwelle" erhalten bleiben
+     (`simulatedRivalPp` selbst bleibt monoton). Sichtbar über
+     `WeeklyTickResult.frtRivalAttacks` + Wochenbericht-Zeile `catchUpFrtRivalAttacks`.
+  3. **Befreiungs-Gefechte (Q4b): ✅** Der bestehende Senkungspfad `reduceCorruption` meldet
+     jetzt die **Befreiung** (Rückgabe `bool`); `ScreenBattleResult` zeigt darauf den
+     l10n-Hinweis `districtLiberatedMessage`. Die Karte/der Stadtteil bleibt bespielbar, und
+     unter der Schwelle hebt die Q4-Hysterese `districtLost` auf (Stadtteil wieder gründbar).
+- **Abweichung/Notiz:** Die Umsetzung nutzt **ein** Feld (`frtFeudUntilWeekById`) statt der
+  skizzierten zwei (`frtFeudUntil`/`stanceBiasById`) – die Bias-Stufe ist genau
+  „eine Stufe Richtung Feind", also vollständig aus Rivale + Wochen-Index ableitbar.
+- **Dateien:** `lib/models/profile_data.dart` (Schema 11), `lib/services/rival_service.dart`,
+  `lib/services/game_clock_service.dart`, `lib/objects/object_profile.dart`,
+  `lib/screens/screen_battle_result.dart`, `lib/screens/screen_restaurant.dart`,
+  `lib/l10n/app_de.arb`/`app_en.arb`.
+- **Tests:** neuer `test/frt_feud_test.dart` (Fehde-Anwendung/-Ablauf, Rangliste/Gefecht,
+  Tick-Fortschreibung, `runCatchUp`-Persistenz, Q7b-PP samt Boden-Invariante,
+  Befreiungs-Meldung) + `test/profile_data_test.dart` (Round-trip/Toleranz von
+  `frtFeudUntilWeekById`, Schema 11).
 
-## P3 – Erweiterungen `11b` (4.2/#9)
+## P3 – Erweiterungen `11b` (4.2/#9) – ✅ umgesetzt
 - **Ziel:** Restliche Erweiterungen mit entschiedenen Wirkungen bauen; Strafenquelle ergänzen.
-- Schritte (je Erweiterung, Muster der Checkliste `11b:417`):
-  1. **`vault`** ⚙: Negativzinsen −10 %/Stufe → Hook `catchUp → applyNegativeInterest` um Prozent-Parameter erweitern; **Caissier**-Synergie additiv (−25 % auf Zinssatz) – Caissier wird als `management`-Rolle (E6) ggf. mit anlegen.
-  2. **`school`** ⚙: **Entscheidung treffen** (Empfehlung: **−5 % Fortbildungskosten/Stufe** – greift in `upgradeToLineCook`/Karriereaufstiegs-Tick und macht Ausbildungs-Rollen wertvoller, ohne die Kampf-Loop zu verwässern); Alternativ-Option als Notiz.
-  3. **`security`** ⚙: **Entscheidung treffen** (Empfehlung: **+5 % Entdeckung/Stufe** in `RivalService.incomingDetectionPercent`, additiv zum Sicherheitschef – wirkt sofort und bleibt einfach erklärbar).
-  4. **`certification`** ⚙ + **Strafenquelle Behörden/Inspektionen**: neue deterministische Wochen-Strafe (CRC32 aus Blockanker + Stadtteil; Haftungsfaktor aus Personal-/Sink-Zustand), gebucht als `penaltyCosts`; Rechtsanwalt + `certification` mindern (additiv). Damit ist `certification` nicht mehr wirkungslos.
-  5. **`stars`** ⚙: +Prestige-Beitrag/Ranglisten-Position (`districtPrestigeFor`-Hook) und selteneres Sabotage-Ziel (`RivalService`-Zielauswahl) – erst nach P1 stehen.
-- **Dateien:** `lib/services/economy_balance.dart`, `lib/services/economy_service.dart`, `lib/services/game_clock_service.dart`, `lib/services/rival_service.dart`, `lib/models/upgrade.dart`/`UpgradeSpec`-Registry, `screen_restaurant.dart` (Anzeige), l10n, `balance_sanity_test`.
-- **Tests:** je Erweiterung Wirkungs-Tests + `balance_sanity_test`-Verträge.
+- Schritte (Muster der Checkliste `11b`):
+  1. **`vault: ✅`** Negativzinsen **−10 % des Satzes/Stufe** (max. 3): `UpgradeSpec.negativeInterestReliefPerLevel`,
+     `EconomyService.applyNegativeInterest(budget, reliefPercent:)` und die Verdrahtung in
+     `GameClockService.catchUp` (Wert einmal je Catch-up) **sowie** in
+     `ObjectProfile.applyNegativeInterest`/`negativeInterestReliefPercent` (Gefechts-Pfad) –
+     beide Pfade rechnen identisch, Deckel 100 %. Der Caissier bleibt als additiver
+     `management`-Posten (`11a`) vorbereitet.
+  2. **`school: ✅`** **−5 % Fortbildungskosten/Stufe** (max. 3, 300 €/30 €) –
+     `trainingCostReductionPerLevel`; neuen Einzelquelle-Helfer
+     `ObjectProfile.promotionPurchaseCost(rank)` eingeführt und in `promoteToRank`
+     (inkl. `upgradeToLineCook`, Default-Kosten jetzt **nach** Abzug) und im
+     Bestätigungsdialog (`ScreenRestaurant._promoteCharacter`) genutzt. Die Alternative
+     „Sieg-XP +2 %" ist verworfen (XP-Seite durch PR-Kampagne belegt).
+  3. **`security: ✅`** **+5 Prozentpunkte Entdeckung/Stufe** (max. 3, 220 €/22 €) –
+     `detectionBonusPerLevel`, additiv zum Sicherheitschef in
+     `RivalService.incomingDetectionPercent`, Deckel 100. Die Alternative
+     „Abschöpfung −5 %" ist verworfen (macht die Gegenschlag-Kette wertvoller).
+  4. **`certification: ✅`** mit der **Strafenquelle Behörden/Inspektionen** (`InspectionService`,
+     deterministisch, `penaltyCosts` im Wochen-Tick, additive Minderung) – bereits vor P3
+     erledigt.
+  5. **`stars: ✅`** **beide** Effekte: `prestigeBonusPerLevel` (0.01 = +1 % der PP-Domäne je
+     Stufe → `GameClockService.powerProjectionState` addiert `prestigeBonus ×
+     powerProjectionDomainMax` PP, gedeckelt) und `sabotageTargetReliefPerLevel` (0.05 = −5
+     Prozentpunkte Angriffswahrscheinlichkeit je Stufe → `RivalService.incomingChancePercent`,
+     wirkt über `incomingAttemptOccurs(chancePercent:)` auf **alle** Konsumenten).
+- **Notiz:** `weeklyMenu`/`terrace`/`delivery` (Gruppe C, Zeitfenster) bleiben **offen** –
+  sie sind in `11b` noch nicht entschieden.
+- **Dateien:** `lib/models/restaurant_upgrade.dart` (Enum + 5 neue `UpgradeSpec`-Felder),
+  `lib/services/economy_balance.dart` (4 Specs), `lib/services/economy_service.dart`
+  (`upgradeEffects`-Summen + Zins-Parameter), `lib/services/game_clock_service.dart`,
+  `lib/services/rival_service.dart`, `lib/objects/object_profile.dart`,
+  `lib/screens/screen_restaurant.dart` (Kachel-Name + Beförderungspreis), l10n DE/EN.
+- **Tests:** `test/economy_service_test.dart` (Specs/Sätze), `test/game_clock_service_test.dart`
+  (Tresor-Zinsen im Tick, Sterneküche-PP), neuer `test/upgrades_p3_hooks_test.dart`
+  (Entdeckung, Ziel-Schutz, Beförderungspreis, Zinsen im Spielstand),
+  `test/screen_restaurant_test.dart` (vier neue Kacheln), `test/balance_sanity_test.dart`
+  (jede Spec mit entschiedenen Werten), `test/frt_feud_test.dart` (Q7b/Schema 11).
 
 ## P4 – Rollen-Feinschliff `11a` (4.2/#8) – ✅ umgesetzt
 - **Ziel:** UI-Lücken und offene Taxonomie-Entscheidungen schließen.
@@ -235,9 +289,15 @@ Ich habe jetzt alle relevanten Dokumente und den Code-Stand analysiert. Hier ist
 - **Dateien:** `lib/services/game_clock_service.dart`, `lib/screens/screen_restaurant.dart`, `lib/services/profile_storage.dart`, `lib/screens/screen_start.dart`, `lib/l10n/app_de.arb`/`app_en.arb`, `pubspec.yaml`.
 - **Validierung:** `flutter analyze` = 14 Baseline-`info`s, `flutter test` = **641 grün** (+10).
 
-## P7 – Balance-Tuning + Abschluss
+## P7 – Balance-Tuning + Abschluss – ✅ umgesetzt
 - **Ziel:** Werte-Pass + Dokument-Synchronisierung.
-- Schritte: (1) Tuning-Größen aus 4.2/#10 in `EconomyBalance` justieren (alle `balance_sanity_test`-Verträge erweitern: Bereiche, Monotonie, „Σ Blocktag = Wochenertrag" weiterhin intakt); (2) `15_Zusammenfassung.md` vollständig abgleichen (Häkchen ✅/~, 4.1/4.2-Status, § 5-Nächste-Schritte aktualisieren); (3) Schluss-Validierung: `flutter analyze` (keine neuen Warnungen) + `flutter test` grün.
+- **Schritt 1 – Werte-Pass (4.2/#10), ✅:** Die Tuning-Größen aus `10`/`11a`/`11b` wurden durchgesehen und in `EconomyBalance` justiert; dabei wurden **zwei echte Wert-Fehler** behoben:
+  - **`Grillardin`/`Friturier` (Rôtisseur-Varianten):** `Friturier` war eine strikte Obermenge von `Grillardin` (gleiche Angriffs-/Schadenswerte **plus** 10 % Reichweite) – der Nahkampf-Zweig war damit entwertet. Neu: `Grillardin` +10 % Angriff/+10 % Schaden, `Friturier` +10 % Schaden/+10 % Reichweite (jeder Zweig tauscht 5 % Schaden gegen genau eine Zweitwirkung).
+  - **`Potager`/`Légumier` (Entremétier-Varianten):** bis dahin **identisch** – die Stationswahl war wirkungslos. Neu: `Potager` trägt die „Suppen-/Flächenwirkung“ als **Aura-Schaden** (+5 % Aura-Schaden zusätzlich zur Aura-Verteidigung), `Légumier` bündelt den „Zutaten“-Nutzen in der **Team-Aura** (+10 % Aura-Verteidigung statt eigener Zweitwirkung).
+  - **Unverändert bestätigt** (und nun als Vertrag festgeschrieben): Lohn-Spanne ±20 % (`thriftinessWageSpread`, symmetrisch für Brigade **und** Teamarzt), Aufstiegs-Gate (Aufstiegskosten relativ zum Lohn steigen mit dem Rang), Rollen-Lohn-Korridore (Hilfsrolle 50–200 €, Verwaltung 100–300 €, Verwaltung als teurere Kategorie), `ruheMargin = 20` (tiefer als die erste Stress-Staffel, für den Median-Zielwert 50 erreichbar), Sink-Werte (5/Tag, 10/Einsatz = zwei Ruhetage; eine Woche ohne Gefecht räumt keinen Median-Charakter leer), Trait-Prozente (±15 % Kampf-Trait ≤ Stations-Deckel, Varianz exakt ±20 über `personalityVarianceModulo = 2 × range + 1`, kollisionsfreie Profil-Sockel), Erschöpfungs-Spirale (~35/70 pp pro Nullwoche bleibt in der W100-Domäne, Sink-Erleichterung auf 100 % gedeckelt), Rolle ↔ Erweiterung (jede Zuordnung aus `11a` trägt ihren Anker-Effekt, jeder Hebel gehört genau einer Erweiterung).
+- **Schritt 2 – Dokument-Synchronisierung, ✅:** `15_Zusammenfassung.md` abgeglichen (Häkchen ✅, 4.1/4.2-Status, § 5); zusätzlich in diesem Pass: `10_Karrierepfade.md` (Stations-Tabelle + Tuning-Regeln der Varianten), `9_Personal.md` (Balance-Zahlen + Verträge), `11a_Hilfs_und_Servicerollen.md` (Zuordnung Rolle ↔ Erweiterung abgesichert; `vault`/`security` als umgesetzt nachgezogen) sowie `11b_Restauranterweiterungen.md` und `doc/rules/team_rules.md` (aus den Vorpaketen).
+- **Schritt 3 – Schluss-Validierung, ✅:** `flutter analyze` = 14 Baseline-`info`s (keine neuen Warnungen); `flutter test` = **695 grün** (`balance_sanity_test.dart` wuchs von 56 auf 66 Tests, +10).
+- **Bewusst offen (nicht P7):** Die nicht entschiedenen **Gruppe-C-Zeitfenster** (`weeklyMenu`, `terrace`, `delivery`, `11b`) bleiben ungebaut – sie brauchen zuerst eine Design-Entscheidung, kein Tuning.
 
 ## Querschnitt (gilt für alle Pakete)
 - **Konventionen:** alle Balance-Werte → `EconomyBalance` (V7, keine magischen Zahlen); rein & deterministisch (injizierte Zeit, CRC32 statt RNG im Tick); idempotenter Catch-up bleibt erhalten (V8); Schema-Bumps tolerant mit Migration (`kProfileSchemaVersion` + `profile_data_test`); l10n-Strings DE/EN via `flutter gen-l10n`; pro Paket Tests + `balance_sanity_test`-Verträge.
@@ -245,11 +305,11 @@ Ich habe jetzt alle relevanten Dokumente und den Code-Stand analysiert. Hier ist
 
 ---
 
-**Offene Punkte, die *du* beim Umsetzen entscheiden musst** (ich habe Empfehlungen eingebaut):
-- `school`-Wirkung: Fortbildungskosten −5 % **oder** Sieg-XP +2 % (Empfehlung: Fortbildungskosten).
-- `security`-Wirkung: Entdeckung +5 % **oder** Abschöpfung −5 % (Empfehlung: Entdeckung).
-- Taxonomie E1/E2/E6 (Empfehlung: Teamarzt-Sonderstatus beibehalten, Kategorie `management`, Vorschlags-Rollen nach `management`).
-- Umfang FRT-C2: nur Kern (Fehde + Befreiung) oder auch ranglose Angriffs-Simulation auf Rivalen (etwas größer).
-- Ob 4.1/#1 (PP-Eingangswerte) nur als Analyse/Entscheid oder mit Implementierung neuer Eingänge.
+**Offene Punkte, die *du* beim Umsetzen entscheiden musst** (ich habe Empfehlungen eingebaut) – **alle entschieden und umgesetzt (P2/P3):**
+- `school`-Wirkung: ✅ **Fortbildungskosten −5 %/Stufe** (nicht Sieg-XP +2 %).
+- `security`-Wirkung: ✅ **Entdeckung +5 Prozentpunkte/Stufe** (nicht Abschöpfung −5 %).
+- Taxonomie E1/E2/E6: ✅ Teamarzt-Sonderstatus beibehalten, Kategorie `management`, Vorschlags-Rollen nach `management` (P4).
+- Umfang FRT-C2: ✅ **Kern *und* ranglose Angriffs-Simulation** (Fehde + Befreiung + Q7b) – P2.
+- 4.1/#1 (PP-Eingangswerte): als Analyse/Entscheid belassen, **keine** neuen Eingänge (**P7-Werte-Pass ✅** – unverändert bestätigt).
 
-Das Ganze ist in **7 überschaubare Pakete** zerlegt, die jeweils für sich committbar und testbar sind. Soll ich mit **P0 + P1** beginnen – und möchtest du zuerst die vier Entscheidungs-Punkte (school, security, E1/E2/E6, C2-Umfang) festlegen, oder soll ich sie mit meinen Empfehlungen umsetzen? Sobald du zufrieden bist, wechsle bitte auf **Act Mode**, dann setze ich die Pakete um.
+Das Ganze ist in **7 überschaubare Pakete** zerlegt, die jeweils für sich committbar und testbar sind. Umgesetzt sind **P0–P7** (inklusive des Werte-Passes aus **P7**, 4.2/#10). Bewusst offen bleibt allein die **nicht entschiedene** Gruppe-C-Zeitfenster-Idee aus `11b` (`weeklyMenu`, `terrace`, `delivery`) – sie braucht zuerst eine Design-Entscheidung, kein Tuning.

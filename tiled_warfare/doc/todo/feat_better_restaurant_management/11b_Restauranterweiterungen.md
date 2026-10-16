@@ -23,11 +23,13 @@ stufenweise ausbaubar, kosten **Ankauf** und **wöchentlichen Unterhalt** und we
 „Wirtschaftsschleife schließen (V2/V7/V8)“; die Unterhaltsschnittstelle zum Plongeur kam mit V10/`7939be4`).
 Der erste Baustein des **V1-Pakets** aus diesem Dokument (`cellar`, Gruppe A) ist ebenfalls umgesetzt, ebenso der
 zweite (`coldRoom`, Gruppe B), der dritte (`firstAid`, Gruppe B, erster ⚙-Baustein), der vierte (`lounge`,
-Gruppe B, zweiter ⚙-Baustein) und der erste Baustein der **Gruppe D** (`certification`, P3, dritter ⚙-Baustein) –
+Gruppe B, zweiter ⚙-Baustein) und die gesamte **Gruppe D** samt Gruppe-A/B-Rest (`certification`, `vault`,
+`school`, `security` und `stars` – **P3**, alle ⚙-Bausteine) –
 Beleg und Checklisten-Abarbeitung unter „Abgeschlossene Klärungen“. Werte verbindlich nur in `EconomyBalance`
 (V7); Auswertung in `EconomyService` (reine Funktionen),
 Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
-(`kProfileSchemaVersion = 5`, additiv/tolerant).
+(`kProfileSchemaVersion = 11` seit der FRT-Fehde aus `14`; `restaurants[].upgrades` selbst ist unverändert
+additiv/tolerant).
 
 ### Aktuelle Auflistung aller Erweiterungen (tabellarisch)
 
@@ -43,6 +45,10 @@ Modell/Persistenz in `UpgradeType`/`UpgradeSpec`/`RestaurantData.upgrades`
 | Erste-Hilfe-Station | `UpgradeType.firstAid` | −5 % Heilzeit pro Verletzungsstufe | 3 | 250 € | 25 € |
 | Ruheraum/Lounge | `UpgradeType.lounge` | +3 % Wochen-Refill, −3 % Tages-Sink (Vitalität/Moral) | 3 | 180 € | 18 € |
 | Zertifizierung/Hygiene-Siegel | `UpgradeType.certification` | −5 % erlittene Strafen | 3 | 200 € | 20 € |
+| Tresor/Kassenraum | `UpgradeType.vault` | −10 % Negativzins-**Satz** | 3 | 200 € | 20 € |
+| Schulungsraum/Trainingsküche | `UpgradeType.school` | −5 % Fortbildungs-/Beförderungskosten | 3 | 300 € | 30 € |
+| Sicherheitstechnik/Alarmanlage | `UpgradeType.security` | +5 Prozentpunkte Entdeckung eingehender Sabotage | 3 | 220 € | 22 € |
+| Sterneküche/Auszeichnung | `UpgradeType.stars` | +1 % PP-Prestige **und** −5 Prozentpunkte Angriffswahrscheinlichkeit | 5 | 400 € | 40 € |
 
 > Quelle: `EconomyBalance.upgrades` (V7). Bei Abweichung gilt der **Code**, nicht die Tabelle.
 > `test/balance_sanity_test.dart` erzwingt, dass **jeder** `UpgradeType`-Wert einen Spec besitzt.
@@ -141,7 +147,7 @@ schließen diese Lücke, docken an vorhandene Hebel an und bleiben Tuning in `Ec
 | Erweiterung (Arbeitstitel) | Wirkung pro Stufe (Vorschlag) | Max | Ankauf (Basis) | Unterhalt (Basis) | Hook | Synergie `11a` |
 |---|---|---:|---:|---:|---|---|
 | Wein-/Getränkekeller (`cellar`) ▶ **umgesetzt** ✅ | +2 % Kundenzufriedenheit, +1 % Attraktivität | 5 | 180 € | 18 € | `satisfactionOf`/`attractivenessOf` | **Sommelier** (offen): Zuschlag greift nur mit gebautem Keller → „der Sommelier wird erst durch den Weinkeller wertvoll“ (Plongeur-Muster) |
-| Tresor/Kassenraum (`vault`) ⚙ | Negativzinsen −10 % | 3 | 200 € | 20 € | `catchUp` → `applyNegativeInterest` (um Prozent-Parameter erweitern) | **Caissier** (offen): −25 % auf den Zinssatz, stapelt **additiv**; reiner Verlustbegrenzer, kein Einkommenshebel |
+| Tresor/Kassenraum (`vault`) ⚙ **umgesetzt (P3)** ✅ | **Negativzinsen −10 % des Satzes** je Stufe (entschieden: Zinssatz-Senkung, nicht Rettungswurf) | 3 | 200 € | 20 € | `EconomyService.applyNegativeInterest(budget, reliefPercent:)` – gerufen aus `GameClockService.catchUp` (einmal je Catch-up) **und** `ObjectProfile.applyNegativeInterest` | **Caissier** (offen): −25 % auf den Zinssatz, stapelt **additiv**; reiner Verlustbegrenzer, kein Einkommenshebel |
 
 ### Gruppe B – Synergien mit umgesetzten Rollen/Systemen
 
@@ -150,8 +156,8 @@ schließen diese Lücke, docken an vorhandene Hebel an und bleiben Tuning in `Ec
 | Kühlhaus/Kühlkette (`coldRoom`) ▶ **umgesetzt** ✅ | +3 % Kapazität | 5 | 160 € | 16 € | `capacityOf` | **Lagerist** (V12): verbreitert die Basis, die „Lagertetris“ faktorbasiert vervielfacht (additiv, kein Doppel-Multiplikator); wirkt nur **skalierend** – ohne Personal ist die Kapazität ohnehin `0` |
 | Erste-Hilfe-Station (`firstAid`) ⚙ **umgesetzt** ✅ | **−5 % Heilzeit je Stufe** (entschieden; die Alternative „+1 Rettungswurf-Zielwert“ wurde **verworfen**) | 3 | 250 € | 25 € | `GameClockService.healTimePerStageFor` (von `advanceHealing`, `rollBackEmergencyShots` **und** dem UI-Countdown genutzt) | **Teamarzt** (Behandlung, `healTimePerStage`): verkürzt die vom Arzt **gesetzte** Basiszeit (24 h/6 h/3 h/1 h) prozentual – kein zweiter Hebel auf den Rettungswurf, der die Domäne des Arztes bleibt |
 | Ruheraum/Lounge (`lounge`) ⚙ **umgesetzt** ✅ | **+3 % Wochen-Refill und −3 % Tages-Sink** (entschieden: **beide** Effekte) | 3 | 180 € | 18 € | `GameClockService._refillStaffResources` **und** `_applyDailyResourceSink` (additiv zum Gewerkschaftschef, auf 100 % gedeckelt) | **Communard + Pâtissier** (Refill, additiv – der Ruheraum gilt als Gebäude-Effekt auch dem Pâtissier), **Gewerkschaftschef** (Sink, additiv), **Tournant** (Nulltag-Malus – bewusst **nicht** berührt) |
-| Schulungsraum/Trainingsküche (`school`) ⚙ | −5 % Fortbildungskosten **oder** Sieg-XP +2 % | 3 | 300 € | 30 € | `upgradeToLineCook`/Karriereaufstiege bzw. `ScreenBattleResult` | **Karrierepfade (10)** und **PR-Kampagne** des Social Media Managers (beide XP, additiv) – verbindet Wirtschafts- und Kampf-Loop |
-| Sicherheitstechnik/Alarmanlage (`security`) ⚙ | Entdeckung eingehender Sabotage +5 % (alternativ Abschöpfung −5 %) | 3 | 220 € | 22 € | `RivalService.incomingDetectionPercent` bzw. Einkommens-Abschöpfung im `catchUp` | **Sicherheitschef** (V13, additiv), Kapitel 13 – macht Erweiterungen **defensiv** relevant |
+| Schulungsraum/Trainingsküche (`school`) ⚙ **umgesetzt (P3)** ✅ | **−5 % Fortbildungskosten je Stufe** (entschieden; die Alternative „Sieg-XP +2 %“ wurde **verworfen**, weil die XP-Seite durch die PR-Kampagne belegt ist) | 3 | 300 € | 30 € | `ObjectProfile.promotionPurchaseCost` → `promoteToRank` (gemeinsamer Pfad von `upgradeToLineCook` und allen Karriereaufstiegen) **und** der Bestätigungsdialog `ScreenRestaurant._promoteCharacter` | **Karrierepfade (10)** – Anzeige und Buchung nutzen denselben Preis („eine Quelle der Wahrheit“) |
+| Sicherheitstechnik/Alarmanlage (`security`) ⚙ **umgesetzt (P3)** ✅ | **Entdeckung eingehender Sabotage +5 Prozentpunkte je Stufe** (entschieden; die Alternative „Abschöpfung −5 %“ wurde **verworfen**) | 3 | 220 € | 22 € | `RivalService.incomingDetectionPercent` (additiv zum Sicherheitschef, Deckel 100) | **Sicherheitschef** (V13, additiv), Kapitel 13 – macht Erweiterungen **defensiv** relevant und die Gegenschlag-Kette wertvoller |
 
 ### Gruppe C – Zeitfenster/Tages-Aktionen (Bindeglied zu § 8/Q1)
 
@@ -167,24 +173,24 @@ je Stufe – löst die dokumentierte „Einzelstufe“-Entscheidung ab).
 
 ### Gruppe D – Vorbereitung Strafen/Prestige (`13`/`12`)
 
-> **Stand:** `certification` ist **umgesetzt (P3)** – zusammen mit der **Behörden-Inspektion**
-> (`InspectionService`) als passiver Strafenquelle; `stars` bleibt offen (wartet auf `12`/`13`).
+> **Stand:** `certification` **und** `stars` sind **umgesetzt (P3)** – `certification` zusammen mit der
+> **Behörden-Inspektion** (`InspectionService`) als passiver Strafenquelle; `stars` mit **beiden** entschiedenen
+> Effekten (Prestige-Beitrag zur Power Projection **und** selteneres Sabotage-Ziel), ohne auf `12`/`13` warten zu
+> müssen.
 
 | Erweiterung (Arbeitstitel) | Wirkung pro Stufe | Max | Ankauf (Basis) | Unterhalt (Basis) | Hook | Synergie / Vorbereitung |
 |---|---|---:|---:|---:|---|---|
 | Zertifizierung/Hygiene-Siegel (`certification`) ⚙ – **umgesetzt (P3)** ✅ | erlittene Strafen −5 % | 3 | 200 € | 20 € | Strafbuchung im Tick (`penaltyCosts`) | **Rechtsanwalt** (additiv, bis 100 % kappbar) – die früher fehlende Strafenquelle ist **entschieden & umgesetzt**: die passive **Behörden-Inspektion** (`InspectionService`, `11a`) liefert sie, beide Strafen laufen über dieselbe `penaltyCosts`-Zeile (`GameClockService.catchUp`). |
-| Sterneküche/Auszeichnung (`stars`) ⚙ | +Prestige-Beitrag/Ranglisten-Position; optional seltener Sabotage-Ziel | 5 | 400 € | 40 € | `districtPrestigeFor`/`RivalService`-Zielauswahl | Vorbereitend für **12** (Mini-PP, „Platz X von Y“) und **13** (Rivalen) – erst nach deren offenen Punkten |
+| Sterneküche/Auszeichnung (`stars`) ⚙ – **umgesetzt (P3)** ✅ | **+1 % PP-Prestige je Stufe** (Prestige-Beitrag zur Rangliste) **und selteneres Sabotage-Ziel** (−5 Prozentpunkte Angriffswahrscheinlichkeit je Stufe) – entschieden: **beide** Effekte | 5 | 400 € | 40 € | `GameClockService.powerProjectionState` (`prestigeBonus × powerProjectionDomainMax` PP) und `RivalService.incomingChancePercent` | Vorbereitend für **12** (Mini-PP, „Platz X von Y“) und **13** (Rivalen) – hebelt **keinen** der drei Eingangswerte |
 
 **Priorisierung („V1-Paket“):** `cellar` ✅ **umgesetzt** → `coldRoom` ✅ **umgesetzt** → `firstAid` ✅ **umgesetzt** → `lounge` ✅ **umgesetzt**;
-danach `school`/`security`, dann die **Gruppe D** (`certification` ✅ **umgesetzt (P3)** – mit der
-Behörden-Inspektion als Strafenquelle) und
-zuletzt die restlichen Zeitfenster-/Prestige-Bausteine (`weeklyMenu`, `terrace`, `delivery`, `stars`).
-Vor dem Bau der Folge-Bausteine sind deren offene Wirkungs-Optionen zu entscheiden (`school`: −5 %
-Fortbildungskosten **oder** +2 % Sieg-XP; `security`: +5 %
-Entdeckung **oder** −5 % Abschöpfung). Bei `firstAid` **und** `lounge` sind die Optionen **entschieden**
-(Heilzeit bzw. „beide Effekte“, siehe Entscheidungen) und die Hooks gebaut; bei `certification` war zusätzlich
-die **Strafenquelle** zu entscheiden – entschieden als **passive Behörden-Inspektion** (`InspectionService`,
-siehe Entscheidungen).
+danach `school` ✅ / `security` ✅ **umgesetzt (P3)**, dann die **Gruppe D** (`certification` ✅ und `stars` ✅ **umgesetzt (P3)** –
+`certification` mit der Behörden-Inspektion als Strafenquelle) und
+zuletzt die restlichen Zeitfenster-Bausteine (`weeklyMenu`, `terrace`, `delivery`) – **offen**.
+Alle Wirkungs-Optionen sind inzwischen **entschieden und gebaut** (`firstAid`: Heilzeit; `lounge`: „beide Effekte“;
+`vault`: Zinssatz; `school`: Fortbildungskosten; `security`: Entdeckung; `stars`: beide Effekte) – siehe Entscheidungen
+und „Abgeschlossene Klärungen“. **Offen** bleiben damit nur die Gruppe-C-Zeitfenster, deren Mechanik noch zu
+entscheiden ist (aktivierbarer Tageszustand vs. eigene Einkommensschiene).
 
 **Bewusst nicht vorgeschlagen:** weitere reine Attraktivitäts-%-Boni (Clamp 0–4), eine „Bar“ neben dem Keller
 (Doppel-Hebel Zufriedenheit), Einkommens-Multiplikatoren auf bestehende Einkommens-%-Boni (verletzt das
@@ -457,6 +463,28 @@ bleibt die Heilung immer noch spürbar lang (Kette `dying → ready` = 5 Stufen 
   `catchUp`-Integration), `test/profile_data_test.dart` (Persistenz-Round-trip + Toleranz gegen unbekannte Namen),
   `test/management_roles_v13_test.dart` (Sabotage-Absorption isoliert von fälligen Inspektionsblöcken),
   `test/balance_sanity_test.dart` erzwingt die Spec.
+- **P3 – Gruppe A/B/D-Rest umgesetzt (Checkliste 1–7 je Baustein abgearbeitet):** `vault`, `school`, `security`
+  und `stars` sind als **⚙-Bausteine** gebaut – je mit neuem `UpgradeSpec`-Feld (V7, keine Literale außerhalb
+  der Balance), neuer `upgradeEffects`-Summe und **einer** Wirkungsstelle:
+  - `vault` → `negativeInterestReliefPerLevel = 0.10`; `EconomyService.applyNegativeInterest` bekam den
+    Parameter `reliefPercent` (Deckel 100, `.ceil()`-Semantik bleibt); Verdrahtung in `GameClockService.catchUp`
+    (Wert einmal je Catch-up) **und** `ObjectProfile.applyNegativeInterest` (Gefechts-Pfad) – beide Pfade
+    rechnen identisch.
+  - `school` → `trainingCostReductionPerLevel = 0.05`; neuer Einzelquelle-Helfer
+    `ObjectProfile.promotionPurchaseCost(rank)`, genutzt von `promoteToRank` (Default-Kosten von
+    `upgradeToLineCook` sind jetzt **nach** Abzug) und vom Bestätigungsdialog in `ScreenRestaurant`.
+  - `security` → `detectionBonusPerLevel = 0.05`; additiv zum Sicherheitschef in
+    `RivalService.incomingDetectionPercent` (Deckel 100).
+  - `stars` → `prestigeBonusPerLevel = 0.01` **und** `sabotageTargetReliefPerLevel = 0.05`;
+    `GameClockService.powerProjectionState` addiert `prestigeBonus × powerProjectionDomainMax` PP,
+    `RivalService.incomingChancePercent` senkt die eingehende Angriffswahrscheinlichkeit (wirkt über
+    `incomingAttemptOccurs(chancePercent:)` auf **alle** Konsumenten: Auflösung, Entdeckung, FRT-Attribution).
+  - l10n `upgradeVault`/`upgradeSchool`/`upgradeSecurity`/`upgradeStars` (DE/EN) + Kacheln im Reiter
+    „Erweiterungen“ (`UpgradeType.values`-getrieben, keine UI-Änderung nötig).
+  - Tests: `test/economy_service_test.dart` (Specs + Zins-Parameter), `test/game_clock_service_test.dart`
+    (Tresor-Zinsen und Sterneküche-PP im Tick), `test/upgrades_p3_hooks_test.dart` (Entdeckung, Ziel-Schutz,
+    Beförderungspreis, Zinsen im `ObjectProfile`), `test/screen_restaurant_test.dart` (vier Kacheln),
+    `test/balance_sanity_test.dart` (jede Spec mit ihren entschiedenen Werten).
 
 ## Checkliste für eine neue Erweiterung (Doku ↔ Code)
 
@@ -483,16 +511,19 @@ bleibt die Heilung immer noch spürbar lang (Kette `dying → ready` = 5 Stufen 
   `upgradeUpkeepPerWeek`, `totalUpgradeUpkeepPerWeek`, `sellRefund`, `applyNegativeInterest`, `canAfford`)
 - Zeit/Abrechnung: `lib/services/game_clock_service.dart` (`catchUp`, `attractivenessOf`/`satisfactionOf`/
   `capacityOf`, `WeeklyTickResult`, `WeekSettlement`)
-- Persistenz: `lib/models/profile_data.dart` (`RestaurantData.upgrades`, `kProfileSchemaVersion = 5`) ·
-  Mutation/UI: `lib/objects/object_profile.dart` (`upgradeLevel`/`buyUpgrade`/`downgradeUpgrade`/`sellUpgrade`),
+- Persistenz: `lib/models/profile_data.dart` (`RestaurantData.upgrades`, `kProfileSchemaVersion = 11`) ·
+  Mutation/UI: `lib/objects/object_profile.dart` (`upgradeLevel`/`buyUpgrade`/`downgradeUpgrade`/`sellUpgrade`,
+  `promotionPurchaseCost`/`applyNegativeInterest` für die P3-Hooks),
   `lib/screens/screen_restaurant.dart` (`_buildUpgradesSection`/`_buildUpgradeTile`)
 - l10n: `lib/l10n/app_de.arb`/`app_en.arb` (`upgradesSection`, `upgradeTables`/`upgradeKitchen`/
   `upgradeSignage`/`upgradeDecoration`/`upgradeJukebox`/`upgradeCellar`/`upgradeColdRoom`/`upgradeFirstAid`/
-  `upgradeLounge`, `upgradeBuy`/`upgradeDowngrade`/`upgradeSell`,
+  `upgradeLounge`/`upgradeCertification`/`upgradeVault`/`upgradeSchool`/`upgradeSecurity`/`upgradeStars`,
+  `upgradeBuy`/`upgradeDowngrade`/`upgradeSell`,
   `upgradeSellConfirm`, `upgradeSold`, `upgradeUpkeepCost`, `upgradeBuyCost`, `upgradeMaxReached`,
   `upgradeNotEnoughBudget`, `tabUpgrades`)
 - Tests: `test/economy_service_test.dart`, `test/game_clock_service_test.dart`, `test/screen_restaurant_test.dart`,
-  `test/profile_data_test.dart`, `test/balance_sanity_test.dart`
+  `test/profile_data_test.dart`, `test/balance_sanity_test.dart` – bei ⚙-Hooks zusätzlich ein Wirkungs-Test je
+  Baustein (Beispiele: `test/upgrades_p3_hooks_test.dart` für `vault`/`school`/`security`/`stars`)
 - Doku: `2-Wirtschaftsschleife.md` § 10 (Bezug: § 8, § 11) · `7_Wirtschaftswerte_zentralisieren.md` ·
   `8_Echtzeit-Zeitsystem.md` (Q1/Tagesschritt) · `10_Karrierepfade.md` § 3 ·
   `11a_Hilfs_und_Servicerollen.md` (Plongeur/Aboyeur) · `doc/rules/team_rules.md` § 2.2

@@ -266,6 +266,12 @@ abstract class AppLocalizations {
   /// **'Der Stadtteil {district} ist verloren (Korruption). Solange er nicht befreit ist, kann dort kein Restaurant gegründet werden.'**
   String districtLostMessage(String district);
 
+  /// Hinweis im Gefechtsergebnis, wenn ein verlorener Stadtteil befreit wurde (C2)
+  ///
+  /// In de, this message translates to:
+  /// **'Der Stadtteil {district} ist befreit! Die Korruption ist unter die Verlustschwelle gefallen – dort kann wieder gegründet werden.'**
+  String districtLiberatedMessage(String district);
+
   /// Label showing the FRT corruption of the district
   ///
   /// In de, this message translates to:
@@ -1785,6 +1791,30 @@ abstract class AppLocalizations {
   /// **'Zertifizierung/Hygiene-Siegel'**
   String get upgradeCertification;
 
+  /// Erweiterung: Tresor/Kassenraum
+  ///
+  /// In de, this message translates to:
+  /// **'Tresor/Kassenraum'**
+  String get upgradeVault;
+
+  /// Erweiterung: Schulungsraum/Trainingsküche
+  ///
+  /// In de, this message translates to:
+  /// **'Schulungsraum/Trainingsküche'**
+  String get upgradeSchool;
+
+  /// Erweiterung: Sicherheitstechnik/Alarmanlage
+  ///
+  /// In de, this message translates to:
+  /// **'Sicherheitstechnik/Alarmanlage'**
+  String get upgradeSecurity;
+
+  /// Erweiterung: Sterneküche/Auszeichnung
+  ///
+  /// In de, this message translates to:
+  /// **'Sterneküche/Auszeichnung'**
+  String get upgradeStars;
+
   /// Ausbaustufe einer Erweiterung
   ///
   /// In de, this message translates to:
@@ -1910,6 +1940,12 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Rivalen-Sabotage: Einkommen −{loss} €'**
   String catchUpRivalSabotageLoss(int loss);
+
+  /// Wochenbericht: Anzahl der von der FRT offen angegriffenen Rivalen (Kapitel 14, Q7b)
+  ///
+  /// In de, this message translates to:
+  /// **'FRT-Angriffe auf Rivalen: {count}'**
+  String catchUpFrtRivalAttacks(int count);
 
   /// Einmalkosten der im Block aktivierten Features (P4)
   ///

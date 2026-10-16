@@ -118,8 +118,8 @@ void main() {
     }
   });
 
-  test('kProfileSchemaVersion ist 10 (FRT: Korruption, Kapitel 14)', () {
-    expect(kProfileSchemaVersion, 10);
+  test('kProfileSchemaVersion ist 11 (FRT-Fehde, Kapitel 14 C2)', () {
+    expect(kProfileSchemaVersion, 11);
   });
 
   test('managementIncomePercent meldet den Social-Media-Manager-Zuschlag', () {

@@ -3,6 +3,7 @@ import 'package:tiled_warfare/models/management_feature.dart';
 import 'package:tiled_warfare/models/management_role.dart';
 import 'package:tiled_warfare/models/match_record.dart';
 import 'package:tiled_warfare/models/medic_quality.dart';
+import 'package:tiled_warfare/models/personality.dart';
 import 'package:tiled_warfare/models/profile_data.dart';
 import 'package:tiled_warfare/models/restaurant_upgrade.dart';
 import 'package:tiled_warfare/models/rival_restaurant.dart';
@@ -15,6 +16,7 @@ import 'package:tiled_warfare/services/game_clock_service.dart';
 import 'package:tiled_warfare/services/passive_income_service.dart';
 import 'package:tiled_warfare/services/power_projection_service.dart';
 import 'package:tiled_warfare/services/rival_service.dart';
+import 'package:tiled_warfare/services/stress_service.dart';
 import 'package:tiled_warfare/services/management_feature_service.dart';
 
 /// Balance-Sanity-Tests (V7): schreiben die gewünschten Eigenschaften der
@@ -150,6 +152,83 @@ void main() {
       expect(
         EconomyBalance.inspectionCorruptionSurchargePercent,
         greaterThanOrEqualTo(0),
+      );
+    });
+
+    test('Tresor (P3) ist der einzige Zins-Satz-Hebel', () {
+      final spec = EconomyBalance.upgrades[UpgradeType.vault]!;
+      expect(spec.maxLevel, 3);
+      expect(spec.buyBaseCost, 200);
+      expect(spec.upkeepBaseCostPerWeek, 20);
+      // Entschiedene Wirkungs-Option: −10 % des Zins-Satzes je Stufe.
+      expect(spec.negativeInterestReliefPerLevel, 0.10);
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.trainingCostReductionPerLevel, 0.0);
+      expect(spec.detectionBonusPerLevel, 0.0);
+      expect(spec.prestigeBonusPerLevel, 0.0);
+      expect(spec.sabotageTargetReliefPerLevel, 0.0);
+    });
+
+    test('Schulungsraum (P3) ist der einzige Ausbildungskosten-Hebel', () {
+      final spec = EconomyBalance.upgrades[UpgradeType.school]!;
+      expect(spec.maxLevel, 3);
+      expect(spec.buyBaseCost, 300);
+      expect(spec.upkeepBaseCostPerWeek, 30);
+      // Entschiedene Wirkungs-Option: −5 % Beförderungskosten je Stufe.
+      expect(spec.trainingCostReductionPerLevel, 0.05);
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.negativeInterestReliefPerLevel, 0.0);
+      expect(spec.detectionBonusPerLevel, 0.0);
+      expect(spec.prestigeBonusPerLevel, 0.0);
+      expect(spec.sabotageTargetReliefPerLevel, 0.0);
+    });
+
+    test('Sicherheitstechnik (P3) ist der einzige Entdeckungs-Hebel', () {
+      final spec = EconomyBalance.upgrades[UpgradeType.security]!;
+      expect(spec.maxLevel, 3);
+      expect(spec.buyBaseCost, 220);
+      expect(spec.upkeepBaseCostPerWeek, 22);
+      // Entschiedene Wirkungs-Option: +5 Prozentpunkte Entdeckung je Stufe.
+      expect(spec.detectionBonusPerLevel, 0.05);
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.trainingCostReductionPerLevel, 0.0);
+      expect(spec.prestigeBonusPerLevel, 0.0);
+      expect(spec.sabotageTargetReliefPerLevel, 0.0);
+    });
+
+    test('Sterneküche (P3) trägt Prestige und Ziel-Schutz, sonst nichts', () {
+      final spec = EconomyBalance.upgrades[UpgradeType.stars]!;
+      expect(spec.maxLevel, 5);
+      expect(spec.buyBaseCost, 400);
+      expect(spec.upkeepBaseCostPerWeek, 40);
+      // Entschiedene Wirkungs-Option: beide Effekte („und“).
+      expect(spec.prestigeBonusPerLevel, 0.01);
+      expect(spec.sabotageTargetReliefPerLevel, 0.05);
+      expect(spec.capacityBonusPerLevel, 0.0);
+      expect(spec.attractivenessBonusPerLevel, 0.0);
+      expect(spec.satisfactionBonusPerLevel, 0.0);
+      expect(spec.negativeInterestReliefPerLevel, 0.0);
+      expect(spec.trainingCostReductionPerLevel, 0.0);
+      expect(spec.detectionBonusPerLevel, 0.0);
+    });
+
+    test('FRT-Fehde (C2) und Q7b haben sinnvolle Balance-Werte', () {
+      expect(EconomyBalance.frtFeudWeeks, greaterThanOrEqualTo(1));
+      expect(
+        EconomyBalance.frtRivalAttackSharePercent,
+        inInclusiveRange(0, 100),
+      );
+      expect(EconomyBalance.frtRivalAttackPpLoss, greaterThan(0));
+      // Der Angriffs-PP-Verlust darf die Domäne nicht sprengen.
+      expect(
+        EconomyBalance.frtRivalAttackPpLoss,
+        lessThanOrEqualTo(EconomyBalance.rivalPpMax),
       );
     });
   });
@@ -1141,6 +1220,397 @@ void main() {
         EconomyBalance.patissierStats.money,
         greaterThan(EconomyBalance.chefDePartieStats.money),
       );
+    });
+  });
+
+  /// P7 (4.2/#10): Der Werte-Pass schreibt die Tuning-Größen fest, die bis
+  /// dahin nur „gefühlt“ plausibel waren – Stations-/Aura-Werte, Lohn-Spanne,
+  /// `ruheMargin`, Sink-Werte, Trait-Prozente und die Zuordnung
+  /// Rolle ↔ Erweiterung (`10`, `11a`, `11b`, `9`).
+  group('Balance-Tuning: Werte-Pass (P7, 4.2/#10)', () {
+    int maxSelf(String station) {
+      var best = 0;
+      for (final stat in StationStat.values) {
+        final value = EconomyService.stationBonusPercent(station, stat);
+        if (value > best) best = value;
+      }
+      return best;
+    }
+
+    /// Gesamt-Profil (Selbstwirkung **und** Aura) einer Station je Stat – die
+    /// Vergleichsbasis für die Dominanz-Prüfung.
+    List<int> profileOf(String station) => [
+          for (final stat in StationStat.values)
+            EconomyService.stationBonusPercent(station, stat) +
+                EconomyService.stationAuraPercent(station, stat),
+        ];
+
+    /// `true`, wenn [a] mindestens so stark ist wie [b] und in mindestens einem
+    /// Wert echt stärker – dann wäre [b] als Wahl entwertet.
+    bool dominates(List<int> a, List<int> b) {
+      var strictlyBetter = false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] < b[i]) return false;
+        if (a[i] > b[i]) strictlyBetter = true;
+      }
+      return strictlyBetter;
+    }
+
+    test('keine Station entwertet ihre Basis oder ihre Geschwister (P7)', () {
+      for (final variant in kVariantStations) {
+        final base = EconomyService.baseStationOf(variant)!;
+        expect(
+          dominates(profileOf(variant), profileOf(base)),
+          isFalse,
+          reason: 'Variante $variant dominiert ihre Basis $base',
+        );
+        expect(
+          dominates(profileOf(base), profileOf(variant)),
+          isFalse,
+          reason: 'Basis $base entwertet Variante $variant',
+        );
+        for (final sibling in kVariantStations) {
+          if (sibling == variant) continue;
+          if (EconomyService.baseStationOf(sibling) != base) continue;
+          expect(
+            dominates(profileOf(sibling), profileOf(variant)),
+            isFalse,
+            reason: 'Geschwister $sibling und $variant sind nicht unterscheidbar',
+          );
+        }
+      }
+    });
+
+    test('Varianten ersetzen den Fokus, sie verstärken ihn nicht (P7)', () {
+      for (final variant in kVariantStations) {
+        final base = EconomyService.baseStationOf(variant)!;
+        expect(
+          maxSelf(variant),
+          lessThanOrEqualTo(maxSelf(base)),
+          reason: 'Variante $variant verstärkt den Fokus ihrer Basis $base',
+        );
+      }
+    });
+
+    test('Auren bleiben schwächer als die eigene Spezialisierung (P7)', () {
+      for (final station in kAllStations) {
+        final isSupport = EconomyService.isSupportStation(station);
+        var maxAura = 0;
+        for (final stat in StationStat.values) {
+          final aura = EconomyService.stationAuraPercent(station, stat);
+          if (aura > maxAura) maxAura = aura;
+        }
+        if (isSupport) {
+          expect(
+            maxAura,
+            0,
+            reason: 'Support-Station $station darf keine Kampf-Aura tragen',
+          );
+          continue;
+        }
+        expect(
+          maxAura,
+          greaterThan(0),
+          reason: 'Kampf-Station $station trägt keine Aura',
+        );
+        expect(
+          maxAura,
+          lessThanOrEqualTo(maxSelf(station)),
+          reason: 'Die Aura von $station ist stärker als ihre Selbstwirkung',
+        );
+        // Die Reichweite ist bewusst aura-frei (Tuning-Entscheidung, `10` § 2).
+        expect(EconomyService.stationAuraPercent(station, StationStat.range), 0);
+      }
+    });
+
+    test('Lohn-Spanne (Thriftiness) bleibt ein moderater Korridor (P7)', () {
+      expect(EconomyBalance.thriftinessWageSpread, greaterThan(0));
+      expect(EconomyBalance.thriftinessWageSpread, lessThanOrEqualTo(0.5));
+
+      const ranks = [
+        'apprentice',
+        'line_cook',
+        'chef_de_partie',
+        'sous_chef',
+        'head_chef',
+      ];
+      for (final rank in ranks) {
+        final neutral = EconomyService.staffWagePerWeek(rank);
+        final thrifty = EconomyService.staffWagePerWeek(rank, 100);
+        final wasteful = EconomyService.staffWagePerWeek(rank, 0);
+        expect(thrifty, lessThan(neutral));
+        expect(wasteful, greaterThan(neutral));
+        expect(
+          wasteful - neutral,
+          neutral - thrifty,
+          reason: 'Der Korridor muss um den Neutralwert symmetrisch bleiben',
+        );
+        expect(
+          wasteful,
+          lessThan(neutral * 2),
+          reason: 'Ein verschwenderischer Charakter verdoppelt den Lohn nicht',
+        );
+        expect(
+          thrifty,
+          greaterThan(neutral ~/ 2),
+          reason: 'Sparen darf Personal nicht fast gratis machen',
+        );
+      }
+
+      // Derselbe Korridor gilt für den Teamarzt (eine Quelle: Spread).
+      final neutralMedic = EconomyService.weeklyMedicCost(
+        MedicQuality.niedrig,
+        3,
+      );
+      expect(
+        EconomyService.weeklyMedicCost(MedicQuality.niedrig, 3, 100),
+        lessThan(neutralMedic),
+      );
+      expect(
+        EconomyService.weeklyMedicCost(MedicQuality.niedrig, 3, 0),
+        greaterThan(neutralMedic),
+      );
+    });
+
+    test('das Aufstiegs-Gate wächst mit dem Rang (P7)', () {
+      const ranks = ['line_cook', 'chef_de_partie', 'sous_chef', 'head_chef'];
+      final weeksPerWage = [
+        for (final rank in ranks)
+          EconomyService.promotionCost(rank) /
+              EconomyService.staffWagePerWeek(rank),
+      ];
+      // Ein höherer Rang ist relativ zum Lohn teurer zu erreichen – die
+      // Leiter ist ein Gate, kein Selbstläufer.
+      for (var i = 1; i < weeksPerWage.length; i++) {
+        expect(
+          weeksPerWage[i],
+          greaterThanOrEqualTo(weeksPerWage[i - 1]),
+          reason: '${ranks[i]} ist relativ billiger als ${ranks[i - 1]}',
+        );
+      }
+      expect(
+        weeksPerWage.first,
+        greaterThan(1),
+        reason: 'Schon der erste Aufstieg kostet mehr als eine Woche Lohn',
+      );
+    });
+
+    test('Rollen-Löhne bleiben im Band und gestaffelt (P7)', () {
+      for (final role in SupportRole.values) {
+        expect(
+          EconomyBalance.supportRoleWagePerWeek[role]!,
+          inInclusiveRange(50, 200),
+          reason: 'Hilfsrolle $role verlässt den Lohn-Korridor',
+        );
+      }
+      for (final role in kAllManagementRoles) {
+        expect(
+          EconomyBalance.managementRoleWagePerWeek[role]!,
+          inInclusiveRange(100, 300),
+          reason: 'Verwaltungsrolle $role verlässt den Lohn-Korridor',
+        );
+      }
+      int maxOf(Iterable<int> values) => values.fold(0, (a, b) => a > b ? a : b);
+      expect(
+        maxOf(EconomyBalance.supportRoleWagePerWeek.values),
+        lessThan(maxOf(EconomyBalance.managementRoleWagePerWeek.values)),
+        reason: 'Die Verwaltung ist die teurere Rollen-Kategorie',
+      );
+    });
+
+    test('Sink-Werte bleiben in der Ressourcen-Domäne (P7)', () {
+      expect(EconomyBalance.resourceSinkPerDay, greaterThan(0));
+      expect(
+        EconomyBalance.resourceSinkPerBattle,
+        2 * EconomyBalance.resourceSinkPerDay,
+        reason: 'Ein Gefechtseinsatz kostet zwei Ruhetage',
+      );
+      // Eine Woche ohne Gefecht darf keinen Median-Charakter (50) leerräumen.
+      expect(
+        7 * EconomyBalance.resourceSinkPerDay,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitMax ~/ 2),
+      );
+      // Auch der doppelte Sink der Feature-Nachteilphase bleibt eine Woche lang
+      // innerhalb der Domäne.
+      expect(
+        7 *
+            EconomyBalance.resourceSinkPerDay *
+            EconomyBalance.featureAftermathSinkMultiplier,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitMax),
+      );
+      // Σ Blocktag = Wochenwert (V8): sieben Tagesschritte kosten exakt 7× Sink.
+      var value = EconomyBalance.personalityTraitMax;
+      for (var day = 0; day < 7; day++) {
+        value =
+            StressService.sink(value, EconomyBalance.resourceSinkPerDay).value;
+      }
+      expect(
+        value,
+        EconomyBalance.personalityTraitMax -
+            7 * EconomyBalance.resourceSinkPerDay,
+      );
+    });
+
+    test('Erschöpfung und Sink-Erleichterung bleiben gedeckelt (P7)', () {
+      expect(EconomyBalance.resourceZeroMalusPerDay, greaterThan(0));
+      expect(
+        EconomyBalance.resourceZeroMalusPerDay,
+        lessThan(EconomyBalance.resourceZeroMalusPerDayBoth),
+        reason: 'Beide Ressourcen auf 0 ist härter als eine',
+      );
+      // Dokumentierte Spirale (`9` § 6): ~35 pp pro Nullwoche (eine Ressource)
+      // bzw. ~70 pp (beide) – beides bleibt in der W100-Domäne.
+      expect(
+        7 * EconomyBalance.resourceZeroMalusPerDay,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitMax ~/ 2),
+      );
+      expect(
+        7 * EconomyBalance.resourceZeroMalusPerDayBoth,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitMax),
+      );
+      // Ruheraum + Gewerkschaftschef können den Tages-Sink nie negativ machen.
+      final lounge = EconomyBalance.upgrades[UpgradeType.lounge]!;
+      final loungeReliefPercent =
+          (lounge.dailySinkReliefPerLevel * lounge.maxLevel * 100).round();
+      final unionReliefPercent =
+          EconomyBalance.unionChiefSinkReductionPercentPerCompetence *
+              EconomyBalance.featureCompetenceMax;
+      expect(loungeReliefPercent + unionReliefPercent, lessThanOrEqualTo(100));
+    });
+
+    test('Trait-Ableitung ist symmetrisch und kollisionsfrei (P7)', () {
+      expect(EconomyBalance.personalityTraitMin, 0);
+      expect(EconomyBalance.personalityTraitMax, 100);
+      // Die Varianz ist exakt ±range und damit unverzerrt.
+      expect(
+        EconomyBalance.personalityVarianceModulo,
+        2 * EconomyBalance.personalityVarianceRange + 1,
+      );
+      expect(EconomyBalance.personalityVarianceRange, greaterThan(0));
+      // Jedes Enneagramm-Profil hat einen eigenen Basis-Sockel.
+      expect(
+        EnneagramProfile.all.length * EconomyBalance.personalityTraitStep,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitModulo),
+        reason: 'Zwei Profile würden auf demselben Sockel landen',
+      );
+      expect(EconomyBalance.personalityTraitStep, greaterThan(0));
+      // Ein Trait wiegt nie schwerer als eine Stations-Spezialisierung.
+      expect(EconomyBalance.combatTraitMaxPercent, greaterThan(0));
+      expect(
+        EconomyBalance.combatTraitMaxPercent,
+        lessThanOrEqualTo(EconomyBalance.stationBonusMaxPercent.toDouble()),
+      );
+      // Die Persönlichkeit bleibt ein moderater Eingangs-Anteil (§ 8).
+      expect(EconomyBalance.personalityAttractivenessWeight, greaterThan(0));
+      expect(
+        EconomyBalance.personalityAttractivenessWeight,
+        lessThan(EconomyBalance.inputDomainMax),
+      );
+    });
+
+    test('Stress-Staffel, Dauerleiter und Ruhe-Marge sind geordnet (P7)', () {
+      expect(
+        EconomyBalance.stressMarginSingleTick,
+        lessThan(EconomyBalance.stressMarginDays),
+      );
+      expect(
+        EconomyBalance.stressMarginDays,
+        lessThan(EconomyBalance.stressMarginWeeks),
+      );
+      expect(
+        EconomyBalance.stressMarginWeeks,
+        lessThan(EconomyBalance.personalityTraitMax),
+        reason: 'Auch die längste Stress-Staffel muss erreichbar bleiben',
+      );
+      expect(
+        EconomyBalance.einzelTickUnit,
+        lessThan(EconomyBalance.stressDayUnit),
+      );
+      expect(
+        EconomyBalance.stressDayUnit,
+        lessThan(EconomyBalance.stressWeekUnit),
+      );
+      expect(
+        EconomyBalance.stressWeekUnit,
+        lessThan(EconomyBalance.stressMonthUnit),
+      );
+      expect(EconomyBalance.stressDiceW6, greaterThan(1));
+      expect(
+        EconomyBalance.stressDiceW4,
+        lessThanOrEqualTo(EconomyBalance.stressDiceW6),
+      );
+
+      // Die Ruhe greift erst bei einer echten Unterschreitung (nicht schon an
+      // der ersten Stress-Staffel) und bleibt für den Median-Zielwert erreichbar.
+      expect(
+        EconomyBalance.ruheMargin,
+        greaterThan(EconomyBalance.stressMarginSingleTick),
+      );
+      expect(
+        EconomyBalance.ruheMargin,
+        lessThanOrEqualTo(EconomyBalance.personalityTraitMax ~/ 2),
+      );
+      expect(
+        EconomyBalance.personalityTraitMax ~/ 2 - EconomyBalance.ruheMargin,
+        greaterThanOrEqualTo(EconomyBalance.d100Min),
+        reason: 'Ruhe wäre für den Median-Zielwert nicht mehr erreichbar',
+      );
+    });
+
+    test('Rolle ↔ Erweiterung: jede Zuordnung hat ihren Anker-Effekt (P7)', () {
+      void anchored(
+        String role,
+        UpgradeType type,
+        double Function(UpgradeSpec spec) effect,
+      ) {
+        final spec = EconomyBalance.upgrades[type];
+        expect(spec, isNotNull, reason: 'Fehlende Erweiterung für $role');
+        expect(
+          effect(spec!),
+          greaterThan(0),
+          reason: '$role braucht $type als Wirkungsbasis',
+        );
+      }
+
+      // Tabelle „Zuordnung Rolle ↔ Erweiterung“ (`11a`).
+      anchored('Sommelier', UpgradeType.cellar,
+          (s) => s.satisfactionBonusPerLevel);
+      anchored('Lagerist', UpgradeType.coldRoom, (s) => s.capacityBonusPerLevel);
+      anchored('Communard/Pâtissier/Gewerkschaftschef/Tournant',
+          UpgradeType.lounge, (s) => s.refillBonusPerLevel);
+      anchored('Communard/Pâtissier/Gewerkschaftschef/Tournant',
+          UpgradeType.lounge, (s) => s.dailySinkReliefPerLevel);
+      anchored('Rechtsanwalt', UpgradeType.certification,
+          (s) => s.penaltyReductionPerLevel);
+      anchored('Caissier', UpgradeType.vault,
+          (s) => s.negativeInterestReliefPerLevel);
+      // Die übrigen Anschaffungen sind ebenfalls echte Wirkungsbasen (P3).
+      anchored('Teamarzt (Heilzeit)', UpgradeType.firstAid,
+          (s) => s.healTimeReductionPerLevel);
+      anchored('Fortbildung', UpgradeType.school,
+          (s) => s.trainingCostReductionPerLevel);
+      anchored('Sicherheitschef', UpgradeType.security,
+          (s) => s.detectionBonusPerLevel);
+      anchored('Sterneküche', UpgradeType.stars, (s) => s.prestigeBonusPerLevel);
+      anchored('Sterneküche', UpgradeType.stars,
+          (s) => s.sabotageTargetReliefPerLevel);
+
+      // Jeder dieser Hebel gehört genau **einer** Erweiterung – sonst gäbe es
+      // zwei Erweiterungen für dieselbe Rolle.
+      void uniqueLever(double Function(UpgradeSpec spec) effect) {
+        final owners = [
+          for (final type in UpgradeType.values)
+            if (effect(EconomyBalance.upgrades[type]!) > 0) type,
+        ];
+        expect(owners, hasLength(1), reason: 'Hebel mehrfach belegt: $owners');
+      }
+
+      uniqueLever((s) => s.negativeInterestReliefPerLevel);
+      uniqueLever((s) => s.trainingCostReductionPerLevel);
+      uniqueLever((s) => s.detectionBonusPerLevel);
+      uniqueLever((s) => s.sabotageTargetReliefPerLevel);
+      uniqueLever((s) => s.dailySinkReliefPerLevel);
+      uniqueLever((s) => s.healTimeReductionPerLevel);
     });
   });
 }

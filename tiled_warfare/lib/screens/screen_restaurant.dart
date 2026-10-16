@@ -257,6 +257,11 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
     if (result.rivalSabotageLosses > 0) {
       lines.add(l10n.catchUpRivalSabotageLoss(result.rivalSabotageLosses));
     }
+    // Kapitel 14/Q7b: Die FRT greift Rivalen offen an – sichtbar macht das die
+    // gesunkenen PP der Rivalen in der Rangliste unten.
+    if (result.frtRivalAttacks > 0) {
+      lines.add(l10n.catchUpFrtRivalAttacks(result.frtRivalAttacks));
+    }
     // `11a` P4: Einmalkosten der im Block aktivierten Features – sie sind bei
     // der Aktivierung bereits abgebucht und werden hier transparent ausgewiesen.
     if (result.prepaidFeatureCosts > 0) {
@@ -999,7 +1004,10 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
       return;
     }
 
-    final cost = EconomyService.promotionCost(targetRank);
+    // § 10 (`school`): Der angezeigte Preis ist der **tatsächlich gebuchte**
+    // (nach Abzug des Schulungsraums) – eine Quelle der Wahrheit, wie bei
+    // `upgradePurchaseCost`.
+    final cost = _profile.promotionPurchaseCost(targetRank);
     final actionLabel = _promoteActionLabel(l10n, targetRank);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1341,6 +1349,14 @@ class _ScreenRestaurantState extends State<ScreenRestaurant>
         return l10n.upgradeLounge;
       case UpgradeType.certification:
         return l10n.upgradeCertification;
+      case UpgradeType.vault:
+        return l10n.upgradeVault;
+      case UpgradeType.school:
+        return l10n.upgradeSchool;
+      case UpgradeType.security:
+        return l10n.upgradeSecurity;
+      case UpgradeType.stars:
+        return l10n.upgradeStars;
     }
   }
 

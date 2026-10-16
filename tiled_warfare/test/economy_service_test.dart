@@ -17,6 +17,28 @@ void main() {
       expect(EconomyService.applyNegativeInterest(-100), -110);
       expect(EconomyService.applyNegativeInterest(-1000), -1100);
     });
+
+    test('reliefPercent senkt den Satz (Tresor, P3)', () {
+      // 50 % Nachlass ⇒ halber Satz (5 %): −1000 → −1050.
+      expect(
+        EconomyService.applyNegativeInterest(-1000, reliefPercent: 50),
+        -1050,
+      );
+      // 100 % Nachlass ⇒ kein Zins.
+      expect(
+        EconomyService.applyNegativeInterest(-1000, reliefPercent: 100),
+        -1000,
+      );
+      // Negative/überschießende Werte werden geklemmt (0 … 100).
+      expect(
+        EconomyService.applyNegativeInterest(-1000, reliefPercent: -5),
+        -1100,
+      );
+      expect(
+        EconomyService.applyNegativeInterest(-1000, reliefPercent: 250),
+        -1000,
+      );
+    });
   });
 
   group('EconomyService.battleReward', () {
@@ -265,6 +287,94 @@ void main() {
       );
       expect(effects.refill, closeTo(0.09, 1e-9));
       expect(effects.dailySinkRelief, closeTo(0.09, 1e-9));
+    });
+
+    test('Tresor (P3) speist ausschließlich den Zins-Satz (§ 10)', () {
+      // vault: −10 % des Negativzins-Satzes je Stufe (Basis 200 €, max. 3).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.vault: 3},
+      );
+      expect(effects.negativeInterestRelief, closeTo(0.30, 1e-9));
+      // Bewusst kein Zuwachs auf Eingangswerte oder andere Hooks.
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.penaltyReduction, closeTo(0.0, 1e-9));
+      expect(effects.trainingCostReduction, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.vault, 3), 1200);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.vault, 0), 200);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.vault, 3), 60);
+      expect(EconomyService.sellRefund(UpgradeType.vault, 3), 600);
+    });
+
+    test('Schulungsraum (P3) speist ausschließlich die Ausbildungskosten (§ 10)',
+        () {
+      // school: −5 % Beförderungskosten je Stufe (Basis 300 €, max. 3).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.school: 3},
+      );
+      expect(effects.trainingCostReduction, closeTo(0.15, 1e-9));
+      expect(effects.detectionBonus, closeTo(0.0, 1e-9));
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.prestigeBonus, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.school, 3), 1800);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.school, 0), 300);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.school, 3), 90);
+    });
+
+    test('Sicherheitstechnik (P3) speist ausschließlich die Entdeckung (§ 10)',
+        () {
+      // security: +5 Prozentpunkte Entdeckung je Stufe (Basis 220 €, max. 3).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.security: 3},
+      );
+      expect(effects.detectionBonus, closeTo(0.15, 1e-9));
+      expect(effects.trainingCostReduction, closeTo(0.0, 1e-9));
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.security, 3), 1320);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.security, 0), 220);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.security, 3), 66);
+    });
+
+    test('Sterneküche (P3) speist Prestige und Sabotage-Ziel-Schutz (§ 10)', () {
+      // stars: +1 % PP-Prestige und −5 Prozentpunkte Angriffswahrscheinlichkeit
+      // je Stufe (Basis 400 €, max. 5).
+      final effects = EconomyService.upgradeEffects(
+        const {UpgradeType.stars: 5},
+      );
+      expect(effects.prestigeBonus, closeTo(0.05, 1e-9));
+      expect(effects.sabotageTargetRelief, closeTo(0.25, 1e-9));
+      expect(effects.capacity, closeTo(0.0, 1e-9));
+      expect(effects.attractiveness, closeTo(0.0, 1e-9));
+      expect(effects.satisfaction, closeTo(0.0, 1e-9));
+
+      expect(EconomyService.upgradeCost(UpgradeType.stars, 5), 6000);
+      expect(EconomyService.upgradeCostDelta(UpgradeType.stars, 0), 400);
+      expect(EconomyService.upgradeUpkeepPerWeek(UpgradeType.stars, 5), 200);
+    });
+
+    test('die P3-Hooks bleiben exklusiv (§ 10)', () {
+      final effects = EconomyService.upgradeEffects(
+        const {
+          UpgradeType.tables: 3,
+          UpgradeType.kitchen: 3,
+          UpgradeType.signage: 3,
+          UpgradeType.decoration: 3,
+          UpgradeType.jukebox: 1,
+          UpgradeType.cellar: 3,
+          UpgradeType.coldRoom: 3,
+          UpgradeType.firstAid: 3,
+          UpgradeType.lounge: 3,
+          UpgradeType.certification: 3,
+        },
+      );
+      expect(effects.negativeInterestRelief, closeTo(0.0, 1e-9));
+      expect(effects.trainingCostReduction, closeTo(0.0, 1e-9));
+      expect(effects.detectionBonus, closeTo(0.0, 1e-9));
+      expect(effects.prestigeBonus, closeTo(0.0, 1e-9));
+      expect(effects.sabotageTargetRelief, closeTo(0.0, 1e-9));
     });
   });
 

@@ -49,6 +49,11 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
   int _reward = 0;
   bool _bankrupt = false;
 
+  /// Kapitel 14/C2: `true`, wenn dieses Gefecht den Stadtteil **befreit** hat
+  /// (Korruption fiel unter die Verlustschwelle) – dann zeigt der Screen den
+  /// „Befreiung“-Hinweis.
+  bool _districtLiberated = false;
+
   @override
   void initState() {
     super.initState();
@@ -130,8 +135,10 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
 
     // Kapitel 14 (FRT): Korruption des Stadtteils wird durch das Gefecht gesenkt
     // (je getötetem Monster und zusätzlich je Sieg). Vor `saveToStorage`, damit
-    // der neue Wert sofort persistiert wird.
-    _profile.reduceCorruption(
+    // der neue Wert sofort persistiert wird. Fällt sie dabei unter die
+    // Verlustschwelle, gilt der Stadtteil als **befreit** (C2) – der Screen
+    // meldet das sichtbar.
+    _districtLiberated = _profile.reduceCorruption(
       monstersKilled: widget.enemyKills,
       victory: widget.playerWon,
     );
@@ -238,6 +245,35 @@ class _ScreenBattleResultState extends State<ScreenBattleResult> {
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
+                  ),
+                ),
+              // Kapitel 14/C2: Befreiungs-Hinweis – die Korruption des Stadtteils
+              // ist durch dieses Gefecht unter die Verlustschwelle gefallen.
+              if (_districtLiberated)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Card(
+                    color: Colors.green.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.flag, color: Colors.green),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              AppLocalizations.of(context)!
+                                  .districtLiberatedMessage(
+                                _profile.activeDistrict ?? '',
+                              ),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               const SizedBox(height: 24),

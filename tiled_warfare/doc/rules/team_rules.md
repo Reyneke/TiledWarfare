@@ -71,6 +71,25 @@ Ihm steht von Anfang an ein **Startbudget** zur Verfügung. Dieses Budget wird i
   Wochenabrechnung führt sie zusätzlich als eigene Zeile `prepaidFeatureCosts` (informativ, keine zweite
   Buchung, `11a` E20).
 
+**Restauranterweiterungen (`11b`, § 10):** Alle Bausteine wirken **additiv** zu den Rollen und werden zentral
+in `EconomyBalance.upgrades` getunt. Neben den Eingangswert-Boni (`tables`, `kitchen`, `signage`, `decoration`,
+`jukebox`, `cellar`, `coldRoom`) gibt es die ⚙-Hooks:
+**Erste-Hilfe-Station** (Heilzeit −5 %/Stufe), **Ruheraum** (Wochen-Refill +3 %/Stufe, Tages-Sink −3 %/Stufe),
+**Zertifizierung/Hygiene-Siegel** (erlittene Strafen −5 %/Stufe, additiv zu Rechtsanwalt/Winkelzug),
+**Tresor/Kassenraum** (Negativzins-**Satz** −10 %/Stufe – ein reiner Verlustbegrenzer),
+**Schulungsraum/Trainingsküche** (Fortbildungs-/Beförderungskosten −5 %/Stufe; Anzeige und Buchung nutzen
+denselben Preis), **Sicherheitstechnik/Alarmanlage** (Entdeckung eingehender Sabotage +5 Prozentpunkte/Stufe,
+additiv zum Sicherheitschef) und **Sterneküche/Auszeichnung** (Prestige-Beitrag zur Power Projection **und**
+selteneres Sabotage-Ziel). Kein Baustein hebelt einen Eingangswert doppelt („additiv statt Multiplikator“).
+
+**FRT-Fehde & Befreiung (`14_FRT.md`, C2):** Wird eine **Fehl-Attribution** der FRT gegen den Spieler
+**aufgedeckt**, gilt der *behauptete* Rivale für `frtFeudWeeks` Wochen um **eine Stufe feindlicher** – sichtbar
+in der Rangliste und im Gefecht (persistiert als `RestaurantData.frtFeudUntilWeekById`, Schema 11). Unbemerkt
+gebliebene Fehl-Attributionen schüren dagegen nur die **Korruption**. Die FRT greift zudem **offen** Rivalen an
+(deren Power Projection sinkt, ohne dass sie in Pleite rutschen). Fällt die Korruption eines **verlorenen**
+Stadtteils durch gewonnene Gefechte wieder unter die Verlustschwelle, gilt der Stadtteil als **befreit** (dort ist
+wieder eine Gründung möglich); das Gefechtsergebnis meldet die Befreiung.
+
 **Zeitsystem (V8):** Abgerechnet wird im **Wochentick** (1 Tick = 1 Echtzeitwoche); verpasste Wochen werden beim App-Start bzw. beim **Wechsel zum jeweiligen Restaurant** nachgeholt (Catch-up, je Restaurant eigenständig). Reihenfolge je Abrechnung: **passives Einkommen → Teamarzt-Kosten → Erweiterungs-Unterhalt → Negativzinsen → Bankrott-Check**.
 
 - **Tagesschritt (§ 6):** Das passive Einkommen entsteht anteilig **je vollem Echtzeittag** (Resttage werden gutgeschrieben); Arztkosten, Unterhalt, Negativzinsen und die Wochen-Zusammenfassung entstehen nur an **vollen 7-Tage-Blöcken**.

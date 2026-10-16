@@ -172,6 +172,17 @@ class WeeklyTickResult {
   /// (Q4, Kapitel 14).
   final bool districtLost;
 
+  /// Kapitel 14 (**Q7b**): Summe der Rivalen, die die FRT in den **in diesem
+  /// Tick abgerechneten Blöcken** offen angegriffen hat (je Block und Rivale
+  /// einmal gezählt).
+  ///
+  /// Rein abgeleitete Kennzahl (deterministisch aus dem Wochen-Index der
+  /// Blockanker) – die Angriffe mindern die angezeigte Rivalen-PP
+  /// (`RivalService.frtAttackPpLoss`). Sie macht sichtbar, dass das Umfeld
+  /// reagiert, ohne dass der Spieler selbst angreifen muss. Ohne fälligen Block
+  /// bleibt sie `0`.
+  final int frtRivalAttacks;
+
   const WeeklyTickResult({
     required this.weeks,
     required this.passiveIncome,
@@ -184,6 +195,7 @@ class WeeklyTickResult {
     this.prepaidFeatureCosts = 0,
     this.rivalSabotageLosses = 0,
     this.frtSabotages = 0,
+    this.frtRivalAttacks = 0,
     this.powerProjection = 0,
     this.playerRank = 0,
     this.rivalCount = 0,
@@ -730,6 +742,17 @@ class GameClockService {
       ongoingCostReductionPercent,
     );
 
+    // Gruppe A (`11b`, § 10): Der **Tresor** senkt den Satz der Negativzinsen.
+    // Der Prozentwert wird einmal je Catch-up aus den Erweiterungen gezogen (er
+    // ändert sich während des Ticks nicht) und an beiden Zinsbuchungen des Ticks
+    // identisch angewandt – identisch zum Gefechts-Pfad
+    // (`ObjectProfile.applyNegativeInterest`).
+    final interestReliefPercent =
+        (EconomyService.upgradeEffects(restaurant.upgrades).negativeInterestRelief *
+                100)
+            .round()
+            .clamp(0, 100);
+
     var budget = restaurant.budget;
     var totalIncome = 0;
     var totalMedic = 0;
@@ -753,6 +776,9 @@ class GameClockService {
     // Kapitel 14: Anzahl der in diesem Catch-up unentdeckt gebliebenen
     // FRT-Fehl-Attributionen (Korruptions-Anstieg je Angriff, Q6).
     var totalFrtSabotages = 0;
+    // Kapitel 14/Q7b: Summe der offenen FRT-Angriffe auf Rivalen über die
+    // abgerechneten Blöcke (Kennzahl des Wochenberichts).
+    var totalFrtRivalAttacks = 0;
     // `11a` P4: Einmalkosten der Feature-Aktivierungen je Block. Sie wurden beim
     // Aktivieren bereits sofort abgebucht (E9/E15/E16); die Wochenzeile weist sie
     // über den Aktivierungsanker zusätzlich aus (`prepaidFeatureCosts`), ohne das
@@ -873,6 +899,22 @@ class GameClockService {
         corruption = FrtService.addSabotage(corruption, frtUndetected);
         totalFrtSabotages += frtUndetected;
       }
+      // Kapitel 14 (C2): **Aufgedeckte** Fehl-Attributionen erzeugen eine
+      // Fehde – der behauptete Rivale bleibt Wochen lang feindlicher gestimmt
+      // (Wirkung in `RivalService.standings`/`battleParticipants`). Der Zustand
+      // wird über `RestaurantData.frtFeudUntilWeekById` fortgeschrieben und vom
+      // Catch-up-Snapshot persistiert.
+      RivalService.applyFrtFeud(
+        restaurant,
+        incoming: incoming,
+        blockAnchor: weekAnchor,
+      );
+      // Kapitel 14 (Q7b): Kennzahl der offenen FRT-Angriffe **dieses** Blocks –
+      // sie macht im Wochenbericht sichtbar, dass die FRT das Umfeld angreift.
+      totalFrtRivalAttacks += RivalService.frtAttackedRivalCount(
+        restaurant.district,
+        RivalService.weekIndexOf(weekAnchor),
+      );
 
       // Kapitel 14: Mit jedem **vollendeten** Block steigt die Korruption des
       // Stadtteils (monoton, V8-idempotent). Erreicht sie die Verlustschwelle,
@@ -934,7 +976,10 @@ class GameClockService {
       budget -= blockFeature;
       totalFeature += blockFeature;
       final beforeInterest = budget;
-      budget = EconomyService.applyNegativeInterest(budget);
+      budget = EconomyService.applyNegativeInterest(
+        budget,
+        reliefPercent: interestReliefPercent,
+      );
       final interest = beforeInterest - budget;
       totalInterest += interest;
       totalPenalty += penaltyForBlock;
@@ -1014,6 +1059,7 @@ class GameClockService {
       leftoverIncome: incomePerDay * leftoverDays,
       corruptionPercent: corruption.round(),
       districtLost: restaurant.districtLost,
+      frtRivalAttacks: totalFrtRivalAttacks,
     );
   }
 
@@ -1553,17 +1599,30 @@ class GameClockService {
       ratio: ratio,
       staffQuality: staffQuality,
     );
+    // Gruppe D (`11b`, § 10): Die **Sterneküche/Auszeichnung** trägt einen
+    // Prestige-Beitrag in die Power Projection – `prestigeBonus ×
+    // powerProjectionDomainMax` Punkte, auf die PP-Domäne geklemmt. Der
+    // Beitrag fliesst in Rangliste **und** Einkommensfaktor (PP ist die einzige
+    // Quelle beider) und ist damit der „Platz X von Y“-Hebel aus Kapitel 12.
+    final prestigeBonus =
+        (EconomyService.upgradeEffects(restaurant.upgrades).prestigeBonus *
+                EconomyBalance.powerProjectionDomainMax)
+            .round();
+    final effectivePp = (pp + prestigeBonus).clamp(
+      0,
+      EconomyBalance.powerProjectionDomainMax,
+    );
     final standings = RivalService.standings(
       restaurant,
-      playerPp: pp,
+      playerPp: effectivePp,
       weekIndex: weekIndex,
     );
     final factor = PowerProjectionService.effectiveIncomeFactor(
-      playerPp: pp,
+      playerPp: effectivePp,
       rivalAveragePp: standings.rivalAveragePp,
     );
     return PowerProjectionState(
-      powerProjection: pp,
+      powerProjection: effectivePp,
       standings: standings,
       incomeFactor: factor,
     );

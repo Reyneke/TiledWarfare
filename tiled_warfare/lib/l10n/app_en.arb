@@ -124,6 +124,11 @@
     "placeholders": { "district": { "type": "String" } }
   },
   "districtLostMessage": "The district {district} is lost (corruption). Until it is liberated, no restaurant can be founded there.",
+  "districtLiberatedMessage": "The district {district} is liberated! Corruption fell below the loss threshold – a restaurant can be founded there again.",
+  "@districtLiberatedMessage": {
+    "description": "Hint in the battle result when a lost district has been liberated (C2)",
+    "placeholders": { "district": { "type": "String" } }
+  },
   "@districtLostMessage": {
     "description": "Error when founding in a corrupted (lost) district",
     "placeholders": { "district": { "type": "String" } }
@@ -1116,6 +1121,14 @@
   "@upgradeLounge": { "description": "Upgrade: rest lounge" },
   "upgradeCertification": "Certification/hygiene seal",
   "@upgradeCertification": { "description": "Upgrade: certification/hygiene seal" },
+  "upgradeVault": "Vault/cash room",
+  "@upgradeVault": { "description": "Upgrade: vault/cash room" },
+  "upgradeSchool": "Training room/training kitchen",
+  "@upgradeSchool": { "description": "Upgrade: training room/training kitchen" },
+  "upgradeSecurity": "Security system/alarm system",
+  "@upgradeSecurity": { "description": "Upgrade: security system/alarm system" },
+  "upgradeStars": "Haute cuisine/award",
+  "@upgradeStars": { "description": "Upgrade: haute cuisine/award" },
   "upgradeLevel": "Level {level}/{max}",
   "@upgradeLevel": {
     "description": "Upgrade level",
@@ -1197,6 +1210,11 @@
   "@catchUpRivalSabotageLoss": {
     "description": "Undetected rival sabotage skims block income (V13, chapter 13)",
     "placeholders": { "loss": { "type": "int" } }
+  },
+  "catchUpFrtRivalAttacks": "FRT attacks on rivals: {count}",
+  "@catchUpFrtRivalAttacks": {
+    "description": "Week report: number of rivals openly attacked by the FRT (chapter 14, Q7b)",
+    "placeholders": { "count": { "type": "int" } }
   },
   "catchUpPrepaidFeatureCost": "Feature one-time costs (booked on activation): −{cost} €",
   "@catchUpPrepaidFeatureCost": {
