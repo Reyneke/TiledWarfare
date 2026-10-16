@@ -186,11 +186,12 @@ je Stufe – löst die dokumentierte „Einzelstufe“-Entscheidung ab).
 **Priorisierung („V1-Paket“):** `cellar` ✅ **umgesetzt** → `coldRoom` ✅ **umgesetzt** → `firstAid` ✅ **umgesetzt** → `lounge` ✅ **umgesetzt**;
 danach `school` ✅ / `security` ✅ **umgesetzt (P3)**, dann die **Gruppe D** (`certification` ✅ und `stars` ✅ **umgesetzt (P3)** –
 `certification` mit der Behörden-Inspektion als Strafenquelle) und
-zuletzt die restlichen Zeitfenster-Bausteine (`weeklyMenu`, `terrace`, `delivery`) – **offen**.
+zuletzt die restlichen Zeitfenster-Bausteine (`weeklyMenu`, `terrace`, `delivery`) – **bewusst vertagt** (Entscheidung unten).
 Alle Wirkungs-Optionen sind inzwischen **entschieden und gebaut** (`firstAid`: Heilzeit; `lounge`: „beide Effekte“;
 `vault`: Zinssatz; `school`: Fortbildungskosten; `security`: Entdeckung; `stars`: beide Effekte) – siehe Entscheidungen
-und „Abgeschlossene Klärungen“. **Offen** bleiben damit nur die Gruppe-C-Zeitfenster, deren Mechanik noch zu
-entscheiden ist (aktivierbarer Tageszustand vs. eigene Einkommensschiene).
+und „Abgeschlossene Klärungen“. **Vertagt** sind damit nur die Gruppe-C-Zeitfenster: entschieden ist, dass sie
+**erst nach einer eigenen Mechanik-Entscheidung** gebaut werden (aktivierbarer Tageszustand vs. eigene
+Einkommensschiene) – siehe „Entscheidungen“.
 
 **Bewusst nicht vorgeschlagen:** weitere reine Attraktivitäts-%-Boni (Clamp 0–4), eine „Bar“ neben dem Keller
 (Doppel-Hebel Zufriedenheit), Einkommens-Multiplikatoren auf bestehende Einkommens-%-Boni (verletzt das
@@ -273,6 +274,29 @@ analog zum bestehenden `rebrandingPenaltyUntil`-Fenster (z. B. Saison-Terrasse, 
   - **Eine Buchungszeile bleibt die Wahrheit:** `GameClockService.catchUp` bucht **alle** Strafen – die der
     aufgedeckten Sabotage (`RivalService`) **und** die der Inspektion – als `penaltyCosts` im Wochen-Tick, durch
     dieselbe Minderung. Der Rechtsanwalt wirkt damit automatisch mit, ohne zweiten Hook.
+- **Gruppe C (Zeitfenster) – bewusst nicht gebaut, vertagt (entschieden).** Die drei Bausteine `weeklyMenu`,
+  `terrace` und `delivery` bleiben **außerhalb dieser Lieferung**, obwohl ihre Wirkungs-Idee bestätigt ist. Der
+  Grund ist **keine** Werte-/Tuning-Frage, sondern die **Mechanik** – jeder Baustein verlangt zuerst eine eigene
+  Struktur-Entscheidung:
+  - `weeklyMenu` braucht einen **aktivierbaren Tageszustand mit Ablaufdatum** (genau **eine** aktive Karte,
+    steigende Wiederholungskosten) – das positive Gegenstück zu `rebrandingPenaltyUntil` (Q1). Offen ist, ob er
+    als **Fenster im Wirtschafts-Eingang** (analog Rebranding, `attractivenessOf`/`satisfactionOf`) oder als
+    **eigene Buchung** greift; daran hängt auch die Ablösung der dokumentierten **Musikautomat-Einzelstufe** durch
+    die Gruppe-C-Idee „Musikautomat auf 2–3 Stufen“.
+  - `terrace` ist der **erste zeitfensterabhängige Kapazitäts-Modifikator** („tages-/prestigeabhängig moduliert“).
+    Kapazität ist ohne Personal `0,0` ⇒ die Erweiterung ist **immer** an eine Rolle gekoppelt; Modulationskurve
+    und **Vorhersagbarkeit im Catch-up** (Wochenbericht/`WeekSettlement`) müssen vorher festliegen.
+  - `delivery` ist die **zweite Einkommensschiene** (flaches Tageseinkommen, **eigene** Buchungszeile und eigene
+    Obergrenze im `catchUp`). Sie **bricht bewusst** die Regel „alles über Fuzzy-Eingänge“ aus `7` und soll laut
+    Tabelle erst **nach Erfahrung mit der Wochenkarte** kommen.
+  - **Kein wirtschaftlicher Notstand:** Die Lücke, die Gruppe C schließen sollte (Zufriedenheit/Kapazität), ist
+    durch `cellar`, `coldRoom` und `tables` bereits gedeckt – die Zeitfenster sind eine **Ergänzung** (Bindeglied
+    zu `8`/Q1), **keine** Lücke. Ein Bau „auf Vorrat“ würde die Eingangswert-Kette mit einem zweiten
+    Buchungsmodell belasten, ohne einen belegten Bedarf zu decken.
+  - **Wiederaufnahme (Reihenfolge + Einhängepunkt, falls gebaut):** `weeklyMenu` → `terrace` → `delivery`,
+    jeweils über den **bestehenden** Zeitfenster-Einhängepunkt aus `8`/Q1 (wie `rebrandingPenaltyUntil`) –
+    **kein** Scheduler, **kein** Event-Journal. Jeder Baustein erhält vor dem Bau seine eigene
+    Wirkungs-Entscheidung in diesem Abschnitt und Verträge in `balance_sanity_test.dart`.
 
 ### Balance-Runde: Gegenwert je Erweiterung (Vergleich)
 

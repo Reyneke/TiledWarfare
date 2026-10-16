@@ -246,6 +246,12 @@ Kurz zusammengefasst: Es gibt bereits viele Bausteine (Profile, Restaurants, Per
 - **Restaurant-Wechsel im Spiel:** Optionaler Wechsel zwischen Spielständen direkt aus `ScreenRestaurant` heraus.
 - **Merging beim Speichern:** Technik, wie `ObjectProfile.toProfileData()` die übrigen, nicht aktiven Restaurants unverändert zurückschreibt.
 - **Regelwerk-Update:** `team_rules.md` auf „mehrere Restaurants als Spielstände“ und Echtzeit-Abrechnung anpassen.
+- **Gruppe-C-Zeitfenster (aus `11b`):** **bewusst zurückgestellt** – die Designentscheidung dazu ist in
+  `11b_Restauranterweiterungen.md` § „Entscheidungen (getroffen)“ festgehalten. Kern: `weeklyMenu`, `terrace` und
+  `delivery` brauchen **zuerst eine Mechanik-Entscheidung** (aktivierbarer Tageszustand mit Ablaufdatum vs. zweite
+  Einkommensschiene mit eigener Buchungszeile/Obergrenze im `catchUp`; `terrace` wirkt nur mit Personal), kein
+  Werte-Tuning. Wiederaufnahme in der Reihenfolge `weeklyMenu` → `terrace` → `delivery` über den **bestehenden**
+  Zeitfenster-Einhängepunkt aus V8/Q1 (wie `rebrandingPenaltyUntil`) – ohne Scheduler/Event-Journal.
 
 ---
 
